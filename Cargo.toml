@@ -1,0 +1,237 @@
+[package]
+name = "sassy-browser"
+version = "2.0.0"
+edition = "2021"
+description = "Pure Rust web browser & universal file viewer. No Chrome. No Google. No paid deps."
+authors = ["Sassy Consulting LLC"]
+license = "MIT"
+readme = "README.md"
+keywords = ["browser", "file-viewer", "pdf", "pdb", "rust", "privacy"]
+categories = ["gui", "visualization", "science"]
+rust-version = "1.75"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PURE RUST - NO CHROME, NO GOOGLE, NO WEBKIT
+# ═══════════════════════════════════════════════════════════════════════════════
+# This browser uses:
+# - Custom HTML/CSS parser and renderer (Pure Rust)
+# - SassyScript JS engine (Pure Rust, no V8, no JIT exploits)
+# - egui for UI (Pure Rust)
+# - fontdue for font rendering (Pure Rust)
+# - softbuffer for pixel output (Pure Rust)
+#
+# NO external browser engines. NO Chromium. NO WebKit. NO Google telemetry.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[dependencies]
+# ═══════════════════════════════════════════════════════════════════════════════
+# GUI Framework - Pure Rust
+# ═══════════════════════════════════════════════════════════════════════════════
+eframe = { version = "0.29", features = ["persistence"] }
+egui = "0.29"
+egui_extras = { version = "0.29", features = ["all_loaders", "image"] }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PURE RUST BROWSER ENGINE - NO CHROME/WEBKIT
+# ═══════════════════════════════════════════════════════════════════════════════
+# HTML parsing
+html5ever = "0.27"
+markup5ever_rcdom = "0.3"
+
+# CSS parsing
+cssparser = "0.34"
+
+# Font rendering (Pure Rust, no FreeType, no HarfBuzz)
+fontdue = "0.9"
+
+# Software rendering fallback
+softbuffer = "0.4"
+winit = "0.30"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HTTP/NETWORKING - No Google APIs
+# ═══════════════════════════════════════════════════════════════════════════════
+ureq = { version = "2.10", features = ["json", "tls"] }
+url = "2.5"
+urlencoding = "2.1"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CRYPTOGRAPHY - For secure sync, no cloud dependency
+# ═══════════════════════════════════════════════════════════════════════════════
+ring = "0.17"
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+zeroize = { version = "1.8", features = ["derive"] }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# IMAGE HANDLING - Every format, Pure Rust
+# ═══════════════════════════════════════════════════════════════════════════════
+image = { version = "0.25", features = [
+    "png", "jpeg", "gif", "webp", "bmp", "ico", "tiff", "tga", "hdr", 
+    "avif", "dds", "exr", "pnm", "qoi", "ff"
+]}
+resvg = "0.44"                          # SVG rendering (Pure Rust)
+rawloader = "0.37"                       # RAW camera: CR2, NEF, ARW, DNG, etc.
+imagepipe = "0.5"                        # RAW processing pipeline
+psd = "0.3"                              # Adobe Photoshop files
+ico = "0.3"                              # ICO/CUR icons
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PDF HANDLING
+# ═══════════════════════════════════════════════════════════════════════════════
+lopdf = "0.34"                           # PDF parsing/editing
+printpdf = "0.7"                         # PDF creation
+pdf-extract = "0.7"                      # Text extraction
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DOCUMENT FORMATS - No Microsoft, No Google Docs
+# ═══════════════════════════════════════════════════════════════════════════════
+calamine = "0.26"                        # Excel/ODS spreadsheets
+quick-xml = "0.37"                       # XML parsing (DOCX, ODT internals)
+zip = "2.2"                              # ZIP/DOCX/XLSX container handling
+epub = "2.1"                             # EPUB parser
+rtf-parser = "0.3"                       # Rich Text Format
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ARCHIVE FORMATS
+# ═══════════════════════════════════════════════════════════════════════════════
+tar = "0.4"
+flate2 = "1.0"                           # GZIP
+xz2 = "0.1"                              # XZ/LZMA
+bzip2 = "0.4"                            # BZIP2
+zstd = "0.13"                            # Zstandard
+sevenz-rust = "0.6"                      # 7z archives
+unrar = "0.5"                            # RAR (read-only)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3D MODEL VIEWING
+# ═══════════════════════════════════════════════════════════════════════════════
+obj-rs = "0.7"                           # Wavefront OBJ
+stl_io = "0.7"                           # STL (3D printing)
+gltf = "1.4"                             # GLTF/GLB
+ply-rs = "0.1"                           # PLY point clouds
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CHEMICAL/BIOLOGICAL - Scientific formats
+# ═══════════════════════════════════════════════════════════════════════════════
+pdbtbx = "0.12"                          # PDB/mmCIF protein structures
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FONT PREVIEW
+# ═══════════════════════════════════════════════════════════════════════════════
+ttf-parser = "0.24"                      # TTF/OTF parsing
+ab_glyph = "0.2"                         # Font rendering
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUDIO (basic metadata/waveform, no playback yet)
+# ═══════════════════════════════════════════════════════════════════════════════
+symphonia = { version = "0.5", features = [
+    "mp3", "aac", "flac", "ogg", "wav", "pcm"
+]}
+rodio = "0.19"                           # Audio playback
+mp4parse = "0.17"                        # MP4 container
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TEXT/CODE EDITING
+# ═══════════════════════════════════════════════════════════════════════════════
+syntect = "5.2"                          # Syntax highlighting
+ropey = "1.6"                            # Efficient text rope
+encoding_rs = "0.8"                      # Character encoding
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MARKDOWN
+# ═══════════════════════════════════════════════════════════════════════════════
+pulldown-cmark = "0.12"
+comrak = "0.28"                          # GFM Markdown
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# QR CODES - For phone sync
+# ═══════════════════════════════════════════════════════════════════════════════
+qrcode = "0.14"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FILE DIALOGS & CLIPBOARD
+# ═══════════════════════════════════════════════════════════════════════════════
+native-dialog = "0.7"
+arboard = "3.4"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SERIALIZATION
+# ═══════════════════════════════════════════════════════════════════════════════
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+csv = "1.3"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# UTILITIES
+# ═══════════════════════════════════════════════════════════════════════════════
+dirs = "5.0"                             # Config/cache directories
+open = "5.3"                             # Open with system apps
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tokio = { version = "1.0", features = ["rt-multi-thread", "sync", "fs"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+rand = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+mime_guess = "2.0"
+infer = "0.16"                           # File type detection
+walkdir = "2.5"
+notify = "6.1"                           # File watching
+tempfile = "3.12"
+hex = "0.4"
+base64 = "0.22"
+sha2 = "0.10"
+crc32fast = "1.4"
+lazy_static = "1.5"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PLATFORM-SPECIFIC - NO CHROME/WEBKIT
+# ═══════════════════════════════════════════════════════════════════════════════
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Graphics_Gdi",
+    "Win32_UI_Shell",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading"
+]}
+winreg = "0.52"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Pure X11/Wayland via winit - NO webkit2gtk
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.26"
+core-foundation = "0.10"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FEATURES
+# ═══════════════════════════════════════════════════════════════════════════════
+[features]
+default = []
+voice = []  # Future: Whisper STT integration
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BUILD OPTIMIZATION
+# ═══════════════════════════════════════════════════════════════════════════════
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[[bin]]
+name = "sassy-browser"
+path = "src/main.rs"

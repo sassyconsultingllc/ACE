@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entropy Demo - Sassy Browser</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0e12;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: system-ui, sans-serif;
+        }
+        .container {
+            max-width: 600px;
+            padding: 20px;
+        }
+        h1 {
+            color: #fff;
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #9ca3af;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        canvas {
+            border-radius: 12px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        .badge {
+            margin-top: 16px;
+            padding: 8px 16px;
+            background: #0f1a12;
+            border: 1px solid #22c55e40;
+            border-radius: 20px;
+            color: #22c55e;
+            font-size: 0.75rem;
+            display: inline-block;
+        }
+        .badge::before {
+            content: "🦀 ";
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>create that key.</h1>
+        <p class="subtitle">When you first launch Sassy Browser, you generate your own cryptographic identity through a simple game. Your actions become your security.</p>
+        <canvas id="entropy" width="560" height="420"></canvas>
+        <div class="badge">Powered by Rust + WebAssembly — zero JavaScript</div>
+    </div>
+
+    <script type="module">
+        // Load WASM module compiled from Rust
+        import init, { 
+            init_entropy, 
+            feed_mouse, 
+            render, 
+            is_complete 
+        } from './pkg/sassy_entropy_wasm.js';
+
+        async function run() {
+            await init();
+            init_entropy();
+
+            const canvas = document.getElementById('entropy');
+            let animating = true;
+
+            // Mouse events
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                feed_mouse(x | 0, y | 0, performance.now());
+            });
+
+            // Touch events (mobile)
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                feed_mouse(x | 0, y | 0, performance.now());
+            }, { passive: false });
+
+            // Render loop - all rendering happens in Rust/WASM
+            function frame() {
+                render('entropy');
+                if (animating && !is_complete()) {
+                    requestAnimationFrame(frame);
+                } else if (is_complete()) {
+                    render('entropy'); // Final render
+                }
+            }
+            requestAnimationFrame(frame);
+        }
+
+        run();
+    </script>
+</body>
+</html>

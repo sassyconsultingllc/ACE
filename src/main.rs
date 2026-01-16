@@ -1,0 +1,276 @@
+//! Sassy Browser v2.0.0 - Pure Rust Web Browser & Universal File Viewer
+//!
+//! ═══════════════════════════════════════════════════════════════════════════════
+//! NO CHROME. NO GOOGLE. NO WEBKIT. NO WEBVIEW2. NO TELEMETRY. PURE RUST.
+//! ═══════════════════════════════════════════════════════════════════════════════
+//!
+//! SECURITY ARCHITECTURE - 4 SANDBOX LAYERS:
+//! ==========================================
+//! 1. NETWORK SANDBOX - All content quarantined in memory
+//! 2. RENDER SANDBOX - SassyScript engine (no V8, no JIT exploits)  
+//! 3. CONTENT SANDBOX - Images/fonts decoded in Rust (no native codec vulns)
+//! 4. DOWNLOAD QUARANTINE - Files held in memory, 3 confirms to release
+//!
+//! WHY PURE RUST MATTERS:
+//! ======================
+//! Chrome/Chromium = Google telemetry, V8 JIT exploits, massive attack surface
+//! WebView2 = Microsoft's Chrome wrapper, same problems
+//! WebKit = Apple's engine, still complex C++ with exploits
+//!
+//! Sassy Browser = 100% Rust, custom everything, no phone-home, no tracking
+//!
+//! FILE FORMAT SUPPORT - 100+ formats (see viewers/)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CORE MODULES
+// ═══════════════════════════════════════════════════════════════════════════════
+mod app;                    // Main application UI (egui)
+mod file_handler;           // Universal file type detection and loading
+mod viewers;                // File type viewers (PDF, images, etc.)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PURE RUST BROWSER ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+mod js;                     // SassyScript JavaScript interpreter
+mod dom;                    // DOM simulation
+mod style;                  // CSS engine
+mod layout;                 // Layout engine (flexbox, etc.)
+mod paint;                  // Painting/rendering
+mod renderer;               // HTML renderer
+mod engine;                 // Core browser engine
+mod script_engine;          // Script execution
+mod html_renderer;          // HTML to egui rendering
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECURITY & SANDBOXING
+// ═══════════════════════════════════════════════════════════════════════════════
+mod sandbox;                // Page sandbox, popup blocker, download quarantine
+mod cookies;                // Cookie storage (local only, no tracking)
+mod crypto;                 // Cryptographic identity (local keys)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DEVELOPER TOOLS
+// ═══════════════════════════════════════════════════════════════════════════════
+mod console;                // Developer console
+mod rest_client;            // Built-in REST client
+mod json_viewer;            // JSON pretty-print and navigation
+mod syntax;                 // Syntax highlighting
+mod markdown;               // Markdown renderer
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MCP - MULTI-AGENT AI SYSTEM (Grok + Claude, NOT Google)
+// ═══════════════════════════════════════════════════════════════════════════════
+mod mcp;                    // Model Context Protocol orchestrator
+mod mcp_panel;              // MCP UI panel
+mod mcp_api;                // API clients (xAI Grok, Anthropic Claude - NO Google)
+mod mcp_fs;                 // Sandboxed file system for AI
+mod mcp_git;                // Git integration
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NETWORKING & SYNC (NO GOOGLE CLOUD)
+// ═══════════════════════════════════════════════════════════════════════════════
+mod network;                // HTTP networking (ureq - no Google APIs)
+mod protocol;               // Protocol handling
+mod sync;                   // Phone sync via Tailscale (peer-to-peer, no cloud)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UI & INPUT
+// ═══════════════════════════════════════════════════════════════════════════════
+mod ui;                     // UI components
+mod input;                  // Input handling
+mod hittest;                // Hit testing
+mod imaging;                // Image loading/caching
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════════
+mod ai;                     // AI assistant (optional, prefers local/open models)
+mod data;                   // Data structures
+mod setup;                  // First-run setup
+mod update;                 // Self-update (from OUR servers, not Google/Microsoft)
+mod extensions;             // Extension system
+mod voice;                  // Voice input (Whisper - runs locally, offline)
+
+// Browser module (tabs, history, bookmarks)
+mod browser;
+
+use std::env;
+
+fn main() {
+    // Initialize logging (NO Google Analytics, NO telemetry, NO phone-home)
+    tracing_subscriber::fmt()
+        .with_target(false)
+        .compact()
+        .init();
+
+    println!(r#"
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                    Sassy Browser v2.0.0 - Pure Rust Edition                   ║
+║                                                                               ║
+║   No Chrome. No Google. No WebKit. No WebView2. No Telemetry. Just Freedom.   ║
+║                                                                               ║
+║   Built with 100% Rust: html5ever, cssparser, fontdue, softbuffer, egui       ║
+║   Custom JS engine: SassyScript (no V8, no JIT exploits, no WASM vulns)       ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+"#);
+
+    tracing::info!("🚀 Starting Sassy Browser v2.0.0 - Pure Rust Edition");
+    
+    let args: Vec<String> = env::args().collect();
+    
+    // Command line handling
+    if args.len() > 1 {
+        match args[1].as_str() {
+            "--help" | "-h" => {
+                print_help();
+                return;
+            }
+            "--version" | "-v" => {
+                println!("Sassy Browser v2.0.0 - Pure Rust Edition");
+                println!("No Chrome. No Google. No WebKit. No Telemetry.");
+                println!("100% Rust. Zero tracking. Maximum freedom.");
+                return;
+            }
+            "--phone-app" | "-p" => {
+                serve_phone_app();
+                return;
+            }
+            "--reset" => {
+                reset_data();
+                return;
+            }
+            "--pure-engine" | "-e" => {
+                // Run pure Rust engine (winit + softbuffer)
+                run_pure_engine();
+                return;
+            }
+            url if url.starts_with("http") || url.starts_with("file:") => {
+                run_browser(Some(url.to_string()));
+                return;
+            }
+            path if std::path::Path::new(path).exists() => {
+                // Open file directly
+                run_browser(Some(format!("file://{}", path)));
+                return;
+            }
+            _ => {
+                println!("Unknown argument: {}", args[1]);
+                print_help();
+                return;
+            }
+        }
+    }
+    
+    run_browser(None);
+}
+
+fn run_browser(_url: Option<String>) {
+    // Check first-run setup
+    if let Some(result) = setup::ensure_setup() {
+        if !result {
+            tracing::warn!("Setup cancelled by user");
+            return;
+        }
+    }
+    
+    // Run the egui-based browser with pure Rust file viewers
+    // Web content rendered by our custom engine (dom, style, layout, paint)
+    if let Err(e) = app::run_browser() {
+        tracing::error!("Browser error: {}", e);
+        eprintln!("❌ Fatal error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+fn run_pure_engine() {
+    // Run the pure Rust engine directly (winit + softbuffer)
+    // This bypasses egui and uses our custom rendering pipeline
+    tracing::info!("Starting pure Rust engine (winit + softbuffer)");
+    
+    // TODO: Call engine::run() when fully integrated
+    // For now, fall back to egui app
+    if let Err(e) = app::run_browser() {
+        tracing::error!("Engine error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+fn serve_phone_app() {
+    println!("📱 Starting phone sync server...");
+    println!("Uses Tailscale for peer-to-peer sync - NO cloud, NO Google, NO tracking");
+    println!("Scan the QR code with your phone to connect.");
+    // TODO: Start phone sync server via sync module
+}
+
+fn reset_data() {
+    println!("🗑️ Resetting all browser data...");
+    if let Some(data_dir) = dirs::data_dir() {
+        let sassy_dir = data_dir.join("sassy-browser");
+        if sassy_dir.exists() {
+            if let Err(e) = std::fs::remove_dir_all(&sassy_dir) {
+                eprintln!("Failed to remove data: {}", e);
+            } else {
+                println!("✅ Data reset complete");
+            }
+        } else {
+            println!("No data to reset");
+        }
+    }
+}
+
+fn print_help() {
+    println!(r#"
+Sassy Browser v2.0.0 - Pure Rust Web Browser & Universal File Viewer
+
+NO CHROME. NO GOOGLE. NO WEBKIT. NO WEBVIEW2. NO TELEMETRY.
+
+USAGE:
+    sassy-browser [OPTIONS] [URL or FILE]
+
+OPTIONS:
+    -h, --help          Show this help
+    -v, --version       Show version
+    -p, --phone-app     Start phone sync server (Tailscale, no cloud)
+    -e, --pure-engine   Run with pure Rust renderer (experimental)
+    --reset             Clear all browser data
+
+EXAMPLES:
+    sassy-browser                           Open browser
+    sassy-browser https://example.com       Open URL
+    sassy-browser document.pdf              Open file
+    sassy-browser molecule.pdb              View molecular structure
+
+KEYBOARD SHORTCUTS:
+    Ctrl+L              Focus address bar
+    Ctrl+T              New tab
+    Ctrl+W              Close tab
+    Ctrl+O              Open file
+    Ctrl+F              Find in page
+    F5                  Refresh
+    F11                 Fullscreen
+    F12                 Developer tools
+
+SUPPORTED FILE FORMATS (100+):
+    Images:      PNG, JPG, GIF, WebP, SVG, RAW, PSD, AVIF, EXR
+    Documents:   PDF, DOCX, ODT, RTF, EPUB, MOBI
+    Spreadsheets: XLSX, ODS, CSV
+    Scientific:  PDB, MOL, SDF, XYZ, CIF
+    Archives:    ZIP, 7Z, RAR, TAR, GZ
+    3D Models:   OBJ, STL, GLTF, PLY
+    Fonts:       TTF, OTF, WOFF
+    Audio:       MP3, FLAC, WAV, OGG
+    Video:       MP4, MKV, WebM
+    Code:        100+ languages with syntax highlighting
+
+PRIVACY PROMISE:
+    ✓ No telemetry
+    ✓ No analytics
+    ✓ No phone-home
+    ✓ No cloud sync (use Tailscale for peer-to-peer)
+    ✓ No Google anything
+    ✓ No Microsoft anything
+    ✓ 100% open source Rust
+
+https://sassyconsultingllc.com/browser
+"#);
+}

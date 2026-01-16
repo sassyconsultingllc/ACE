@@ -1,0 +1,7 @@
+﻿debug/
+.DS_Store
+.vscode/
+.idea/
+*.log
+*.tmp
+*.bak

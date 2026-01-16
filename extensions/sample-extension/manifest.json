@@ -1,0 +1,24 @@
+{
+    "manifest_version": 2,
+    "name": "Sassy Sample Extension",
+    "version": "1.0.0",
+    "description": "A sample extension for Sassy Browser",
+    "icons": {
+        "48": "icon.png",
+        "96": "icon.png"
+    },
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "js": ["content.js"],
+            "run_at": "document_end"
+        }
+    ],
+    "background": {
+        "scripts": ["background.js"]
+    },
+    "permissions": [
+        "activeTab",
+        "storage"
+    ]
+}

@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0d1117">
+    <title>Sassy Remote</title>
+    <style>
+        :root {
+            --bg: #0d1117; --surface: #161b22; --elevated: #21262d;
+            --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+            --accent: #58a6ff; --success: #3fb950; --error: #f85149;
+            --radius: 12px; --gap: 16px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; }
+        
+        .screen { display: none; min-height: 100dvh; padding: var(--gap); }
+        .screen.active { display: flex; flex-direction: column; }
+        
+        /* Who's Browsing */
+        #login-screen { align-items: center; padding-top: 80px; gap: 40px; }
+        
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand-icon { width: 48px; height: 48px; background: linear-gradient(135deg, #58a6ff 0%, #a371f7 100%); border-radius: 12px; }
+        .brand h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; }
+        
+        h2.prompt { font-size: 20px; font-weight: 400; color: var(--muted); }
+        
+        .users-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 24px;
+            width: 100%;
+            max-width: 480px;
+        }
+        
+        .user-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 8px;
+            cursor: pointer;
+            transition: transform 0.15s;
+            width: 88px;
+        }
+        .user-card:active { transform: scale(0.95); }
+        
+        .user-avatar {
+            width: 64px; height: 64px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 500;
+            color: white;
+            position: relative;
+            transition: box-shadow 0.15s;
+        }
+        .user-card:hover .user-avatar { box-shadow: 0 0 0 3px var(--elevated); }
+        
+        .user-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        
+        .pin-badge {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 20px;
+            height: 20px;
+            background: var(--surface);
+            border: 2px solid var(--bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .pin-badge svg { width: 10px; height: 10px; fill: var(--muted); }
+        
+        .user-name { font-size: 13px; color: var(--text); text-align: center; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        
+        .add-user .user-avatar { 
+            background: transparent; 
+            border: 2px dashed var(--border);
+            color: var(--muted);
+        }
+        .add-user .user-name { color: var(--muted); }
+        
+        /* PIN Modal */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); align-items: center; justify-content: center; padding: var(--gap); }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--surface); padding: 32px; border-radius: 16px; width: 100%; max-width: 320px; text-align: center; }
+        
+        .modal-avatar { width: 72px; height: 72px; border-radius: 50%; margin: 0 auto 16px; font-size: 26px; font-weight: 500; color: white; display: flex; align-items: center; justify-content: center; }
+        .modal-name { font-size: 20px; font-weight: 500; margin-bottom: 8px; }
+        .modal-subtitle { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+        
+        .pin-dots { display: flex; justify-content: center; gap: 16px; margin-bottom: 32px; }
+        .pin-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--border); transition: all 0.15s; }
+        .pin-dot.filled { background: var(--text); transform: scale(1.1); }
+        
+        .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 240px; margin: 0 auto; }
+        .pin-key {
+            height: 56px;
+            background: var(--elevated);
+            border: none;
+            border-radius: 12px;
+            font-size: 24px;
+            font-weight: 400;
+            color: var(--text);
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .pin-key:active { background: var(--border); }
+        .pin-key.back { font-size: 18px; color: var(--muted); }
+        .pin-error { color: var(--error); font-size: 14px; margin-top: 20px; min-height: 20px; }
+        
+        .modal-cancel { margin-top: 24px; color: var(--muted); font-size: 14px; cursor: pointer; padding: 8px 16px; }
+        
+        /* Browser Screen */
+        #browser-screen { padding: 0; }
+        
+        header {
+            background: var(--surface);
+            padding: 12px var(--gap);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .header-user { display: flex; align-items: center; gap: 10px; }
+        .header-avatar { width: 32px; height: 32px; border-radius: 50%; font-size: 13px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 500; }
+        .header-name { font-weight: 500; font-size: 15px; }
+        
+        .header-logout { 
+            margin-left: auto; 
+            padding: 8px 14px; 
+            background: transparent; 
+            border: 1px solid var(--border); 
+            border-radius: 8px; 
+            font-size: 13px; 
+            color: var(--text); 
+            cursor: pointer; 
+        }
+        .header-logout:active { background: var(--elevated); }
+        
+        .nav-bar {
+            background: var(--surface);
+            padding: 8px var(--gap);
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .nav-btn {
+            background: var(--elevated);
+            width: 44px; height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            cursor: pointer;
+            color: var(--text);
+        }
+        .nav-btn svg { width: 20px; height: 20px; fill: currentColor; }
+        .nav-btn:active { background: var(--border); }
+        
+        .address-bar {
+            flex: 1;
+            background: var(--elevated);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 14px;
+            color: var(--muted);
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        
+        .tabs-section { flex: 1; overflow-y: auto; padding: var(--gap); }
+        .tabs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .tabs-header h2 { font-size: 17px; font-weight: 500; }
+        .tabs-count { color: var(--muted); font-size: 13px; }
+        
+        .tab-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        
+        .tab-tile {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            cursor: pointer;
+            transition: border-color 0.15s, transform 0.1s;
+        }
+        .tab-tile:active { transform: scale(0.98); }
+        .tab-tile.active { border-color: var(--accent); border-width: 2px; }
+        
+        .tab-preview { 
+            aspect-ratio: 16/10;
+            background: var(--elevated); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+        }
+        .tab-preview .favicon { width: 24px; height: 24px; border-radius: 4px; background: var(--border); }
+        
+        .tab-info { padding: 10px 12px; border-top: 1px solid var(--border); }
+        .tab-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tab-url { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+        
+        .bottom-actions {
+            background: var(--surface);
+            padding: 8px var(--gap);
+            padding-bottom: max(8px, env(safe-area-inset-bottom));
+            display: flex;
+            gap: 8px;
+            border-top: 1px solid var(--border);
+        }
+        .action-btn {
+            flex: 1;
+            background: var(--elevated);
+            border: none;
+            padding: 14px 8px;
+            border-radius: var(--radius);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            color: var(--text);
+        }
+        .action-btn svg { width: 20px; height: 20px; fill: currentColor; }
+        .action-btn span { font-size: 11px; color: var(--muted); }
+        .action-btn:active { background: var(--border); }
+        
+        /* Setup Screen */
+        #setup-screen { align-items: center; justify-content: center; gap: 32px; }
+        .setup-box { background: var(--surface); padding: 28px; border-radius: 16px; width: 100%; max-width: 340px; }
+        .setup-box h2 { font-size: 18px; margin-bottom: 20px; }
+        .setup-box input { 
+            width: 100%; 
+            background: var(--elevated); 
+            border: 1px solid var(--border); 
+            border-radius: 10px; 
+            padding: 14px 16px; 
+            color: var(--text); 
+            font-size: 16px; 
+            margin-bottom: 12px; 
+        }
+        .setup-box input:focus { outline: none; border-color: var(--accent); }
+        .setup-box input::placeholder { color: var(--muted); }
+        .setup-box button { 
+            width: 100%; 
+            background: var(--accent); 
+            border: none; 
+            padding: 14px; 
+            border-radius: 10px; 
+            font-size: 15px; 
+            font-weight: 600; 
+            color: white; 
+            cursor: pointer; 
+        }
+        .setup-note { text-align: center; color: var(--muted); font-size: 13px; }
+        .status { text-align: center; font-size: 14px; min-height: 20px; margin-top: 8px; }
+        .status.error { color: var(--error); }
+        
+        /* SVG Icons */
+        .icon { display: inline-block; width: 20px; height: 20px; }
+    </style>
+</head>
+<body>
+    <!-- Setup -->
+    <div class="screen active" id="setup-screen">
+        <div class="brand">
+            <div class="brand-icon"></div>
+            <h1>Sassy</h1>
+        </div>
+        <div class="setup-box">
+            <h2>Connect to Browser</h2>
+            <input type="text" id="host-input" placeholder="your-pc.tailnet.ts.net">
+            <button onclick="connect()">Connect</button>
+            <p class="status" id="status"></p>
+        </div>
+        <p class="setup-note">Secured via Tailscale</p>
+    </div>
+    
+    <!-- Who's Browsing -->
+    <div class="screen" id="login-screen">
+        <div class="brand">
+            <div class="brand-icon"></div>
+            <h1>Sassy</h1>
+        </div>
+        <h2 class="prompt">Who's browsing?</h2>
+        <div class="users-grid" id="users-grid"></div>
+    </div>
+    
+    <!-- PIN Modal -->
+    <div class="modal" id="pin-modal">
+        <div class="modal-content">
+            <div class="modal-avatar" id="pin-avatar">SH</div>
+            <div class="modal-name" id="pin-name">Name</div>
+            <div class="modal-subtitle">Enter PIN</div>
+            <div class="pin-dots" id="pin-dots"></div>
+            <div class="pin-pad" id="pin-pad"></div>
+            <p class="pin-error" id="pin-error"></p>
+            <div class="modal-cancel" onclick="cancelPin()">Cancel</div>
+        </div>
+    </div>
+    
+    <!-- Browser -->
+    <div class="screen" id="browser-screen">
+        <header>
+            <div class="header-user">
+                <div class="header-avatar" id="current-avatar">SH</div>
+                <span class="header-name" id="current-name">Name</span>
+            </div>
+            <button class="header-logout" onclick="logout()">Switch user</button>
+        </header>
+        
+        <div class="nav-bar">
+            <button class="nav-btn" onclick="send('nav.back')">
+                <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            </button>
+            <button class="nav-btn" onclick="send('nav.forward')">
+                <svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
+            </button>
+            <button class="nav-btn" onclick="send('nav.refresh')">
+                <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+            </button>
+            <div class="address-bar" id="url">about:blank</div>
+        </div>
+        
+        <div class="tabs-section">
+            <div class="tabs-header">
+                <h2>Tabs</h2>
+                <span class="tabs-count" id="tab-count">0</span>
+            </div>
+            <div class="tab-tiles" id="tabs"></div>
+        </div>
+        
+        <div class="bottom-actions">
+            <button class="action-btn" onclick="newTab()">
+                <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                <span>New</span>
+            </button>
+            <button class="action-btn" onclick="send('scroll.top')">
+                <svg viewBox="0 0 24 24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+                <span>Top</span>
+            </button>
+            <button class="action-btn" onclick="send('scroll.bottom')">
+                <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+                <span>Bottom</span>
+            </button>
+            <button class="action-btn" onclick="closeTab()">
+                <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                <span>Close</span>
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        let ws, state = { users: [], tabs: [], user: null, activeTab: null };
+        
+        const show = id => document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+        
+        // Restore saved host
+        const saved = localStorage.getItem('sassy_host');
+        if (saved) document.getElementById('host-input').value = saved;
+        
+        function connect() {
+            const host = document.getElementById('host-input').value.trim();
+            const status = document.getElementById('status');
+            if (!host) { status.textContent = 'Enter address'; status.className = 'status error'; return; }
+            
+            status.textContent = 'Connecting...';
+            status.className = 'status';
+            
+            try {
+                ws = new WebSocket(`ws://${host}:8765`);
+                ws.onopen = () => {
+                    localStorage.setItem('sassy_host', host);
+                    send('users.list');
+                };
+                ws.onclose = () => { status.textContent = 'Disconnected'; status.className = 'status error'; };
+                ws.onerror = () => { status.textContent = 'Connection failed'; status.className = 'status error'; };
+                ws.onmessage = e => handle(JSON.parse(e.data));
+            } catch(e) {
+                status.textContent = 'Invalid address';
+                status.className = 'status error';
+            }
+        }
+        
+        function send(action, data = {}) {
+            if (!ws || ws.readyState !== 1) return;
+            ws.send(JSON.stringify({ action, ...data, user_id: state.user?.id }));
+        }
+        
+        function handle(msg) {
+            if (msg.type === 'users') {
+                state.users = msg.users;
+                renderUsers();
+                show('login-screen');
+            } else if (msg.type === 'auth_ok') {
+                state.user = state.users.find(u => u.id === msg.user_id);
+                send('state.request');
+            } else if (msg.type === 'auth_fail') {
+                document.getElementById('pin-error').textContent = 'Incorrect PIN';
+                pinValue = '';
+                updatePinDots();
+            } else if (msg.type === 'state') {
+                state.tabs = msg.tabs || [];
+                state.activeTab = msg.active_tab_id;
+                renderBrowser();
+                show('browser-screen');
+            } else if (msg.event) {
+                handleEvent(msg);
+            }
+        }
+        
+        function handleEvent(msg) {
+            if (msg.event === 'tab.created') { state.tabs.push(msg.tab); renderTabs(); }
+            else if (msg.event === 'tab.closed') { state.tabs = state.tabs.filter(t => t.id !== msg.tab_id); renderTabs(); }
+            else if (msg.event === 'tab.activated') { state.activeTab = msg.tab_id; renderTabs(); updateUrl(); }
+            else if (msg.event === 'tab.updated') { 
+                const i = state.tabs.findIndex(t => t.id === msg.tab.id);
+                if (i >= 0) state.tabs[i] = msg.tab;
+                renderTabs(); updateUrl();
+            }
+        }
+        
+        function getInitials(name) {
+            return name.split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase();
+        }
+        
+        function renderUsers() {
+            const grid = document.getElementById('users-grid');
+            grid.innerHTML = state.users.map(u => `
+                <div class="user-card" onclick="selectUser('${u.id}')">
+                    <div class="user-avatar" style="background:${u.color}">
+                        ${u.avatar?.type === 'image' ? `<img src="${u.avatar.url}">` : getInitials(u.name)}
+                        ${u.requires_pin ? `<div class="pin-badge"><svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg></div>` : ''}
+                    </div>
+                    <div class="user-name">${esc(u.name)}</div>
+                </div>
+            `).join('') + `
+                <div class="user-card add-user" onclick="addUser()">
+                    <div class="user-avatar">+</div>
+                    <div class="user-name">Add</div>
+                </div>
+            `;
+        }
+        
+        let selectedUser = null, pinValue = '';
+        
+        function selectUser(id) {
+            selectedUser = state.users.find(u => u.id === id);
+            if (!selectedUser) return;
+            
+            if (selectedUser.requires_pin) {
+                showPinModal();
+            } else {
+                send('auth', { user_id: id });
+            }
+        }
+        
+        function showPinModal() {
+            const avatar = document.getElementById('pin-avatar');
+            avatar.textContent = getInitials(selectedUser.name);
+            avatar.style.background = selectedUser.color;
+            document.getElementById('pin-name').textContent = selectedUser.name;
+            document.getElementById('pin-error').textContent = '';
+            pinValue = '';
+            
+            document.getElementById('pin-dots').innerHTML = [0,1,2,3].map(() => '<div class="pin-dot"></div>').join('');
+            document.getElementById('pin-pad').innerHTML = 
+                [1,2,3,4,5,6,7,8,9,'',0,'<'].map(k => 
+                    k === '' ? '<div></div>' :
+                    k === '<' ? `<button class="pin-key back" onclick="pinBack()"><svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:currentColor"><path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/></svg></button>` :
+                    `<button class="pin-key" onclick="pinKey(${k})">${k}</button>`
+                ).join('');
+            
+            document.getElementById('pin-modal').classList.add('active');
+        }
+        
+        function cancelPin() {
+            document.getElementById('pin-modal').classList.remove('active');
+            selectedUser = null;
+            pinValue = '';
+        }
+        
+        function pinKey(n) {
+            if (pinValue.length >= 4) return;
+            pinValue += n;
+            updatePinDots();
+            if (pinValue.length === 4) {
+                setTimeout(() => send('auth', { user_id: selectedUser.id, pin: pinValue }), 200);
+            }
+        }
+        
+        function pinBack() {
+            pinValue = pinValue.slice(0, -1);
+            updatePinDots();
+            document.getElementById('pin-error').textContent = '';
+        }
+        
+        function updatePinDots() {
+            document.querySelectorAll('.pin-dot').forEach((d, i) => d.classList.toggle('filled', i < pinValue.length));
+        }
+        
+        function renderBrowser() {
+            if (!state.user) return;
+            
+            const avatar = document.getElementById('current-avatar');
+            avatar.textContent = getInitials(state.user.name);
+            avatar.style.background = state.user.color;
+            document.getElementById('current-name').textContent = state.user.name;
+            
+            document.getElementById('pin-modal').classList.remove('active');
+            renderTabs();
+            updateUrl();
+        }
+        
+        function renderTabs() {
+            document.getElementById('tab-count').textContent = state.tabs.length;
+            document.getElementById('tabs').innerHTML = state.tabs.map(t => `
+                <div class="tab-tile ${t.id === state.activeTab ? 'active' : ''}" onclick="send('tab.activate',{tab_id:${t.id}})">
+                    <div class="tab-preview"><div class="favicon"></div></div>
+                    <div class="tab-info">
+                        <div class="tab-title">${esc(t.title || 'New Tab')}</div>
+                        <div class="tab-url">${esc(t.url || '')}</div>
+                    </div>
+                </div>
+            `).join('') || '<p style="color:var(--muted);text-align:center;padding:40px">No tabs open</p>';
+        }
+        
+        function updateUrl() {
+            const tab = state.tabs.find(t => t.id === state.activeTab);
+            document.getElementById('url').textContent = tab?.url || 'about:blank';
+        }
+        
+        function newTab() { send('tab.create', { url: 'about:blank' }); }
+        function closeTab() { if (state.activeTab) send('tab.close', { tab_id: state.activeTab }); }
+        
+        function logout() {
+            state.user = null;
+            state.tabs = [];
+            send('logout');
+            show('login-screen');
+        }
+        
+        function addUser() {
+            const name = prompt('Name:');
+            if (name?.trim()) send('users.add', { name: name.trim() });
+        }
+        
+        function esc(s) { return (s||'').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+        
+        // Auto-connect
+        if (saved) setTimeout(connect, 300);
+    </script>
+</body>
+</html>
