@@ -1,0 +1,41 @@
+# Sassy Browser Sync Configuration
+# Phone remote control over Tailscale mesh
+
+[sync]
+enabled = true
+port = 8765
+
+# Bind mode - where the server listens
+# "tailscale_only" - Only Tailscale interface (100.x.x.x) - RECOMMENDED
+# "localhost" - Only 127.0.0.1, use Tailscale Funnel for remote
+# "all_interfaces" - NOT RECOMMENDED, exposes to LAN
+bind_mode = "tailscale_only"
+
+[security]
+# Trust devices authenticated via Tailscale automatically
+trust_tailscale = true
+
+# Require explicit approval for new devices
+require_approval = true
+
+# Notify these device IDs when new device requests access
+notify_admins = []
+
+[family]
+# Enable family device management
+enabled = false
+
+# Who can approve new devices (device IDs)
+admins = []
+
+# Note on philosophy:
+# We approve DEVICES, not monitor SESSIONS.
+# No URL tracking, no history logging, no surveillance.
+# Goal: Security (who connects), not surveillance (what they do).
+#
+# Trust levels:
+# - Admin: Can approve/block devices
+# - Trusted: Full access (teen 13+, other adults)
+# - Supervised: Access but parent notified of device changes (under 13)
+# - Pending: Waiting for approval
+# - Blocked: Denied access
