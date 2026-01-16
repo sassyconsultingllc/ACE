@@ -1,0 +1,248 @@
+# Sassy Browser - AI Integration (Optional)
+# All AI features are OFF by default. Your browsing stays private.
+
+[ai]
+enabled = false
+provider = "none"  # Options: "none", "anthropic", "openai", "local"
+
+# API Keys - never synced, never uploaded, stored locally only
+# Get your key from: https://console.anthropic.com (Claude)
+#                    https://platform.openai.com (OpenAI)
+[ai.keys]
+anthropic = ""
+openai = ""
+
+# Local AI (Ollama)
+[ai.local]
+endpoint = "http://localhost:11434"
+model = "llama2"
+
+# Help button - the "?" like Windows XP
+[help]
+show_button = true
+position = "bottom-right"
+
+# Learning mode - extra explanations for curious users
+[learning]
+enabled = false
+easter_eggs_notifications = true
+
+# ==============================================================================
+# MCP Multi-Agent Coding System
+# ==============================================================================
+# Four AI agents working together for conversational code editing:
+#   🗣️ Voice  - Intent understanding, natural conversation
+#   🎯 Orchestrator - Task planning, workflow management
+#   ⚡ Coder  - Code generation and editing
+#   🔍 Auditor - Code review, feasibility analysis
+
+[mcp]
+enabled = true
+mode = "cloud"  # "cloud", "self-hosted", "hybrid", "local"
+
+# Default cloud providers (set API keys below)
+# Cloud mode uses: Grok (xAI), Manus, Claude (Anthropic), Gemini (Google)
+
+# ==============================================================================
+# API Keys for Cloud Mode
+# ==============================================================================
+[mcp.keys]
+xai = ""           # https://console.x.ai - Grok
+anthropic = ""     # https://console.anthropic.com - Claude
+google = ""        # https://aistudio.google.com - Gemini
+together = ""      # https://api.together.xyz - Together.ai (alternative)
+huggingface = ""   # https://huggingface.co/settings/tokens - HF Inference
+
+# ==============================================================================
+# Speech-to-Text (Whisper) - Microphone Input
+# ==============================================================================
+# Local Whisper transcription using whisper.cpp (GPU accelerated)
+# Download models from: https://huggingface.co/ggerganov/whisper.cpp
+
+[whisper]
+enabled = true
+model = "base"     # "tiny", "base", "small", "medium", "large"
+use_gpu = true     # Use GPU acceleration (CUDA/Metal)
+language = "en"    # Target language (empty = auto-detect)
+
+# Voice Activity Detection
+vad_threshold = 0.3        # 0.0-1.0, lower = more sensitive
+silence_duration = 1.5     # Seconds of silence before auto-stop
+max_duration = 60.0        # Maximum recording length in seconds
+live_preview = true        # Show real-time transcription
+
+# ==============================================================================
+# Voice Agent (Intent Understanding)
+# ==============================================================================
+[mcp.voice]
+enabled = true
+provider = "xai"   # "xai", "together", "huggingface", "ollama", "openai"
+
+# Cloud: xAI Grok
+[mcp.voice.xai]
+url = "https://api.x.ai/v1/chat/completions"
+model = "grok-2"
+max_tokens = 4096
+temperature = 0.7
+
+# Alternative: Together.ai (Llama)
+[mcp.voice.together]
+url = "https://api.together.xyz/v1/chat/completions"
+model = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+max_tokens = 4096
+temperature = 0.7
+
+# Alternative: Hugging Face Inference Endpoint
+[mcp.voice.huggingface]
+url = ""  # Your HF endpoint URL
+model = "meta-llama/Llama-3.3-70B-Instruct"
+max_tokens = 4096
+temperature = 0.7
+
+# Local: Ollama
+[mcp.voice.ollama]
+url = "http://localhost:11434/api/chat"
+model = "llama3.3:70b"
+max_tokens = 4096
+temperature = 0.7
+
+# ==============================================================================
+# Orchestrator Agent (Task Planning)
+# ==============================================================================
+[mcp.orchestrator]
+enabled = true
+provider = "together"  # "together", "huggingface", "ollama", "openai"
+
+# Cloud: Together.ai (Mixtral)
+[mcp.orchestrator.together]
+url = "https://api.together.xyz/v1/chat/completions"
+model = "mistralai/Mixtral-8x22B-Instruct-v0.1"
+max_tokens = 8192
+temperature = 0.3
+
+# Alternative: Hugging Face
+[mcp.orchestrator.huggingface]
+url = ""  # Your HF endpoint URL
+model = "mistralai/Mixtral-8x22B-Instruct-v0.1"
+max_tokens = 8192
+temperature = 0.3
+
+# Local: Ollama
+[mcp.orchestrator.ollama]
+url = "http://localhost:11434/api/chat"
+model = "mixtral:8x22b"
+max_tokens = 8192
+temperature = 0.3
+
+# ==============================================================================
+# Coder Agent (Code Generation)
+# ==============================================================================
+[mcp.coder]
+enabled = true
+provider = "anthropic"  # "anthropic", "together", "huggingface", "ollama"
+
+# Cloud: Anthropic Claude
+[mcp.coder.anthropic]
+url = "https://api.anthropic.com/v1/messages"
+model = "claude-sonnet-4-20250514"
+max_tokens = 8192
+temperature = 0.3
+
+# Alternative: Together.ai (Qwen Coder)
+[mcp.coder.together]
+url = "https://api.together.xyz/v1/chat/completions"
+model = "Qwen/Qwen2.5-Coder-32B-Instruct"
+max_tokens = 8192
+temperature = 0.3
+
+# Alternative: Hugging Face
+[mcp.coder.huggingface]
+url = ""  # Your HF endpoint URL
+model = "Qwen/Qwen2.5-Coder-32B-Instruct"
+max_tokens = 8192
+temperature = 0.3
+
+# Local: Ollama
+[mcp.coder.ollama]
+url = "http://localhost:11434/api/chat"
+model = "qwen2.5-coder:32b"
+max_tokens = 8192
+temperature = 0.3
+
+# ==============================================================================
+# Auditor Agent (Code Review)
+# ==============================================================================
+[mcp.auditor]
+enabled = true
+provider = "google"  # "google", "together", "huggingface", "ollama"
+
+# Cloud: Google Gemini
+[mcp.auditor.google]
+url = "https://generativelanguage.googleapis.com/v1beta/models"
+model = "gemini-2.5-pro-preview-06-05"
+max_tokens = 65536
+temperature = 0.2
+
+# Alternative: Together.ai (DeepSeek)
+[mcp.auditor.together]
+url = "https://api.together.xyz/v1/chat/completions"
+model = "deepseek-ai/DeepSeek-V3"
+max_tokens = 32768
+temperature = 0.2
+
+# Alternative: Hugging Face
+[mcp.auditor.huggingface]
+url = ""  # Your HF endpoint URL
+model = "deepseek-ai/DeepSeek-V3"
+max_tokens = 32768
+temperature = 0.2
+
+# Local: Ollama
+[mcp.auditor.ollama]
+url = "http://localhost:11434/api/chat"
+model = "deepseek-coder-v2:latest"
+max_tokens = 32768
+temperature = 0.2
+
+# ==============================================================================
+# ngrok Tunnel (Expose local Ollama to internet)
+# ==============================================================================
+[mcp.ngrok]
+enabled = false
+auth_token = ""  # https://dashboard.ngrok.com/get-started/your-authtoken
+# When enabled, starts ngrok tunnel on Ollama port automatically
+# Share the URL with other devices or remote access
+
+# ==============================================================================
+# Hybrid Mode Examples
+# ==============================================================================
+# mode = "hybrid" lets you mix cloud and local:
+#   - Voice: Cloud (fast response, always available)
+#   - Coder: Local (privacy for your code)
+#
+# Example hybrid setup:
+#   [mcp.voice]
+#   provider = "xai"        # Cloud Grok
+#   [mcp.coder]
+#   provider = "ollama"     # Local Qwen Coder
+#   [mcp.auditor]
+#   provider = "google"     # Cloud Gemini
+
+# ==============================================================================
+# Cost Comparison (approximate, Dec 2024)
+# ==============================================================================
+# Cloud Mode:
+#   - xAI Grok: $5/M input, $15/M output tokens
+#   - Anthropic Claude: $3/M input, $15/M output tokens  
+#   - Google Gemini: $1.25/M input, $5/M output tokens
+#   - Together.ai: ~$0.20-1.00/M tokens (varies by model)
+#
+# Self-Hosted (Hugging Face Inference Endpoints):
+#   - GPU Instances: $1-5/hour
+#   - Best for: High volume, consistent usage
+#
+# Local (Ollama):
+#   - Free! (requires beefy GPU)
+#   - 70B models: 48GB+ VRAM recommended
+#   - 32B models: 24GB VRAM
+#   - 7B models: 8GB VRAM

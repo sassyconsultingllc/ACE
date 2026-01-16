@@ -144,12 +144,18 @@ impl Tab {
                 if *is_secure { "🔒" } else { "🌐" }
             }
             TabContent::File(f) => match f.file_type {
-                FileType::Image => "🖼️",
+                FileType::Image | FileType::ImageRaw | FileType::ImagePsd => "🖼️",
                 FileType::Pdf => "📄",
                 FileType::Document => "📝",
                 FileType::Spreadsheet => "📊",
                 FileType::Chemical => "🧬",
-                FileType::Text => "📃",
+                FileType::Text | FileType::Markdown => "📃",
+                FileType::Archive => "📦",
+                FileType::Model3D => "🧊",
+                FileType::Font => "🔤",
+                FileType::Audio => "🎵",
+                FileType::Video => "🎬",
+                FileType::Ebook => "📚",
                 FileType::Unknown => "📁",
             },
             TabContent::NewTab => "➕",

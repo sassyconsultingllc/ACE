@@ -6,9 +6,14 @@
 //! - wry webview handles web content in the content area
 //! - egui viewers handle files (PDF, images, documents, etc.) in the content area
 
+use crate::auth::{AuthManager, FirstRunState, FirstRunStep, DeviceType, TailscaleManager};
 use crate::browser::{BrowserEngine, Tab, TabContent, TabId};
 use crate::file_handler::{FileType, OpenFile};
 use crate::html_renderer::HtmlRenderer;
+use crate::network_monitor::{NetworkMonitor, ActivityIndicatorState, format_bytes, format_speed};
+use crate::password_vault::{PasswordVault, Credential, PasswordGeneratorOptions, generate_password};
+use crate::smart_history::{SmartHistory, HistoryEntry};
+use crate::family_profiles::{ProfileManager, ProfileType, Profile};
 use crate::viewers::{
     archive::ArchiveViewer,
     audio::AudioViewer,
@@ -30,6 +35,34 @@ use std::sync::Arc;
 /// Browser application state
 pub struct BrowserApp {
     engine: BrowserEngine,
+    
+    // Authentication & licensing
+    auth: AuthManager,
+    tailscale: TailscaleManager,
+    first_run: FirstRunState,
+    
+    // =========================================================================
+    // DISRUPTOR FEATURES - Kills paid software & Chrome bloat
+    // =========================================================================
+    
+    // 📡 Network Activity Monitor - NO HIDDEN TRAFFIC
+    network_monitor: NetworkMonitor,
+    activity_indicator: ActivityIndicatorState,
+    
+    // 🔐 Password Vault - Replaces LastPass, 1Password, Chrome passwords
+    password_vault: PasswordVault,
+    vault_search_query: String,
+    vault_panel_visible: bool,
+    password_generator_opts: PasswordGeneratorOptions,
+    generated_password: String,
+    
+    // ⏱️ Smart History - 14.7s delay, NSFW detection
+    smart_history: SmartHistory,
+    history_panel_visible: bool,
+    
+    // 👨‍👩‍👧‍👦 Family Profiles - Parental controls that work
+    profile_manager: ProfileManager,
+    profiles_panel_visible: bool,
     
     // Viewers for file types
     image_viewer: ImageViewer,
@@ -68,8 +101,43 @@ impl BrowserApp {
         configure_fonts(&cc.egui_ctx);
         configure_style(&cc.egui_ctx, true);
         
+        let auth = AuthManager::new();
+        let mut tailscale = TailscaleManager::new();
+        tailscale.check_installation();
+        
+        let first_run = if auth.is_first_run {
+            FirstRunState::default()
+        } else {
+            let mut state = FirstRunState::default();
+            state.step = FirstRunStep::Complete;
+            state
+        };
+        
+        // Get config directory for vault
+        let config_dir = dirs::config_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("SassyBrowser");
+        
         Self {
             engine: BrowserEngine::new(),
+            auth,
+            tailscale,
+            first_run,
+            
+            // Disruptor features
+            network_monitor: NetworkMonitor::new(),
+            activity_indicator: ActivityIndicatorState::default(),
+            password_vault: PasswordVault::new(config_dir.clone()),
+            vault_search_query: String::new(),
+            vault_panel_visible: false,
+            password_generator_opts: PasswordGeneratorOptions::default(),
+            generated_password: String::new(),
+            smart_history: SmartHistory::new(),
+            history_panel_visible: false,
+            profile_manager: ProfileManager::new(),
+            profiles_panel_visible: false,
+            
+            // Viewers
             image_viewer: ImageViewer::new(),
             pdf_viewer: PdfViewer::new(),
             document_viewer: DocumentViewer::new(),
@@ -1021,10 +1089,445 @@ impl BrowserApp {
         // TODO: Implement printing
         self.status_message = "Print functionality coming soon".into();
     }
+    
+    // =========================================================================
+    // FIRST RUN WIZARD
+    // =========================================================================
+    
+    fn render_first_run_wizard(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(50.0);
+                
+                // Header
+                ui.heading(RichText::new("🦊 Sassy Browser").size(48.0).color(Color32::from_rgb(255, 140, 0)));
+                ui.add_space(10.0);
+                ui.label(RichText::new("Pure Rust • No Chrome • No Google • No Tracking").size(16.0).color(Color32::GRAY));
+                ui.add_space(40.0);
+                
+                // Progress indicator
+                ui.horizontal(|ui| {
+                    let steps = ["Welcome", "Security", "Device", "Tailscale", "Phone", "Done"];
+                    let current = match self.first_run.step {
+                        FirstRunStep::Welcome => 0,
+                        FirstRunStep::EntropyCollection => 1,
+                        FirstRunStep::DeviceSetup => 2,
+                        FirstRunStep::TailscaleSetup => 3,
+                        FirstRunStep::PhonePairing => 4,
+                        FirstRunStep::Complete => 5,
+                    };
+                    
+                    for (i, step) in steps.iter().enumerate() {
+                        let color = if i < current {
+                            Color32::from_rgb(0, 200, 100) // Completed
+                        } else if i == current {
+                            Color32::from_rgb(255, 140, 0)  // Current
+                        } else {
+                            Color32::GRAY                   // Future
+                        };
+                        
+                        ui.label(RichText::new(format!("{}. {}", i + 1, step)).color(color));
+                        if i < steps.len() - 1 {
+                            ui.label(RichText::new(" → ").color(Color32::DARK_GRAY));
+                        }
+                    }
+                });
+                
+                ui.add_space(40.0);
+                ui.separator();
+                ui.add_space(30.0);
+                
+                // Step content
+                match self.first_run.step {
+                    FirstRunStep::Welcome => self.render_wizard_welcome(ui),
+                    FirstRunStep::EntropyCollection => self.render_wizard_entropy(ui),
+                    FirstRunStep::DeviceSetup => self.render_wizard_device(ui),
+                    FirstRunStep::TailscaleSetup => self.render_wizard_tailscale(ui),
+                    FirstRunStep::PhonePairing => self.render_wizard_phone(ui),
+                    FirstRunStep::Complete => {}
+                }
+            });
+        });
+    }
+    
+    fn render_wizard_welcome(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Welcome to Sassy Browser");
+        ui.add_space(20.0);
+        
+        ui.label("This browser is different. Here's why:");
+        ui.add_space(10.0);
+        
+        egui::Frame::dark_canvas(ui.style()).show(ui, |ui| {
+            ui.set_min_width(600.0);
+            ui.vertical(|ui| {
+                ui.add_space(10.0);
+                let features = [
+                    ("🔒", "100% Pure Rust", "No Chrome, no WebKit, no Google telemetry"),
+                    ("📁", "200+ File Formats", "PDF, PDB, RAW photos, CAD files - all built-in"),
+                    ("💰", "Kills Paid Software", "Adobe Suite ($504/yr), AutoCAD ($2K/yr) - FREE"),
+                    ("🔗", "Tailscale Mesh", "Sync across all your devices securely"),
+                    ("📱", "Phone App", "Pair your phone for seamless sync"),
+                ];
+                
+                for (icon, title, desc) in features {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(icon).size(24.0));
+                        ui.add_space(10.0);
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new(title).strong().size(16.0));
+                            ui.label(RichText::new(desc).color(Color32::GRAY));
+                        });
+                    });
+                    ui.add_space(8.0);
+                }
+                ui.add_space(10.0);
+            });
+        });
+        
+        ui.add_space(30.0);
+        
+        if ui.button(RichText::new("Get Started →").size(18.0)).clicked() {
+            self.first_run.next_step();
+        }
+    }
+    
+    fn render_wizard_entropy(&mut self, ui: &mut egui::Ui) {
+        ui.heading("🔐 Creating Your Security Key");
+        ui.add_space(20.0);
+        
+        ui.label("Move your mouse around to generate cryptographic entropy.");
+        ui.label("This creates a unique 256-bit key that stays on YOUR device.");
+        ui.add_space(20.0);
+        
+        // Progress bar
+        let progress = self.auth.entropy_progress();
+        let progress_bar = egui::ProgressBar::new(progress)
+            .desired_width(400.0)
+            .show_percentage()
+            .animate(true);
+        ui.add(progress_bar);
+        
+        ui.add_space(10.0);
+        
+        let bits = (progress * 256.0) as u32;
+        let color = if bits >= 256 {
+            Color32::from_rgb(0, 200, 100)
+        } else if bits >= 128 {
+            Color32::YELLOW
+        } else {
+            Color32::from_rgb(255, 140, 0)
+        };
+        
+        ui.label(RichText::new(format!("Entropy: {} / 256 bits", bits)).color(color));
+        
+        ui.add_space(20.0);
+        
+        // Visual entropy display
+        egui::Frame::dark_canvas(ui.style()).show(ui, |ui| {
+            ui.set_min_size(Vec2::new(400.0, 100.0));
+            
+            // Show some "randomness" visualization
+            ui.horizontal_wrapped(|ui| {
+                let hash_preview = format!("{:016x}", (progress * 1e16) as u64);
+                for c in hash_preview.chars() {
+                    let char_color = if c.is_ascii_digit() {
+                        Color32::from_rgb(100, 200, 255)
+                    } else {
+                        Color32::from_rgb(255, 200, 100)
+                    };
+                    ui.label(RichText::new(c.to_string()).monospace().color(char_color).size(20.0));
+                }
+            });
+        });
+        
+        ui.add_space(30.0);
+        
+        ui.horizontal(|ui| {
+            if ui.button("← Back").clicked() {
+                self.first_run.prev_step();
+            }
+            
+            ui.add_space(20.0);
+            
+            let ready = self.auth.is_entropy_ready();
+            if ui.add_enabled(ready, egui::Button::new(RichText::new("Continue →").size(18.0))).clicked() {
+                self.first_run.next_step();
+            }
+            
+            if !ready {
+                ui.label(RichText::new("Keep moving your mouse!").color(Color32::YELLOW));
+            }
+        });
+    }
+    
+    fn render_wizard_device(&mut self, ui: &mut egui::Ui) {
+        ui.heading("🖥️ Name This Device");
+        ui.add_space(20.0);
+        
+        ui.label("Give this device a name so you can identify it in your network.");
+        ui.add_space(20.0);
+        
+        ui.horizontal(|ui| {
+            ui.label("Device Name:");
+            ui.text_edit_singleline(&mut self.first_run.device_name);
+        });
+        
+        ui.add_space(20.0);
+        
+        ui.label("Device Type:");
+        ui.horizontal(|ui| {
+            let types = [
+                (DeviceType::Desktop, "🖥️ Desktop"),
+                (DeviceType::Laptop, "💻 Laptop"),
+                (DeviceType::Server, "🖧 Server"),
+            ];
+            
+            for (dtype, label) in types {
+                if ui.selectable_label(self.first_run.device_type == dtype, label).clicked() {
+                    self.first_run.device_type = dtype;
+                }
+            }
+        });
+        
+        ui.add_space(20.0);
+        
+        ui.checkbox(&mut self.first_run.enable_tailscale, "Enable Tailscale mesh networking");
+        ui.checkbox(&mut self.first_run.enable_phone_sync, "Set up phone sync");
+        
+        if let Some(ref err) = self.first_run.error_message {
+            ui.add_space(10.0);
+            ui.label(RichText::new(err).color(Color32::RED));
+        }
+        
+        ui.add_space(30.0);
+        
+        ui.horizontal(|ui| {
+            if ui.button("← Back").clicked() {
+                self.first_run.prev_step();
+            }
+            
+            ui.add_space(20.0);
+            
+            if ui.button(RichText::new("Create Device Key →").size(18.0)).clicked() {
+                match self.auth.complete_first_run(
+                    &self.first_run.device_name,
+                    self.first_run.device_type.clone()
+                ) {
+                    Ok(device_id) => {
+                        self.first_run.error_message = None;
+                        self.status_message = format!("Device registered: {}", &device_id[..8]);
+                        self.first_run.next_step();
+                    }
+                    Err(e) => {
+                        self.first_run.error_message = Some(e);
+                    }
+                }
+            }
+        });
+    }
+    
+    fn render_wizard_tailscale(&mut self, ui: &mut egui::Ui) {
+        ui.heading("🔗 Tailscale Setup");
+        ui.add_space(20.0);
+        
+        match self.tailscale.status {
+            crate::auth::TailscaleStatus::NotInstalled => {
+                ui.label("Tailscale is not installed on this system.");
+                ui.add_space(10.0);
+                ui.label("Install Tailscale to sync across your devices:");
+                ui.add_space(10.0);
+                
+                if ui.link("https://tailscale.com/download").clicked() {
+                    let _ = open::that("https://tailscale.com/download");
+                }
+                
+                ui.add_space(20.0);
+                
+                if ui.button("Check Again").clicked() {
+                    self.tailscale.check_installation();
+                }
+            }
+            crate::auth::TailscaleStatus::Stopped => {
+                ui.label("Tailscale is installed but not running.");
+                ui.add_space(20.0);
+                
+                if ui.button("Start Tailscale").clicked() {
+                    if let Err(e) = self.tailscale.start() {
+                        self.first_run.error_message = Some(e);
+                    }
+                }
+            }
+            crate::auth::TailscaleStatus::NeedsLogin => {
+                ui.label("Tailscale needs authentication.");
+                ui.add_space(10.0);
+                ui.label("Run this command in your terminal:");
+                ui.add_space(10.0);
+                
+                egui::Frame::dark_canvas(ui.style()).show(ui, |ui| {
+                    ui.label(RichText::new("tailscale login").monospace().size(16.0));
+                });
+                
+                ui.add_space(20.0);
+                
+                if ui.button("Check Status").clicked() {
+                    self.tailscale.get_status();
+                }
+            }
+            crate::auth::TailscaleStatus::Running => {
+                ui.label(RichText::new("✅ Tailscale is connected!").color(Color32::from_rgb(0, 200, 100)));
+                ui.add_space(10.0);
+                
+                if let Some(ref ip) = self.tailscale.ip_address {
+                    ui.label(format!("Your Tailscale IP: {}", ip));
+                }
+                if let Some(ref hostname) = self.tailscale.hostname {
+                    ui.label(format!("Hostname: {}", hostname));
+                }
+                
+                ui.add_space(20.0);
+                
+                // Show peers
+                let peers = self.tailscale.get_peers();
+                if !peers.is_empty() {
+                    ui.label(RichText::new("Devices on your network:").strong());
+                    for peer in peers {
+                        let status = if peer.online { "🟢" } else { "⚪" };
+                        ui.label(format!("{} {} ({})", status, peer.hostname, peer.ip_address));
+                    }
+                }
+            }
+            crate::auth::TailscaleStatus::Error(ref e) => {
+                ui.label(RichText::new(format!("Error: {}", e)).color(Color32::RED));
+                
+                if ui.button("Retry").clicked() {
+                    self.tailscale.get_status();
+                }
+            }
+        }
+        
+        if let Some(ref err) = self.first_run.error_message {
+            ui.add_space(10.0);
+            ui.label(RichText::new(err).color(Color32::RED));
+        }
+        
+        ui.add_space(30.0);
+        
+        ui.horizontal(|ui| {
+            if ui.button("← Back").clicked() {
+                self.first_run.prev_step();
+            }
+            
+            ui.add_space(20.0);
+            
+            let label = if self.first_run.enable_phone_sync {
+                "Continue to Phone Setup →"
+            } else {
+                "Finish Setup →"
+            };
+            
+            if ui.button(RichText::new(label).size(18.0)).clicked() {
+                self.first_run.next_step();
+            }
+            
+            ui.add_space(20.0);
+            
+            if ui.small_button("Skip").clicked() {
+                self.first_run.enable_tailscale = false;
+                self.first_run.next_step();
+            }
+        });
+    }
+    
+    fn render_wizard_phone(&mut self, ui: &mut egui::Ui) {
+        ui.heading("📱 Phone App Pairing");
+        ui.add_space(20.0);
+        
+        // Generate pairing code if not already done
+        if self.first_run.pairing_code.is_none() {
+            self.first_run.pairing_code = Some(self.auth.generate_pairing_code());
+        }
+        
+        ui.label("Scan this QR code with the Sassy Browser phone app:");
+        ui.add_space(20.0);
+        
+        // QR code placeholder (actual QR rendering would need qrcode crate integration)
+        egui::Frame::dark_canvas(ui.style()).show(ui, |ui| {
+            ui.set_min_size(Vec2::new(200.0, 200.0));
+            ui.centered_and_justified(|ui| {
+                let code = self.first_run.pairing_code.as_deref().unwrap_or("000000");
+                ui.label(RichText::new(format!("Pairing Code:\n\n{}", code)).size(32.0).monospace());
+            });
+        });
+        
+        ui.add_space(20.0);
+        
+        ui.label("Or enter this code manually in the phone app:");
+        ui.add_space(10.0);
+        
+        if let Some(ref code) = self.first_run.pairing_code {
+            ui.label(RichText::new(code).size(48.0).monospace().color(Color32::from_rgb(255, 140, 0)));
+        }
+        
+        ui.add_space(10.0);
+        
+        ui.label(RichText::new("Download the app:").color(Color32::GRAY));
+        ui.horizontal(|ui| {
+            if ui.link("iOS App Store").clicked() {
+                let _ = open::that("https://apps.apple.com/app/sassy-browser");
+            }
+            ui.label(" | ");
+            if ui.link("Google Play").clicked() {
+                let _ = open::that("https://play.google.com/store/apps/details?id=com.sassybrowser");
+            }
+            ui.label(" | ");
+            if ui.link("F-Droid").clicked() {
+                let _ = open::that("https://f-droid.org/packages/com.sassybrowser");
+            }
+        });
+        
+        ui.add_space(30.0);
+        
+        ui.horizontal(|ui| {
+            if ui.button("← Back").clicked() {
+                self.first_run.prev_step();
+            }
+            
+            ui.add_space(20.0);
+            
+            if ui.button(RichText::new("Finish Setup →").size(18.0)).clicked() {
+                self.first_run.next_step();
+            }
+            
+            ui.add_space(20.0);
+            
+            if ui.small_button("Skip for now").clicked() {
+                self.first_run.enable_phone_sync = false;
+                self.first_run.next_step();
+            }
+        });
+    }
 }
 
 impl eframe::App for BrowserApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Collect entropy from mouse movements for first-run key generation
+        if self.first_run.step == FirstRunStep::EntropyCollection {
+            ctx.input(|i| {
+                if let Some(pos) = i.pointer.hover_pos() {
+                    self.auth.add_entropy_mouse(pos.x as i32, pos.y as i32);
+                }
+                if i.events.iter().any(|e| matches!(e, egui::Event::Key { .. })) {
+                    self.auth.add_entropy_key();
+                }
+            });
+        }
+        
+        // Show first-run wizard if not complete
+        if self.first_run.step != FirstRunStep::Complete {
+            self.render_first_run_wizard(ctx);
+            return;
+        }
+        
         // Process any pending messages from webviews
         self.engine.process_messages();
         

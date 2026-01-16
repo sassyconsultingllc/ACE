@@ -592,7 +592,7 @@ fn element_replace_child(args: Vec<Value>) -> Value {
 fn element_clone_node(args: Vec<Value>) -> Value {
     // cloneNode(deep) - returns a copy of the node
     let deep = args.get(0)
-        .map(|v| v.to_boolean())
+        .map(|v| v.is_truthy())
         .unwrap_or(false);
     
     // Create a new element wrapper (shallow clone)

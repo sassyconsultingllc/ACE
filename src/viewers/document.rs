@@ -255,7 +255,7 @@ impl DocumentViewer {
         
         for para in &content.paragraphs {
             self.paragraphs.push(Paragraph {
-                text: para.clone(),
+                text: para.text.clone(),
                 style: "Normal".to_string(),
                 format: TextFormat::default(),
                 list_item: None,
@@ -823,6 +823,11 @@ impl DocumentViewer {
     fn render_document(&mut self, ui: &mut egui::Ui, zoom: f32) {
         let page_width = 612.0 * zoom; // Letter width in points
         
+        // Track changes to apply after iteration
+        let mut needs_stats_update = false;
+        let mut new_current_paragraph = self.current_paragraph;
+        let mut new_current_format = self.current_format.clone();
+        
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -840,15 +845,19 @@ impl DocumentViewer {
                         .show(ui, |ui| {
                             ui.set_min_width(page_width);
                             
-                            // Render paragraphs
-                            for (idx, para) in self.paragraphs.iter_mut().enumerate() {
-                                let is_current = idx == self.current_paragraph;
+                            // Render paragraphs using index-based iteration
+                            let para_count = self.paragraphs.len();
+                            for idx in 0..para_count {
+                                // Get style format
+                                let style_format = {
+                                    let para_style = &self.paragraphs[idx].style;
+                                    self.styles.iter()
+                                        .find(|s| &s.name == para_style)
+                                        .map(|s| s.format.clone())
+                                        .unwrap_or_default()
+                                };
                                 
-                                // Get style
-                                let style_format = self.styles.iter()
-                                    .find(|s| s.name == para.style)
-                                    .map(|s| s.format.clone())
-                                    .unwrap_or_default();
+                                let para = &self.paragraphs[idx];
                                 
                                 // Merge paragraph format with style
                                 let font_size = if para.format.font_size > 0.0 { 
@@ -873,10 +882,12 @@ impl DocumentViewer {
                                     _ => egui::Layout::top_down(egui::Align::LEFT),
                                 };
                                 
+                                let para_format = para.format.clone();
+                                
                                 ui.with_layout(layout, |ui| {
                                     if self.edit_mode {
                                         let response = ui.add(
-                                            TextEdit::multiline(&mut para.text)
+                                            TextEdit::multiline(&mut self.paragraphs[idx].text)
                                                 .font(egui::FontId::proportional(font_size))
                                                 .desired_width(page_width - 144.0)
                                                 .frame(false)
@@ -884,12 +895,12 @@ impl DocumentViewer {
                                         
                                         if response.changed() {
                                             self.has_unsaved_changes = true;
-                                            self.update_stats();
+                                            needs_stats_update = true;
                                         }
                                         
                                         if response.has_focus() {
-                                            self.current_paragraph = idx;
-                                            self.current_format = para.format.clone();
+                                            new_current_paragraph = idx;
+                                            new_current_format = para_format.clone();
                                         }
                                     } else {
                                         let response = ui.add(
@@ -899,8 +910,8 @@ impl DocumentViewer {
                                         );
                                         
                                         if response.clicked() {
-                                            self.current_paragraph = idx;
-                                            self.current_format = para.format.clone();
+                                            new_current_paragraph = idx;
+                                            new_current_format = para_format.clone();
                                         }
                                     }
                                     
@@ -917,6 +928,13 @@ impl DocumentViewer {
                     ui.add_space(20.0);
                 });
             });
+        
+        // Apply tracked changes
+        self.current_paragraph = new_current_paragraph;
+        self.current_format = new_current_format;
+        if needs_stats_update {
+            self.update_stats();
+        }
     }
     
     fn render_find_replace(&mut self, ui: &mut egui::Ui) {

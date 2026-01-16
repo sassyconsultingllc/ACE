@@ -115,7 +115,7 @@ impl AudioViewer {
         });
     }
     
-    fn render_waveform(&self, ui: &mut egui::Ui, audio: &AudioContent, zoom: f32) {
+    fn render_waveform(&mut self, ui: &mut egui::Ui, audio: &AudioContent, zoom: f32) {
         let width = ui.available_width();
         let height = 60.0 * zoom;
         

@@ -138,25 +138,21 @@ impl DownloadManager {
         url: &str,
         save_path: &PathBuf,
     ) {
-        let client = reqwest::blocking::Client::builder()
-            .user_agent("SassyBrowser/1.0")
-            .build();
-        
         let result = (|| -> Result<()> {
-            let client = client?;
-            let mut response = client.get(url).send()?;
+            let response = ureq::get(url)
+                .set("User-Agent", "SassyBrowser/2.0")
+                .call()?;
             
             // Get content length
-            let total_bytes = response.content_length();
+            let total_bytes = response.header("content-length")
+                .and_then(|s| s.parse::<u64>().ok());
             
             // Update total bytes
             {
                 let mut downloads = downloads.lock().unwrap();
                 if let Some(d) = downloads.iter_mut().find(|d| d.id == id) {
                     d.total_bytes = total_bytes;
-                    d.mime_type = response.headers()
-                        .get("content-type")
-                        .and_then(|v| v.to_str().ok())
+                    d.mime_type = response.header("content-type")
                         .map(String::from);
                 }
             }
@@ -164,10 +160,13 @@ impl DownloadManager {
             // Create file
             let mut file = std::fs::File::create(save_path)?;
             
+            // Get reader from response
+            let mut reader = response.into_reader();
+            
             // Download in chunks
             let mut buffer = [0u8; 8192];
             loop {
-                let bytes_read = std::io::Read::read(&mut response, &mut buffer)?;
+                let bytes_read = std::io::Read::read(&mut reader, &mut buffer)?;
                 if bytes_read == 0 {
                     break;
                 }

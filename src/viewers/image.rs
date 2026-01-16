@@ -714,8 +714,10 @@ impl ImageViewer {
             }
         }
         
-        if let Some(texture) = &self.working_texture {
-            let img_size = texture.size_vec2();
+        // Extract texture info before closure to avoid borrow conflicts
+        let texture_info = self.working_texture.as_ref().map(|t| (t.id(), t.size_vec2()));
+        
+        if let Some((texture_id, img_size)) = texture_info {
             
             // Calculate display size
             let effective_zoom = self.zoom_override.unwrap_or(zoom);
@@ -756,7 +758,7 @@ impl ImageViewer {
                     
                     // Draw image
                     painter.image(
-                        texture.id(),
+                        texture_id,
                         rect,
                         Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
                         Color32::WHITE,

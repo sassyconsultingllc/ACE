@@ -146,6 +146,8 @@ impl SpreadsheetViewer {
                                 CellValue::Boolean(b) => b.to_string(),
                                 CellValue::Formula(f) => format!("={}", f),
                                 CellValue::Error(e) => format!("#ERR: {}", e),
+                                CellValue::Date(d) => d.clone(),
+                                CellValue::Currency(n, sym) => format!("{}{:.2}", sym, n),
                             };
                             if !response.has_focus() {
                                 self.formula_bar_text = text;
@@ -261,6 +263,8 @@ impl SpreadsheetViewer {
                                     CellValue::Boolean(b) => (b.to_string().to_uppercase(), Color32::from_rgb(255, 200, 100)),
                                     CellValue::Formula(f) => (f.clone(), Color32::from_rgb(100, 255, 150)),
                                     CellValue::Error(e) => (format!("#{}", e), Color32::RED),
+                                    CellValue::Date(d) => (d.clone(), Color32::from_rgb(200, 180, 255)),
+                                    CellValue::Currency(symbol, amount) => (format!("{}{:.2}", symbol, amount), Color32::from_rgb(100, 255, 200)),
                                 };
                                 
                                 if !text.is_empty() {

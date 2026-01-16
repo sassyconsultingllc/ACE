@@ -1,0 +1,27 @@
+#pragma code_page(65001)
+1 VERSIONINFO
+FILESUBTYPE 0x0
+FILETYPE 0x1
+FILEFLAGS 0x0
+FILEVERSION 2, 0, 0, 0
+PRODUCTVERSION 2, 0, 0, 0
+FILEOS 0x40004
+FILEFLAGSMASK 0x3f
+{
+BLOCK "StringFileInfo"
+{
+BLOCK "000004b0"
+{
+VALUE "FileVersion", "2.0.0"
+VALUE "FileDescription", "Pure Rust Web Browser"
+VALUE "ProductName", "Sassy Browser"
+VALUE "ProductVersion", "2.0.0"
+VALUE "LegalCopyright", "Sassy Consulting LLC"
+}
+}
+BLOCK "VarFileInfo" {
+VALUE "Translation", 0x0, 0x04b0
+}
+}
+1 ICON "assets/icons/icon.ico"
+

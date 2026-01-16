@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=V:\sassy-browser-FIXED\target\release\build\mime_guess-535ecb094c57c206\out\mime_types_generated.rs

@@ -56,8 +56,8 @@ impl VideoViewer {
                 // Main layout - video area + info panel
                 ui.horizontal(|ui| {
                     // Video display area
-                    let video_width = (available.width - 320.0).max(400.0);
-                    let video_height = (video_width * 9.0 / 16.0).min(available.height - 200.0);
+                    let video_width = (available.x - 320.0).max(400.0);
+                    let video_height = (video_width * 9.0 / 16.0).min(available.y - 200.0);
                     
                     egui::Frame::none()
                         .fill(Color32::BLACK)

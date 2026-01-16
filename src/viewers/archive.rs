@@ -9,6 +9,7 @@
 
 use crate::file_handler::{ArchiveContent, ArchiveEntry, ArchiveFormat, FileContent, OpenFile};
 use eframe::egui::{self, Color32, FontId, RichText, Vec2, Sense};
+use std::io::Write;
 use std::path::PathBuf;
 use std::collections::HashSet;
 
@@ -21,11 +22,12 @@ pub enum ArchiveMode {
 }
 
 /// Compression level
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum CompressionLevel {
     Store,      // No compression
     Fastest,    // Level 1
     Fast,       // Level 3
+    #[default]
     Normal,     // Level 5
     Maximum,    // Level 7
     Ultra,      // Level 9
@@ -404,3 +406,517 @@ impl ArchiveViewer {
         decompress_file(archive, output).map_err(|e| e.to_string())?;
         Ok(0)
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // UI RENDERING
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
+        if let FileContent::Archive(archive) = &file.content {
+            self.render_toolbar(ui, archive, &file.path);
+            ui.separator();
+            self.render_info_bar(ui, archive);
+            ui.separator();
+            
+            ui.horizontal(|ui| {
+                // Main content
+                self.render_entries(ui, archive, zoom);
+            });
+            
+            // Dialogs
+            if self.show_create_dialog {
+                self.render_create_dialog(ui);
+            }
+            if self.show_extract_dialog {
+                self.render_extract_dialog(ui, &file.path);
+            }
+        } else {
+            ui.centered_and_justified(|ui| {
+                ui.label("Not an archive file");
+            });
+        }
+    }
+    
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, archive: &ArchiveContent, archive_path: &PathBuf) {
+        ui.horizontal(|ui| {
+            // Extract buttons
+            if ui.button("📦 Extract All").clicked() {
+                self.show_extract_dialog = true;
+            }
+            
+            ui.add_enabled_ui(!self.selected_entries.is_empty(), |ui| {
+                if ui.button("📄 Extract Selected").clicked() {
+                    // Extract only selected entries
+                    if let Some(dir) = native_dialog::FileDialog::new()
+                        .show_open_single_dir()
+                        .ok()
+                        .flatten()
+                    {
+                        // TODO: Extract only selected files
+                        let _ = Self::extract_all(archive_path, &dir);
+                    }
+                }
+            });
+            
+            ui.separator();
+            
+            // Create new archive
+            if ui.button("➕ New Archive").clicked() {
+                self.show_create_dialog = true;
+                self.new_archive = NewArchive::default();
+            }
+            
+            // Add to archive (if format supports it)
+            if archive.format == ArchiveFormat::Zip {
+                if ui.button("📁 Add Files").clicked() {
+                    if let Some(files) = native_dialog::FileDialog::new()
+                        .show_open_multiple_file()
+                        .ok()
+                    {
+                        self.files_to_add.extend(files);
+                        self.mode = ArchiveMode::Edit;
+                    }
+                }
+            }
+            
+            ui.separator();
+            
+            // View options
+            ui.toggle_value(&mut self.tree_view, "🌲 Tree");
+            ui.checkbox(&mut self.show_hidden, "Hidden");
+            
+            // Search
+            ui.separator();
+            ui.label("🔍");
+            ui.add(egui::TextEdit::singleline(&mut self.filter_query)
+                .hint_text("Filter...")
+                .desired_width(150.0));
+            
+            // Selection info
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if !self.selected_entries.is_empty() {
+                    ui.label(format!("{} selected", self.selected_entries.len()));
+                }
+            });
+        });
+    }
+    
+    fn render_info_bar(&self, ui: &mut egui::Ui, archive: &ArchiveContent) {
+        ui.horizontal(|ui| {
+            ui.label(format!("Format: {:?}", archive.format));
+            ui.separator();
+            ui.label(format!("{} files", archive.entries.len()));
+            ui.separator();
+            
+            let total_size: u64 = archive.entries.iter().map(|e| e.size).sum();
+            let compressed_size: u64 = archive.entries.iter().map(|e| e.compressed_size).sum();
+            
+            ui.label(format!("Size: {}", Self::format_size(total_size)));
+            ui.label(format!("Compressed: {}", Self::format_size(compressed_size)));
+            
+            if total_size > 0 {
+                let ratio = (compressed_size as f64 / total_size as f64 * 100.0) as u32;
+                ui.label(format!("Ratio: {}%", ratio));
+            }
+        });
+    }
+    
+    fn render_entries(&mut self, ui: &mut egui::Ui, archive: &ArchiveContent, _zoom: f32) {
+        // Filter entries
+        let filter = self.filter_query.to_lowercase();
+        let filtered: Vec<_> = archive.entries.iter()
+            .enumerate()
+            .filter(|(_, e)| {
+                if !self.show_hidden && e.path.starts_with('.') {
+                    return false;
+                }
+                if !filter.is_empty() && !e.path.to_lowercase().contains(&filter) {
+                    return false;
+                }
+                true
+            })
+            .collect();
+        
+        // Sort entries
+        let mut sorted = filtered.clone();
+        sorted.sort_by(|(_, a), (_, b)| {
+            let cmp = match self.sort_column {
+                SortColumn::Name => a.path.cmp(&b.path),
+                SortColumn::Size => a.size.cmp(&b.size),
+                SortColumn::CompressedSize => a.compressed_size.cmp(&b.compressed_size),
+                SortColumn::Modified => a.modified.cmp(&b.modified),
+                SortColumn::Ratio => {
+                    let ratio_a = if a.size > 0 { a.compressed_size * 100 / a.size } else { 0 };
+                    let ratio_b = if b.size > 0 { b.compressed_size * 100 / b.size } else { 0 };
+                    ratio_a.cmp(&ratio_b)
+                }
+            };
+            if self.sort_ascending { cmp } else { cmp.reverse() }
+        });
+        
+        egui::ScrollArea::both()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                // Header
+                ui.horizontal(|ui| {
+                    ui.add_space(24.0); // Checkbox space
+                    
+                    if ui.selectable_label(self.sort_column == SortColumn::Name, "Name").clicked() {
+                        self.toggle_sort(SortColumn::Name);
+                    }
+                    
+                    ui.add_space(ui.available_width() - 400.0);
+                    
+                    if ui.selectable_label(self.sort_column == SortColumn::Size, "Size").clicked() {
+                        self.toggle_sort(SortColumn::Size);
+                    }
+                    
+                    ui.add_space(80.0);
+                    
+                    if ui.selectable_label(self.sort_column == SortColumn::CompressedSize, "Compressed").clicked() {
+                        self.toggle_sort(SortColumn::CompressedSize);
+                    }
+                    
+                    ui.add_space(80.0);
+                    
+                    if ui.selectable_label(self.sort_column == SortColumn::Ratio, "Ratio").clicked() {
+                        self.toggle_sort(SortColumn::Ratio);
+                    }
+                });
+                
+                ui.separator();
+                
+                // Entries
+                if self.tree_view {
+                    self.render_tree_view(ui, &sorted);
+                } else {
+                    self.render_list_view(ui, &sorted);
+                }
+            });
+    }
+    
+    fn render_tree_view(&mut self, ui: &mut egui::Ui, entries: &[(usize, &ArchiveEntry)]) {
+        // Build tree structure
+        let mut folders: HashSet<String> = HashSet::new();
+        for (_, entry) in entries {
+            let parts: Vec<_> = entry.path.split('/').collect();
+            let mut path = String::new();
+            for (i, part) in parts.iter().enumerate() {
+                if i < parts.len() - 1 {
+                    if !path.is_empty() { path.push('/'); }
+                    path.push_str(part);
+                    folders.insert(path.clone());
+                }
+            }
+        }
+        
+        // Render root level
+        self.render_tree_level(ui, entries, "", 0);
+    }
+    
+    fn render_tree_level(&mut self, ui: &mut egui::Ui, entries: &[(usize, &ArchiveEntry)], prefix: &str, depth: usize) {
+        let indent = "  ".repeat(depth);
+        
+        // Get immediate children at this level
+        let mut seen_folders: HashSet<String> = HashSet::new();
+        
+        for (idx, entry) in entries {
+            let path = &entry.path;
+            
+            // Check if this entry is at the current level
+            let relative = if prefix.is_empty() {
+                path.as_str()
+            } else if path.starts_with(prefix) && path.len() > prefix.len() {
+                &path[prefix.len() + 1..]
+            } else {
+                continue;
+            };
+            
+            if relative.contains('/') {
+                // This is a folder
+                let folder_name = relative.split('/').next().unwrap_or("");
+                if !folder_name.is_empty() && !seen_folders.contains(folder_name) {
+                    seen_folders.insert(folder_name.to_string());
+                    let full_path = if prefix.is_empty() {
+                        folder_name.to_string()
+                    } else {
+                        format!("{}/{}", prefix, folder_name)
+                    };
+                    
+                    let is_expanded = self.expanded_folders.contains(&full_path);
+                    
+                    ui.horizontal(|ui| {
+                        ui.label(&indent);
+                        let icon = if is_expanded { "📂" } else { "📁" };
+                        if ui.selectable_label(false, format!("{} {}", icon, folder_name)).clicked() {
+                            if is_expanded {
+                                self.expanded_folders.remove(&full_path);
+                            } else {
+                                self.expanded_folders.insert(full_path.clone());
+                            }
+                        }
+                    });
+                    
+                    if is_expanded {
+                        self.render_tree_level(ui, entries, &full_path, depth + 1);
+                    }
+                }
+            } else if !relative.is_empty() {
+                // This is a file
+                let is_selected = self.selected_entries.contains(idx);
+                
+                ui.horizontal(|ui| {
+                    ui.label(&indent);
+                    
+                    let mut selected = is_selected;
+                    if ui.checkbox(&mut selected, "").changed() {
+                        if selected {
+                            self.selected_entries.insert(*idx);
+                        } else {
+                            self.selected_entries.remove(idx);
+                        }
+                    }
+                    
+                    let icon = Self::get_file_icon(relative);
+                    if ui.selectable_label(is_selected, format!("{} {}", icon, relative)).clicked() {
+                        self.selected_entries.clear();
+                        self.selected_entries.insert(*idx);
+                        self.last_selected = Some(*idx);
+                    }
+                    
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(Self::format_size(entry.size));
+                    });
+                });
+            }
+        }
+    }
+    
+    fn render_list_view(&mut self, ui: &mut egui::Ui, entries: &[(usize, &ArchiveEntry)]) {
+        for (idx, entry) in entries {
+            let is_selected = self.selected_entries.contains(idx);
+            
+            ui.horizontal(|ui| {
+                let mut selected = is_selected;
+                if ui.checkbox(&mut selected, "").changed() {
+                    if selected {
+                        self.selected_entries.insert(*idx);
+                    } else {
+                        self.selected_entries.remove(idx);
+                    }
+                }
+                
+                let icon = if entry.is_dir { "📁" } else { Self::get_file_icon(&entry.path) };
+                
+                if ui.selectable_label(is_selected, format!("{} {}", icon, entry.path)).clicked() {
+                    if !ui.input(|i| i.modifiers.ctrl) {
+                        self.selected_entries.clear();
+                    }
+                    self.selected_entries.insert(*idx);
+                    self.last_selected = Some(*idx);
+                }
+                
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Ratio
+                    if entry.size > 0 {
+                        let ratio = entry.compressed_size * 100 / entry.size;
+                        ui.label(format!("{}%", ratio));
+                    }
+                    ui.add_space(40.0);
+                    
+                    // Compressed
+                    ui.label(Self::format_size(entry.compressed_size));
+                    ui.add_space(40.0);
+                    
+                    // Size
+                    ui.label(Self::format_size(entry.size));
+                });
+            });
+        }
+    }
+    
+    fn toggle_sort(&mut self, column: SortColumn) {
+        if self.sort_column == column {
+            self.sort_ascending = !self.sort_ascending;
+        } else {
+            self.sort_column = column;
+            self.sort_ascending = true;
+        }
+    }
+    
+    fn render_create_dialog(&mut self, ui: &mut egui::Ui) {
+        egui::Window::new("Create Archive")
+            .collapsible(false)
+            .show(ui.ctx(), |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Name:");
+                    ui.text_edit_singleline(&mut self.new_archive.name);
+                });
+                
+                ui.horizontal(|ui| {
+                    ui.label("Format:");
+                    egui::ComboBox::from_id_salt("archive_format")
+                        .selected_text(format!("{:?}", self.new_archive.format))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.new_archive.format, ArchiveFormat::Zip, "ZIP");
+                            ui.selectable_value(&mut self.new_archive.format, ArchiveFormat::TarGz, "TAR.GZ");
+                            ui.selectable_value(&mut self.new_archive.format, ArchiveFormat::TarXz, "TAR.XZ");
+                            ui.selectable_value(&mut self.new_archive.format, ArchiveFormat::SevenZ, "7Z");
+                        });
+                });
+                
+                ui.horizontal(|ui| {
+                    ui.label("Compression:");
+                    egui::ComboBox::from_id_salt("compression_level")
+                        .selected_text(format!("{:?}", self.new_archive.compression))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.new_archive.compression, CompressionLevel::Store, "Store (none)");
+                            ui.selectable_value(&mut self.new_archive.compression, CompressionLevel::Fastest, "Fastest");
+                            ui.selectable_value(&mut self.new_archive.compression, CompressionLevel::Normal, "Normal");
+                            ui.selectable_value(&mut self.new_archive.compression, CompressionLevel::Maximum, "Maximum");
+                        });
+                });
+                
+                ui.separator();
+                
+                if ui.button("Add Files...").clicked() {
+                    if let Some(files) = native_dialog::FileDialog::new()
+                        .show_open_multiple_file()
+                        .ok()
+                    {
+                        self.new_archive.files.extend(files);
+                    }
+                }
+                
+                if ui.button("Add Folder...").clicked() {
+                    if let Some(dir) = native_dialog::FileDialog::new()
+                        .show_open_single_dir()
+                        .ok()
+                        .flatten()
+                    {
+                        self.new_archive.files.push(dir);
+                    }
+                }
+                
+                // Show files to add
+                egui::ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
+                    for file in &self.new_archive.files {
+                        ui.label(file.display().to_string());
+                    }
+                });
+                
+                ui.separator();
+                
+                ui.horizontal(|ui| {
+                    if ui.button("Create").clicked() && !self.new_archive.files.is_empty() {
+                        let ext = match self.new_archive.format {
+                            ArchiveFormat::Zip => "zip",
+                            ArchiveFormat::TarGz => "tar.gz",
+                            ArchiveFormat::TarXz => "tar.xz",
+                            ArchiveFormat::SevenZ => "7z",
+                            _ => "zip",
+                        };
+                        
+                        if let Some(path) = native_dialog::FileDialog::new()
+                            .add_filter("Archive", &[ext])
+                            .set_filename(&format!("{}.{}", self.new_archive.name, ext))
+                            .show_save_single_file()
+                            .ok()
+                            .flatten()
+                        {
+                            let _ = Self::create_archive(
+                                &path,
+                                &self.new_archive.files,
+                                self.new_archive.format.clone(),
+                                self.new_archive.compression,
+                            );
+                        }
+                        self.show_create_dialog = false;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        self.show_create_dialog = false;
+                    }
+                });
+            });
+    }
+    
+    fn render_extract_dialog(&mut self, ui: &mut egui::Ui, archive_path: &PathBuf) {
+        egui::Window::new("Extract Archive")
+            .collapsible(false)
+            .show(ui.ctx(), |ui| {
+                ui.label("Extract to:");
+                
+                ui.horizontal(|ui| {
+                    let path_str = self.extract_path.as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|| "Select destination...".to_string());
+                    ui.label(&path_str);
+                    
+                    if ui.button("Browse...").clicked() {
+                        if let Some(dir) = native_dialog::FileDialog::new()
+                            .show_open_single_dir()
+                            .ok()
+                            .flatten()
+                        {
+                            self.extract_path = Some(dir);
+                        }
+                    }
+                });
+                
+                ui.separator();
+                
+                ui.horizontal(|ui| {
+                    ui.add_enabled_ui(self.extract_path.is_some(), |ui| {
+                        if ui.button("Extract").clicked() {
+                            if let Some(dest) = &self.extract_path {
+                                let _ = Self::extract_all(archive_path, dest);
+                            }
+                            self.show_extract_dialog = false;
+                        }
+                    });
+                    if ui.button("Cancel").clicked() {
+                        self.show_extract_dialog = false;
+                    }
+                });
+            });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HELPERS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    fn format_size(bytes: u64) -> String {
+        const KB: u64 = 1024;
+        const MB: u64 = KB * 1024;
+        const GB: u64 = MB * 1024;
+        
+        if bytes >= GB {
+            format!("{:.2} GB", bytes as f64 / GB as f64)
+        } else if bytes >= MB {
+            format!("{:.2} MB", bytes as f64 / MB as f64)
+        } else if bytes >= KB {
+            format!("{:.1} KB", bytes as f64 / KB as f64)
+        } else {
+            format!("{} B", bytes)
+        }
+    }
+    
+    fn get_file_icon(path: &str) -> &'static str {
+        let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
+        match ext.as_str() {
+            "txt" | "md" | "log" => "📝",
+            "rs" | "py" | "js" | "ts" | "c" | "cpp" | "h" | "java" | "go" => "💻",
+            "html" | "htm" | "css" => "🌐",
+            "json" | "xml" | "yaml" | "toml" => "📋",
+            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "svg" | "webp" => "🖼",
+            "mp3" | "wav" | "flac" | "ogg" | "m4a" => "🎵",
+            "mp4" | "mkv" | "avi" | "mov" | "webm" => "🎬",
+            "pdf" => "📕",
+            "doc" | "docx" | "odt" | "rtf" => "📄",
+            "xls" | "xlsx" | "ods" | "csv" => "📊",
+            "zip" | "rar" | "7z" | "tar" | "gz" => "📦",
+            "exe" | "msi" | "dll" => "⚙️",
+            _ => "📄",
+        }
+    }
+}

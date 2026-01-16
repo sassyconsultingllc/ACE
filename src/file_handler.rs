@@ -397,7 +397,7 @@ pub struct ArchiveContent {
     pub comment: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ArchiveFormat {
     #[default]
     Zip,
@@ -549,7 +549,15 @@ pub struct EbookContent {
     pub isbn: Option<String>,
     pub chapters: Vec<EbookChapter>,
     pub cover_image: Option<Vec<u8>>,
+    pub toc: Vec<TocEntry>,
     pub table_of_contents: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TocEntry {
+    pub title: String,
+    pub href: String,
+    pub level: u8,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -902,15 +910,8 @@ impl FileHandler {
             }
         };
         
-        let file = OpenFile {
-            path: path.to_path_buf(),
-            file_type,
-            content,
-            size,
-            modified: false,
-            mime_type,
-            hash: None,
-        };
+        let mut file = OpenFile::new(path.to_path_buf(), file_type, content, size);
+        file.mime_type = mime_type;
         
         // Cache the file
         if self.cache.len() >= self.max_cache_size {
@@ -1490,7 +1491,7 @@ impl FileHandler {
         };
         
         let archive = unrar::Archive::new(path)
-            .list()
+            .open_for_listing()
             .map_err(|e| anyhow!("RAR error: {:?}", e))?;
         
         for entry in archive {
@@ -1499,13 +1500,13 @@ impl FileHandler {
                     path: entry.filename.to_string_lossy().to_string(),
                     is_dir: entry.is_directory(),
                     size: entry.unpacked_size as u64,
-                    compressed_size: entry.packed_size as u64,
+                    compressed_size: entry.unpacked_size as u64, // RAR doesn't expose packed size in this API
                     modified: None,
                     crc: Some(entry.file_crc),
                     is_encrypted: entry.is_encrypted(),
                 });
                 content.total_size += entry.unpacked_size as u64;
-                content.compressed_size += entry.packed_size as u64;
+                content.compressed_size += entry.unpacked_size as u64;
             }
         }
         
@@ -1528,33 +1529,36 @@ impl FileHandler {
     }
     
     fn load_obj(&self, path: &Path) -> Result<FileContent> {
-        let obj = obj_rs::Obj::load(path)?;
+        use obj::Obj;
+        use std::io::BufReader;
+        
+        let file = fs::File::open(path)?;
+        let reader = BufReader::new(file);
+        let obj: Obj = obj::load_obj(reader)?;
         
         let mut model = Model3DContent {
             format: Model3DFormat::Obj,
             ..Default::default()
         };
         
-        // Extract vertices
-        for pos in &obj.data.position {
+        // Extract vertices from positions
+        for vert in &obj.vertices {
             model.vertices.push(Vertex3D {
-                position: [pos[0], pos[1], pos[2]],
+                position: [vert.position[0], vert.position[1], vert.position[2]],
                 normal: None,
                 texcoord: None,
                 color: None,
             });
         }
         
-        // Extract faces
-        for object in &obj.data.objects {
-            for group in &object.groups {
-                for poly in &group.polys {
-                    let face = Face3D {
-                        vertices: poly.0.iter().map(|idx| idx.0).collect(),
-                        material: None,
-                    };
-                    model.faces.push(face);
-                }
+        // Extract faces from indices
+        for idx_chunk in obj.indices.chunks(3) {
+            if idx_chunk.len() == 3 {
+                let face = Face3D {
+                    vertices: vec![idx_chunk[0] as usize, idx_chunk[1] as usize, idx_chunk[2] as usize],
+                    material: None,
+                };
+                model.faces.push(face);
             }
         }
         
@@ -1573,21 +1577,29 @@ impl FileHandler {
             ..Default::default()
         };
         
-        // STL stores triangles directly
-        for triangle in stl.faces {
-            let base_idx = model.vertices.len();
+        // First, add all vertices from the mesh
+        for v in &stl.vertices {
+            model.vertices.push(Vertex3D {
+                position: [v[0], v[1], v[2]],
+                normal: None,
+                texcoord: None,
+                color: None,
+            });
+        }
+        
+        // Then add faces using the indices
+        for triangle in &stl.faces {
+            let normal: [f32; 3] = [triangle.normal[0], triangle.normal[1], triangle.normal[2]];
             
-            for vertex in &triangle.vertices {
-                model.vertices.push(Vertex3D {
-                    position: [vertex[0], vertex[1], vertex[2]],
-                    normal: Some(triangle.normal),
-                    texcoord: None,
-                    color: None,
-                });
+            // Update normals for the vertices
+            for &idx in &triangle.vertices {
+                if idx < model.vertices.len() {
+                    model.vertices[idx].normal = Some(normal);
+                }
             }
             
             model.faces.push(Face3D {
-                vertices: vec![base_idx, base_idx + 1, base_idx + 2],
+                vertices: vec![triangle.vertices[0], triangle.vertices[1], triangle.vertices[2]],
                 material: None,
             });
         }
@@ -1745,7 +1757,7 @@ impl FileHandler {
             supported_scripts: Vec::new(),
             weight: face.weight().to_number(),
             is_italic: face.is_italic(),
-            is_monospace: face.is_monospace(),
+            is_monospace: face.is_monospaced(),
             preview_data: data,
         };
         
@@ -1774,7 +1786,7 @@ impl FileHandler {
             .format(&hint, mss, &format_opts, &metadata_opts)
             .map_err(|e| anyhow!("Audio probe error: {:?}", e))?;
         
-        let format = probed.format;
+        let mut format = probed.format;
         
         let mut audio = AudioContent::default();
         
@@ -1839,7 +1851,7 @@ impl FileHandler {
                 
                 if let Some(duration) = track.duration {
                     if let Some(timescale) = track.timescale {
-                        video.duration_secs = duration.0 as f64 / timescale.0 as f64;
+                        video.duration = duration.0 as f64 / timescale.0 as f64;
                     }
                 }
             }
@@ -1866,10 +1878,10 @@ impl FileHandler {
         
         let mut ebook = EbookContent {
             format: EbookFormat::Epub,
-            title: doc.mdata("title").unwrap_or_default(),
-            author: doc.mdata("creator").unwrap_or_default(),
-            publisher: doc.mdata("publisher"),
-            language: doc.mdata("language"),
+            title: doc.mdata("title").map(|m| m.value.clone()),
+            author: doc.mdata("creator").map(|m| m.value.clone()),
+            publisher: doc.mdata("publisher").map(|m| m.value.clone()),
+            language: doc.mdata("language").map(|m| m.value.clone()),
             ..Default::default()
         };
         
@@ -1880,22 +1892,28 @@ impl FileHandler {
             }
         }
         
-        // Build TOC
-        for (title, href) in doc.toc.iter() {
+        // Build TOC from navigation points
+        for nav_point in doc.toc.iter() {
             ebook.toc.push(TocEntry {
-                title: title.clone(),
-                href: href.clone(),
+                title: nav_point.label.clone(),
+                href: nav_point.content.to_string_lossy().to_string(),
                 level: 0,
             });
         }
         
-        // Get chapter content
-        let spine = doc.spine.clone();
-        for chapter_id in &spine {
-            if let Some((content, _)) = doc.get_resource(chapter_id) {
+        // Build table_of_contents for viewer compatibility
+        let mut table_of_contents: Vec<String> = Vec::new();
+        for nav_point in doc.toc.iter() {
+            table_of_contents.push(nav_point.label.clone());
+        }
+        ebook.table_of_contents = table_of_contents;
+        
+        // Get chapter content from spine
+        for spine_item in doc.spine.clone() {
+            if let Some((content, _)) = doc.get_resource(&spine_item.idref) {
                 if let Ok(html) = String::from_utf8(content) {
                     ebook.chapters.push(EbookChapter {
-                        title: Some(chapter_id.clone()),
+                        title: Some(spine_item.idref.clone()),
                         content: html,
                         images: Vec::new(),
                     });

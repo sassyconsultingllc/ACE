@@ -47,6 +47,15 @@ mod html_renderer;          // HTML to egui rendering
 mod sandbox;                // Page sandbox, popup blocker, download quarantine
 mod cookies;                // Cookie storage (local only, no tracking)
 mod crypto;                 // Cryptographic identity (local keys)
+mod auth;                   // Authentication, licensing, Tailscale, phone sync
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DISRUPTOR FEATURES - Kills paid software
+// ═══════════════════════════════════════════════════════════════════════════════
+mod network_monitor;        // Always-visible activity indicator, NO hidden traffic
+mod password_vault;         // Built-in password manager (ChaCha20-Poly1305, Argon2id)
+mod smart_history;          // 14.7s delay history, NSFW auto-detection
+mod family_profiles;        // Adult/Teen/Kid profiles, time limits, parental controls
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DEVELOPER TOOLS
@@ -166,11 +175,9 @@ fn main() {
 
 fn run_browser(_url: Option<String>) {
     // Check first-run setup
-    if let Some(result) = setup::ensure_setup() {
-        if !result {
-            tracing::warn!("Setup cancelled by user");
-            return;
-        }
+    if setup::ensure_setup().is_none() {
+        tracing::warn!("Setup cancelled by user");
+        return;
     }
     
     // Run the egui-based browser with pure Rust file viewers

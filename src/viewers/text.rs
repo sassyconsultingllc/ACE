@@ -127,7 +127,7 @@ impl TextViewer {
     }
     
     fn render_highlighted(&mut self, ui: &mut egui::Ui, file: &OpenFile, font_size: f32) {
-        if let FileContent::Text { content, syntax } = &file.content {
+        if let FileContent::Text { content, syntax, .. } = &file.content {
             let lines: Vec<&str> = content.lines().collect();
             let line_count = lines.len();
             let line_number_width = format!("{}", line_count).len();

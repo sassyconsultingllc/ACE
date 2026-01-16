@@ -73,7 +73,7 @@ impl EbookViewer {
                     .show(ui, |ui| {
                         ui.set_min_width(250.0);
                         ui.set_max_width(250.0);
-                        ui.set_min_height(available.height);
+                        ui.set_min_height(available.y);
                         
                         self.render_sidebar(ui, file, accent_color);
                     });
@@ -84,7 +84,7 @@ impl EbookViewer {
                 .fill(bg_color)
                 .inner_margin(24.0)
                 .show(ui, |ui| {
-                    ui.set_min_width(if self.show_toc { available.width - 270.0 } else { available.width });
+                    ui.set_min_width(if self.show_toc { available.x - 270.0 } else { available.x });
                     
                     self.render_content(ui, file, text_color, accent_color);
                 });
@@ -164,12 +164,12 @@ impl EbookViewer {
                         ui.add_space(12.0);
                         
                         // TOC entries
-                        for (idx, toc_entry) in ebook.table_of_contents.iter().enumerate() {
+                        for (idx, toc_entry) in ebook.toc.iter().enumerate() {
                             let is_current = idx == self.current_chapter;
-                            let label_text = if toc_entry.len() > 30 {
-                                format!("{}...", &toc_entry[..30])
+                            let label_text = if toc_entry.title.len() > 30 {
+                                format!("{}...", &toc_entry.title[..30])
                             } else {
-                                toc_entry.clone()
+                                toc_entry.title.clone()
                             };
                             
                             let response = ui.selectable_label(
@@ -186,7 +186,7 @@ impl EbookViewer {
                         }
                         
                         // If no TOC, show chapter numbers
-                        if ebook.table_of_contents.is_empty() {
+                        if ebook.toc.is_empty() {
                             for idx in 0..ebook.chapters.len() {
                                 let is_current = idx == self.current_chapter;
                                 let label = format!("Chapter {}", idx + 1);
@@ -421,7 +421,7 @@ impl EbookViewer {
             .replace("&hellip;", "…")
             .replace("&rsquo;", "'")
             .replace("&lsquo;", "'")
-            .replace("&rdquo;", """)
-            .replace("&ldquo;", """)
+            .replace("&rdquo;", "\u{201D}")
+            .replace("&ldquo;", "\u{201C}")
     }
 }
