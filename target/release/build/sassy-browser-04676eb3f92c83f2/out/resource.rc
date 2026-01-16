@@ -1,22 +1,22 @@
 #pragma code_page(65001)
 1 VERSIONINFO
-FILESUBTYPE 0x0
-FILETYPE 0x1
-FILEFLAGS 0x0
 FILEVERSION 2, 0, 0, 0
-PRODUCTVERSION 2, 0, 0, 0
-FILEOS 0x40004
 FILEFLAGSMASK 0x3f
+FILEFLAGS 0x0
+FILETYPE 0x1
+PRODUCTVERSION 2, 0, 0, 0
+FILESUBTYPE 0x0
+FILEOS 0x40004
 {
 BLOCK "StringFileInfo"
 {
 BLOCK "000004b0"
 {
-VALUE "FileVersion", "2.0.0"
-VALUE "FileDescription", "Pure Rust Web Browser"
-VALUE "ProductName", "Sassy Browser"
-VALUE "ProductVersion", "2.0.0"
 VALUE "LegalCopyright", "Sassy Consulting LLC"
+VALUE "ProductVersion", "2.0.0"
+VALUE "FileVersion", "2.0.0"
+VALUE "ProductName", "Sassy Browser"
+VALUE "FileDescription", "Pure Rust Web Browser"
 }
 }
 BLOCK "VarFileInfo" {
