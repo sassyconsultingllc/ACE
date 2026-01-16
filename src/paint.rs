@@ -22,7 +22,8 @@ pub struct Painter {
 
 impl Painter {
     pub fn new(width: u32, height: u32) -> Self {
-        let font_data = include_bytes!("../assets/DejaVuSansMono.ttf");
+        // Use bundled font if DejaVu is not available
+        let font_data = include_bytes!("../assets/fonts/Metamorphous-7wZ4.ttf");
         let font = Font::from_bytes(font_data as &[u8], FontSettings::default())
             .expect("Failed to load font");
         

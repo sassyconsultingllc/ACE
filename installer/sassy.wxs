@@ -3,7 +3,7 @@
     <Product Id="*" 
              Name="Sassy Browser" 
              Language="1033" 
-             Version="1.0.0.0" 
+             Version="2.0.0.0" 
              Manufacturer="Sassy Consulting LLC" 
              UpgradeCode="E8F5C9A2-4B3D-4F1E-9A8B-7C6D5E4F3A2B">
         

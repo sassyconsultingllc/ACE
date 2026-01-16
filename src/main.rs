@@ -153,6 +153,12 @@ fn main() {
                 run_pure_engine();
                 return;
             }
+            "--webview" => {
+                // Enable system/webview-style fetching (uses bundled HTTP client)
+                std::env::set_var("SASSY_ENABLE_WEBVIEW", "1");
+                run_browser(None);
+                return;
+            }
             url if url.starts_with("http") || url.starts_with("file:") => {
                 run_browser(Some(url.to_string()));
                 return;

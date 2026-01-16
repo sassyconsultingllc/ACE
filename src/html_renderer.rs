@@ -416,7 +416,15 @@ impl HtmlRenderer {
             return;
         }
         
-        // For http/https, show placeholder since we can't fetch in sync context
+        // If enabled via --webview, attempt to fetch the remote page (blocking)
+        if std::env::var("SASSY_ENABLE_WEBVIEW").ok().as_deref() == Some("1") {
+            match crate::http_client::fetch_text(url) {
+                Ok(body) => { self.parse_html(&body); return; }
+                Err(e) => tracing::warn!("Failed to fetch {}: {}", url, e),
+            }
+        }
+
+        // Fallback placeholder when fetching is disabled or failed
         let html = format!(r#"
             <!DOCTYPE html>
             <html>

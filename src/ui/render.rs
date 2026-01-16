@@ -19,7 +19,8 @@ static FONT: OnceLock<Font> = OnceLock::new();
 fn get_font() -> &'static Font {
     FONT.get_or_init(|| {
         // Try to load DejaVu Sans Mono, fall back to embedded minimal font
-        let font_data = include_bytes!("../../assets/DejaVuSansMono.ttf");
+        // Use bundled font if DejaVu is not available
+        let font_data = include_bytes!("../../assets/fonts/Metamorphous-7wZ4.ttf");
         Font::from_bytes(font_data.as_slice(), FontSettings::default())
             .expect("Failed to load font")
     })

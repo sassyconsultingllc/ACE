@@ -158,9 +158,8 @@ pub fn load_image_blocking(url: &str) -> Result<ImageData, String> {
         cache.insert(url.to_string(), ImageState::Loading);
     }
     
-    // Fetch the image
-    let response = ureq::get(url)
-        .call()
+    // Fetch the image (use http_client to attach User-Agent if configured)
+    let response = crate::http_client::get(url)
         .map_err(|e| format!("Failed to fetch image: {}", e))?;
     
     // Read response body

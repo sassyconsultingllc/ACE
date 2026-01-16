@@ -208,8 +208,9 @@ impl Theme {
                 surface_elevated: "#21262d".into(),
                 border: "#30363d".into(),
                 text_primary: "#e6edf3".into(),
-                text_secondary: "#8b949e".into(),
-                text_muted: "#6e7681".into(),
+                // Slightly stronger secondary/muted colors for readability
+                text_secondary: "#bfc9d3".into(),
+                text_muted: "#9aa0a6".into(),
                 accent: "#58a6ff".into(),
                 accent_hover: "#79c0ff".into(),
                 accent_active: "#388bfd".into(),
@@ -226,12 +227,13 @@ impl Theme {
             typography: Typography {
                 font_family: "Inter, system-ui, sans-serif".into(),
                 font_mono: "JetBrains Mono, monospace".into(),
-                font_size_xs: 11,
-                font_size_sm: 13,
-                font_size_base: 14,
-                font_size_lg: 16,
-                font_size_xl: 20,
-                font_size_2xl: 24,
+                // Increase base and related sizes for better legibility
+                font_size_xs: 12,
+                font_size_sm: 14,
+                font_size_base: 16,
+                font_size_lg: 18,
+                font_size_xl: 22,
+                font_size_2xl: 26,
                 line_height: 1.5,
             },
             spacing: Spacing {

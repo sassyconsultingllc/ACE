@@ -30,6 +30,7 @@ use crate::viewers::{
 };
 use anyhow::Result;
 use eframe::egui::{self, Color32, FontId, Key, Modifiers, RichText, Stroke, Vec2};
+use eframe::egui::{ColorImage, TextureHandle};
 use std::sync::Arc;
 
 /// Browser application state
@@ -80,6 +81,8 @@ pub struct BrowserApp {
     
     // HTML/JS renderer for web content
     html_renderer: HtmlRenderer,
+    // UI icon textures (loaded at startup)
+    icons: std::collections::HashMap<String, TextureHandle>,
     
     // UI state
     dark_mode: bool,
@@ -118,6 +121,29 @@ impl BrowserApp {
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join("SassyBrowser");
         
+        // Load icon textures from assets/icons
+        let mut icons: std::collections::HashMap<String, TextureHandle> = std::collections::HashMap::new();
+        let ctx = &cc.egui_ctx;
+        let icon_files = [
+            ("back", "assets/icons/backward.ico"),
+            ("forward", "assets/icons/forward.ico"),
+            ("bookmarks", "assets/icons/bookmarks.ico"),
+            ("app", "assets/icons/icon.svg"),
+        ];
+
+        for (key, path) in &icon_files {
+            if let Ok(bytes) = std::fs::read(path) {
+                if let Ok(img) = image::load_from_memory(&bytes) {
+                    let img = img.to_rgba8();
+                    let size = [img.width() as usize, img.height() as usize];
+                    let pixels: Vec<u8> = img.into_raw();
+                    let color_image = ColorImage::from_rgba_unmultiplied(size, &pixels);
+                    let handle = ctx.load_texture(*path, color_image, egui::TextureOptions::default());
+                    icons.insert((*key).to_string(), handle);
+                }
+            }
+        }
+
         Self {
             engine: BrowserEngine::new(),
             auth,
@@ -151,6 +177,7 @@ impl BrowserApp {
             video_viewer: VideoViewer::new(),
             ebook_viewer: EbookViewer::new(),
             html_renderer: HtmlRenderer::new(),
+            icons,
             dark_mode: true,
             zoom_level: 1.0,
             show_dev_tools: false,
@@ -174,17 +201,33 @@ impl BrowserApp {
                 _ => (false, false, false),
             };
             
-            // Navigation buttons
-            if ui.add_enabled(can_back, egui::Button::new("◀").min_size(Vec2::new(28.0, 24.0)))
-                .on_hover_text("Back (Alt+Left)")
-                .clicked() {
-                self.engine.go_back();
+            // Navigation buttons (use loaded icons when available)
+            if let Some(tex) = self.icons.get("back") {
+                if ui.add_enabled(can_back, egui::ImageButton::new((tex.id(), Vec2::new(28.0, 24.0))))
+                    .on_hover_text("Back (Alt+Left)")
+                    .clicked() {
+                    self.engine.go_back();
+                }
+            } else {
+                if ui.add_enabled(can_back, egui::Button::new("◀").min_size(Vec2::new(28.0, 24.0)))
+                    .on_hover_text("Back (Alt+Left)")
+                    .clicked() {
+                    self.engine.go_back();
+                }
             }
-            
-            if ui.add_enabled(can_forward, egui::Button::new("▶").min_size(Vec2::new(28.0, 24.0)))
-                .on_hover_text("Forward (Alt+Right)")
-                .clicked() {
-                self.engine.go_forward();
+
+            if let Some(tex) = self.icons.get("forward") {
+                if ui.add_enabled(can_forward, egui::ImageButton::new((tex.id(), Vec2::new(28.0, 24.0))))
+                    .on_hover_text("Forward (Alt+Right)")
+                    .clicked() {
+                    self.engine.go_forward();
+                }
+            } else {
+                if ui.add_enabled(can_forward, egui::Button::new("▶").min_size(Vec2::new(28.0, 24.0)))
+                    .on_hover_text("Forward (Alt+Right)")
+                    .clicked() {
+                    self.engine.go_forward();
+                }
             }
             
             if is_loading {
@@ -255,9 +298,19 @@ impl BrowserApp {
                     ui.close_menu();
                 }
                 ui.separator();
-                if ui.button("⭐ Bookmarks").clicked() {
-                    self.engine.navigate("sassy://bookmarks");
-                    ui.close_menu();
+                // Bookmarks menu button: prefer image icon if available
+                if let Some(tex) = self.icons.get("bookmarks") {
+                    if ui.add(egui::ImageButton::new((tex.id(), Vec2::new(18.0,18.0))))
+                        .on_hover_text("Bookmarks")
+                        .clicked() {
+                        self.engine.navigate("sassy://bookmarks");
+                        ui.close_menu();
+                    }
+                } else {
+                    if ui.button("⭐ Bookmarks").clicked() {
+                        self.engine.navigate("sassy://bookmarks");
+                        ui.close_menu();
+                    }
                 }
                 if ui.button("🕐 History").clicked() {
                     self.engine.navigate("sassy://history");
@@ -306,11 +359,12 @@ impl BrowserApp {
             for (idx, (id, icon, title, loading, pinned)) in tabs.iter().enumerate() {
                 let is_active = idx == active_idx;
                 
-                // Tab styling
+                // Tab styling: use the current visuals/panel fills instead of hardcoded grays
+                let visuals = ui.ctx().style().visuals.clone();
                 let bg_color = if is_active {
-                    if self.dark_mode { Color32::from_gray(50) } else { Color32::from_gray(220) }
+                    visuals.widgets.active.bg_fill
                 } else {
-                    if self.dark_mode { Color32::from_gray(30) } else { Color32::from_gray(200) }
+                    visuals.widgets.inactive.bg_fill
                 };
                 
                 egui::Frame::none()
@@ -430,7 +484,7 @@ impl BrowserApp {
             }
             
             if is_empty {
-                ui.label(RichText::new("Bookmarks bar is empty").italics().color(Color32::GRAY));
+                ui.label(RichText::new("Bookmarks bar is empty").italics().color(Color32::from_rgb(160,160,160)));
             }
         });
     }
@@ -789,7 +843,7 @@ impl BrowserApp {
                         if ui.small_button("×").clicked() {
                             remove_id = Some(*id);
                         }
-                        ui.label(RichText::new(url).small().color(Color32::GRAY));
+                        ui.label(RichText::new(url).color(Color32::from_rgb(150,150,150)));
                     });
                 });
             }
@@ -800,7 +854,7 @@ impl BrowserApp {
             }
             
             if is_empty {
-                ui.label(RichText::new("No bookmarks yet").italics().color(Color32::GRAY));
+                ui.label(RichText::new("No bookmarks yet").italics().color(Color32::from_rgb(160,160,160)));
             }
         });
     }
@@ -1573,16 +1627,48 @@ impl eframe::App for BrowserApp {
 
 fn configure_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
-    // Add custom fonts here if needed
+    // Add bundled custom font (Metamorphous) if present
+    // Embedded at compile time from assets/fonts
+    fonts.font_data.insert(
+        "metamorphous".into(),
+        egui::FontData::from_static(include_bytes!("../assets/fonts/Metamorphous-7wZ4.ttf")),
+    );
+    // Prefer our custom font for proportional text
+    fonts.families.get_mut(&egui::FontFamily::Proportional).map(|v| v.insert(0, "metamorphous".into()));
     ctx.set_fonts(fonts);
 }
 
 fn configure_style(ctx: &egui::Context, dark_mode: bool) {
+    // Start from egui defaults then tweak fills so the whole window and panels follow theme
+    let mut visuals = if dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
+
     if dark_mode {
-        ctx.set_visuals(egui::Visuals::dark());
+        visuals.window_fill = Color32::from_rgb(0x0d, 0x11, 0x17); // #0d1117
+        visuals.panel_fill = Color32::from_rgb(0x16, 0x1b, 0x22); // #161b22
+        visuals.extreme_bg_color = Color32::from_rgb(0x0a, 0x0c, 0x0e);
+        visuals.faint_bg_color = Color32::from_rgb(0x14, 0x18, 0x1e);
+        visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(0x0d, 0x11, 0x17);
+        visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x16, 0x1b, 0x22);
+        visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x21, 0x26, 0x2d);
+        visuals.widgets.active.bg_fill = Color32::from_rgb(0x21, 0x26, 0x2d);
+        visuals.override_text_color = Some(Color32::from_rgb(0xe6, 0xed, 0xf3));
     } else {
-        ctx.set_visuals(egui::Visuals::light());
+        // Light mode: keep defaults but nudge fills to match theme defaults
+        visuals.window_fill = Color32::from_rgb(0xff, 0xff, 0xff);
+        visuals.panel_fill = Color32::from_rgb(0xf6, 0xf8, 0xfa);
+        visuals.extreme_bg_color = Color32::from_rgb(0xf0, 0xf2, 0xf4);
     }
+
+    ctx.set_visuals(visuals);
+
+    // Improve default text sizes for readability across the UI
+    let mut style = (*ctx.style()).clone();
+    style.text_styles.insert(egui::TextStyle::Heading, FontId::proportional(20.0));
+    style.text_styles.insert(egui::TextStyle::Body, FontId::proportional(16.0));
+    style.text_styles.insert(egui::TextStyle::Monospace, FontId::monospace(15.0));
+    style.text_styles.insert(egui::TextStyle::Button, FontId::proportional(15.0));
+    style.text_styles.insert(egui::TextStyle::Small, FontId::proportional(14.0));
+    ctx.set_style(style);
 }
 
 /// Run the browser application
