@@ -100,6 +100,9 @@ mod update;                 // Self-update (from OUR servers, not Google/Microso
 mod extensions;             // Extension system
 mod voice;                  // Voice input (Whisper - runs locally, offline)
 
+// HTTP client helper (builds UA and wraps requests)
+mod http_client;
+
 // Browser module (tabs, history, bookmarks)
 mod browser;
 
