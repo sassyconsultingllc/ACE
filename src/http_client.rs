@@ -14,7 +14,7 @@ pub fn build_user_agent() -> Option<String> {
         "chrome" => {
             match device.as_str() {
                 "mobile" | "pixel" => "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Mobile Safari/537.36".to_string(),
-                _ => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36".to_string(),
+       _ => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36".to_string(),
             }
         }
         "safari" => {
