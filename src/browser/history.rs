@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables, unused_imports)]
 //! History management - Track browsing history
 
 use serde::{Deserialize, Serialize};
@@ -115,8 +116,6 @@ impl HistoryManager {
     
     /// Get entries for a specific day
     pub fn for_date(&self, year: i32, month: u32, day: u32) -> Vec<&HistoryEntry> {
-        use std::time::{Duration, UNIX_EPOCH};
-        
         // Calculate start and end timestamps for the day
         // This is a simplified calculation
         let start_of_day = chrono_date_to_timestamp(year, month, day);

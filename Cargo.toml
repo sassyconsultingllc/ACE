@@ -71,6 +71,8 @@ image = { version = "0.25", features = [
     "avif", "dds", "exr", "pnm", "qoi", "ff"
 ]}
 resvg = "0.44"                          # SVG rendering (Pure Rust)
+usvg = "0.44"                           # SVG parser used by resvg
+tiny-skia = "0.11"                      # 2D rasterizer used by resvg
 rawloader = "0.37"                       # RAW camera: CR2, NEF, ARW, DNG, etc.
 imagepipe = "0.5"                        # RAW processing pipeline
 psd = "0.3"                              # Adobe Photoshop files

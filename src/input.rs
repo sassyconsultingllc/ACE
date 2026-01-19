@@ -5,6 +5,7 @@
 //! - Text cursor position and selection
 //! - Input history (for undo)
 //! - IME composition
+#![allow(dead_code, unused_variables, unused_imports)]
 
 use std::collections::VecDeque;
 

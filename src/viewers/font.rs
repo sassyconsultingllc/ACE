@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Font Viewer - TTF, OTF, WOFF preview with character map
 
 use crate::file_handler::{FileContent, FontContent, OpenFile};

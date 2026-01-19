@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Text/Code Viewer - Syntax highlighting, line numbers, editing
 
 use crate::file_handler::{FileContent, OpenFile};

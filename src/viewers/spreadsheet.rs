@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Spreadsheet Viewer - XLSX, XLS, ODS, CSV viewer and editor
 
 use crate::file_handler::{CellValue, FileContent, OpenFile, Sheet, SpreadsheetContent};

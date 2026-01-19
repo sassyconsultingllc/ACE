@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Video Viewer - MP4, WebM, AVI, MKV playback with thumbnails
 //! 
 //! Features:

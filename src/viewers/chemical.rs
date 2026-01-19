@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Chemical/Biological Viewer - PDB, MOL, SDF molecular structure viewer
 
 use crate::file_handler::{Atom, Bond, ChemicalContent, FileContent, OpenFile};

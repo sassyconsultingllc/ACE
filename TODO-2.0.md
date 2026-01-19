@@ -49,6 +49,7 @@
 - [x] Anthropic (Claude) integration
 - [x] Sandboxed file system for AI
 - [x] Git integration
+- [x] MCP Server mode (expose browser as MCP server for external control)
 
 #### Phone Sync (No Cloud)
 - [x] Tailscale P2P sync
@@ -65,6 +66,9 @@
 - [ ] Fix any API mismatches between old/new modules
 - [ ] Wire pure Rust engine to egui UI
 - [ ] Test all 13 file viewers
+- [x] Add MCP Server mode (mcp_server.rs) - Claude Desktop integration
+- [ ] Wire MCP server tools to actual browser engine APIs
+- [ ] Test MCP server with Claude Desktop
 
 #### Medium Priority
 - [ ] Restore missing dev tools (playground.rs, waterfall.rs, inspector.rs, split.rs)

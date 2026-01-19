@@ -6,6 +6,8 @@
 // YOUR HISTORY BECOMES INTENTIONAL.
 // ============================================================================
 
+#![allow(dead_code, unused_variables, unused_imports)]
+
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -219,7 +221,7 @@ impl SmartHistory {
         self.total_visits += 1;
         
         // Check for NSFW
-        let (is_nsfw, confidence) = self.nsfw_detector.analyze(url, title);
+        let (is_nsfw, _confidence) = self.nsfw_detector.analyze(url, title);
         if is_nsfw && self.auto_exclude_nsfw {
             self.nsfw_blocked += 1;
             // Still track in pending but mark for exclusion
@@ -426,6 +428,23 @@ impl SmartHistory {
     
     pub fn clear_nsfw(&mut self) {
         self.entries.retain(|e| !e.is_nsfw);
+    }
+
+    pub fn exclude_domain(&mut self, domain: &str) {
+        self.nsfw_detector.add_excluded_domain(domain);
+        for entry in self.entries.iter_mut().filter(|e| e.domain == domain) {
+            entry.is_nsfw = true;
+            entry.exclude_from_sync = true;
+            entry.nsfw_confidence = entry.nsfw_confidence.max(1.0);
+        }
+    }
+
+    pub fn include_domain(&mut self, domain: &str) {
+        self.nsfw_detector.remove_excluded_domain(domain);
+        for entry in self.entries.iter_mut().filter(|e| e.domain == domain) {
+            entry.exclude_from_sync = false;
+            entry.is_nsfw = false;
+        }
     }
     
     fn prune(&mut self) {

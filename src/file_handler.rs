@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables, unused_imports)]
 //! Universal File Handler - Detection, loading, saving, printing, export
 //! 
 //! Supports virtually every file format without paid dependencies:
@@ -15,7 +16,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{Read, Seek};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -737,7 +738,7 @@ impl FileHandler {
             
             // Video
             "mp4" | "webm" | "mkv" | "avi" | "mov" | "wmv" | "flv" |
-            "m4v" | "mpeg" | "mpg" | "3gp" | "ogv" | "ts" | "mts" => FileType::Video,
+            "m4v" | "mpeg" | "mpg" | "3gp" | "ogv" => FileType::Video,
             
             // eBooks
             "epub" | "mobi" | "azw" | "azw3" | "kf8" | "kfx" | "prc" |
@@ -1464,8 +1465,8 @@ impl FileHandler {
             ..Default::default()
         };
         
-        let path_str = path.to_str().ok_or_else(|| anyhow!("Invalid path"))?;
-        
+        let _path_str = path.to_str().ok_or_else(|| anyhow!("Invalid path"))?;
+
         sevenz_rust::decompress_file(path, tempfile::tempdir()?.path())
             .map_err(|e| anyhow!("7z error: {:?}", e))?;
         
@@ -1765,7 +1766,6 @@ impl FileHandler {
     }
     
     fn load_audio(&self, path: &Path) -> Result<FileContent> {
-        use symphonia::core::codecs::DecoderOptions;
         use symphonia::core::formats::FormatOptions;
         use symphonia::core::io::MediaSourceStream;
         use symphonia::core::meta::MetadataOptions;

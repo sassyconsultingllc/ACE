@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables, unused_imports)]
+
 use super::lexer::{Token, TokenKind, Lexer};
 
 #[derive(Debug, Clone)]
@@ -335,7 +337,20 @@ impl Parser {
     }
     
     fn parse_expression(&mut self) -> Result<Expr, String> {
-        self.parse_assignment()
+        // Support comma operator (evaluates operands left-to-right, returns last)
+        self.parse_comma()
+    }
+
+    fn parse_comma(&mut self) -> Result<Expr, String> {
+        let mut expr = self.parse_assignment()?;
+
+        while matches!(self.current().kind, TokenKind::Comma) {
+            self.advance();
+            let right = self.parse_assignment()?;
+            expr = Expr::Binary { left: Box::new(expr), op: ",".to_string(), right: Box::new(right) };
+        }
+
+        Ok(expr)
     }
     
     fn parse_assignment(&mut self) -> Result<Expr, String> {
@@ -661,6 +676,13 @@ impl Parser {
         let mut elements = Vec::new();
         
         while !matches!(self.current().kind, TokenKind::RBracket | TokenKind::Eof) {
+            // Support elisions / leading or consecutive commas: `[,,a]`
+            if matches!(self.current().kind, TokenKind::Comma) {
+                elements.push(Expr::Undefined);
+                self.advance();
+                continue;
+            }
+
             elements.push(self.parse_assignment()?);
             
             if matches!(self.current().kind, TokenKind::Comma) {

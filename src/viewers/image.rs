@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Image Editor - Full editing capabilities for all image formats
 //! 
 //! Features:

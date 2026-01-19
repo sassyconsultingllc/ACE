@@ -1,7 +1,7 @@
+#![allow(dead_code, unused_variables, unused_imports)]
 //! Bookmark management - Store and organize bookmarks
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use anyhow::Result;
 use uuid::Uuid;
@@ -271,9 +271,31 @@ impl BookmarkManager {
     }
     
     /// Import from HTML bookmark file
-    pub fn import_html(&mut self, _content: &str) -> Result<usize> {
-        // TODO: Parse HTML bookmark format
-        Ok(0)
+    pub fn import_html(&mut self, content: &str) -> Result<usize> {
+        // Minimal Netscape-style bookmark import: looks for <A HREF="...">Title</A>
+        let mut imported = 0usize;
+        for line in content.lines() {
+            if let Some(href_pos) = line.to_uppercase().find("HREF=") {
+                // Extract URL between quotes
+                let after = &line[href_pos + 5..];
+                if let Some(first_quote) = after.find('"') {
+                    let rest = &after[first_quote + 1..];
+                    if let Some(end_quote) = rest.find('"') {
+                        let url = &rest[..end_quote];
+                        // Title follows after the closing quote
+                        let title = rest[end_quote + 1..]
+                            .split('>')
+                            .nth(1)
+                            .and_then(|s| s.split("</A>").next())
+                            .unwrap_or(url)
+                            .trim();
+                        self.add(url, title, None);
+                        imported += 1;
+                    }
+                }
+            }
+        }
+        Ok(imported)
     }
     
     /// Export to HTML bookmark file

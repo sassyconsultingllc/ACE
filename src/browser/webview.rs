@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables, unused_imports)]
 //! WebView stub - Pure Rust rendering, no external browser engine
 //! NO CHROME. NO GOOGLE. NO WEBKIT.
 

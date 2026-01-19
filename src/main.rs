@@ -74,6 +74,7 @@ mod mcp_panel;              // MCP UI panel
 mod mcp_api;                // API clients (xAI Grok, Anthropic Claude - NO Google)
 mod mcp_fs;                 // Sandboxed file system for AI
 mod mcp_git;                // Git integration
+mod mcp_server;             // MCP Server - expose browser as MCP server for Claude Desktop
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NETWORKING & SYNC (NO GOOGLE CLOUD)
@@ -149,6 +150,11 @@ fn main() {
             }
             "--reset" => {
                 reset_data();
+                return;
+            }
+            "--mcp-server" => {
+                // Run as MCP server (for Claude Desktop integration)
+                run_mcp_server_mode(&args[2..]);
                 return;
             }
             "--pure-engine" | "-e" => {
@@ -234,6 +240,35 @@ fn reset_data() {
     }
 }
 
+fn run_mcp_server_mode(args: &[String]) {
+    println!("🤖 Starting Sassy Browser MCP Server...");
+    println!("Connect from Claude Desktop or any MCP client.");
+    
+    let mut config = mcp_server::McpServerConfig::default();
+    config.enabled = true;
+    
+    // Parse additional args
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--mcp-port" if i + 1 < args.len() => {
+                if let Ok(port) = args[i + 1].parse() {
+                    config.port = port;
+                    config.transport = "socket".to_string();
+                }
+                i += 1;
+            }
+            "--mcp-socket" => {
+                config.transport = "socket".to_string();
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    
+    mcp_server::run_mcp_server(config);
+}
+
 fn print_help() {
     println!(r#"
 Sassy Browser v2.0.0 - Pure Rust Web Browser & Universal File Viewer
@@ -249,12 +284,17 @@ OPTIONS:
     -p, --phone-app     Start phone sync server (Tailscale, no cloud)
     -e, --pure-engine   Run with pure Rust renderer (experimental)
     --reset             Clear all browser data
+    --mcp-server        Run as MCP server (for Claude Desktop)
+    --mcp-port PORT     MCP server port (default: 9999, implies socket mode)
+    --mcp-socket        Use socket transport instead of stdio
 
 EXAMPLES:
     sassy-browser                           Open browser
     sassy-browser https://example.com       Open URL
     sassy-browser document.pdf              Open file
     sassy-browser molecule.pdb              View molecular structure
+    sassy-browser --mcp-server              Run as MCP server (stdio)
+    sassy-browser --mcp-server --mcp-port 9999  Run MCP server on port 9999
 
 KEYBOARD SHORTCUTS:
     Ctrl+L              Focus address bar

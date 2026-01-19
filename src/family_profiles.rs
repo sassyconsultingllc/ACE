@@ -6,6 +6,8 @@
 // Weekly reports. FINALLY, PARENTAL CONTROLS THAT WORK.
 // ============================================================================
 
+#![allow(dead_code, unused_variables, unused_imports)]
+
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -340,6 +342,10 @@ pub struct ProfileManager {
 }
 
 impl ProfileManager {
+        /// Public getter for all approval requests (for UI display)
+        pub fn all_approval_requests(&self) -> &[ApprovalRequest] {
+            &self.approval_requests
+        }
     pub fn new() -> Self {
         Self {
             profiles: Vec::new(),
@@ -623,6 +629,22 @@ impl ProfileManager {
             }
         }
     }
+
+    pub fn record_download(&mut self, filename: &str, url: &str, size_bytes: u64, approved: bool, approved_by: Option<String>) {
+        if let Some(profile) = self.active_profile_mut() {
+            profile.usage_stats.downloads.push(DownloadRecord {
+                timestamp: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+                filename: filename.to_string(),
+                url: url.to_string(),
+                size_bytes,
+                approved,
+                approved_by,
+            });
+        }
+    }
     
     pub fn record_search(&mut self, query: &str) {
         if let Some(profile) = self.active_profile_mut() {
@@ -704,7 +726,7 @@ impl ProfileManager {
         Ok(())
     }
     
-    pub fn deny_request(&mut self, request_id: &str, parent_id: &str, reason: Option<&str>) -> Result<(), String> {
+    pub fn deny_request(&mut self, request_id: &str, _parent_id: &str, reason: Option<&str>) -> Result<(), String> {
         let request = self.approval_requests.iter_mut()
             .find(|r| r.id == request_id)
             .ok_or("Request not found")?;

@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 //! Viewers module - All file type viewers for Sassy Browser
 //! 
 //! This module contains specialized viewers for every supported file type:

@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! eBook Viewer - EPUB, MOBI reader with chapter navigation
 //! 
 //! Features:

@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables, unused_imports)]
 // ============================================================================
 // SASSY BROWSER - PASSWORD VAULT
 // ============================================================================
@@ -11,8 +12,9 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
     ChaCha20Poly1305, Nonce,
@@ -357,7 +359,7 @@ pub struct PasswordVault {
 
 impl PasswordVault {
     pub fn new(config_dir: PathBuf) -> Self {
-        Self {
+        let mut vault = Self {
             credentials: Vec::new(),
             folders: vec!["Personal".to_string(), "Work".to_string(), "Finance".to_string()],
             config_dir,
@@ -368,7 +370,37 @@ impl PasswordVault {
             auto_lock_seconds: 300, // 5 minutes
             last_activity: std::time::Instant::now(),
             breach_check_enabled: true,
+        };
+
+        let _ = vault.load_config();
+        vault
+    }
+
+    /// Load non-sensitive config (salt, hash, auto-lock) so unlock works after restart
+    pub fn load_config(&mut self) -> Result<(), String> {
+        if let Ok(config) = std::fs::read_to_string(self.config_path()) {
+            for line in config.lines() {
+                if let Some(value) = line.strip_prefix("salt=") {
+                    if let Ok(salt_bytes) = hex::decode(value) {
+                        if salt_bytes.len() == 16 {
+                            self.salt.copy_from_slice(&salt_bytes);
+                        }
+                    }
+                } else if let Some(value) = line.strip_prefix("pin_hash=") {
+                    if !value.is_empty() {
+                        self.pin_hash = Some(value.to_string());
+                    }
+                } else if let Some(value) = line.strip_prefix("auto_lock=") {
+                    if let Ok(secs) = value.parse() {
+                        self.auto_lock_seconds = secs;
+                    }
+                } else if let Some(value) = line.strip_prefix("breach_check=") {
+                    self.breach_check_enabled = value != "0";
+                }
+            }
         }
+
+        Ok(())
     }
     
     pub fn is_setup(&self) -> bool {
@@ -377,6 +409,14 @@ impl PasswordVault {
     
     pub fn is_unlocked(&self) -> bool {
         self.is_unlocked
+    }
+
+    pub fn breach_check_enabled(&self) -> bool {
+        self.breach_check_enabled
+    }
+
+    pub fn set_breach_check_enabled(&mut self, enabled: bool) {
+        self.breach_check_enabled = enabled;
     }
     
     pub fn setup(&mut self, pin: &str) -> Result<(), String> {
@@ -462,6 +502,7 @@ impl PasswordVault {
             return Err("Vault is locked".to_string());
         }
         
+        self.ensure_folder(&credential.folder);
         self.credentials.push(credential);
         self.save()?;
         self.touch();
@@ -473,13 +514,17 @@ impl PasswordVault {
         if !self.is_unlocked {
             return Err("Vault is locked".to_string());
         }
-        
-        if let Some(cred) = self.credentials.iter_mut().find(|c| c.id == id) {
-            *cred = credential;
-            cred.modified_at = SystemTime::now()
+
+        if let Some(idx) = self.credentials.iter().position(|c| c.id == id) {
+            let mut updated = credential;
+            updated.modified_at = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
+
+            let folder = updated.folder.clone();
+            self.credentials[idx] = updated;
+            self.ensure_folder(&folder);
             self.save()?;
             self.touch();
             Ok(())
@@ -511,6 +556,20 @@ impl PasswordVault {
             return None;
         }
         self.credentials.iter().find(|c| c.id == id)
+    }
+
+    pub fn mark_used(&mut self, id: &str) -> Result<(), String> {
+        if !self.is_unlocked {
+            return Err("Vault is locked".into());
+        }
+        if let Some(cred) = self.credentials.iter_mut().find(|c| c.id == id) {
+            cred.record_use();
+            self.save()?;
+            self.touch();
+            Ok(())
+        } else {
+            Err("Credential not found".into())
+        }
     }
     
     pub fn find_for_url(&self, url: &str) -> Vec<&Credential> {
@@ -650,10 +709,11 @@ impl PasswordVault {
         
         // Save config (non-sensitive)
         let config = format!(
-            "salt={}\npin_hash={}\nauto_lock={}\n",
+            "salt={}\npin_hash={}\nauto_lock={}\nbreach_check={}\n",
             hex::encode(&self.salt),
             self.pin_hash.as_deref().unwrap_or(""),
-            self.auto_lock_seconds
+            self.auto_lock_seconds,
+            if self.breach_check_enabled { 1 } else { 0 }
         );
         fs::write(self.config_path(), config)
             .map_err(|e| format!("Failed to write config: {}", e))?;
@@ -662,26 +722,7 @@ impl PasswordVault {
     }
     
     pub fn load(&mut self) -> Result<(), String> {
-        // Load config
-        if let Ok(config) = fs::read_to_string(self.config_path()) {
-            for line in config.lines() {
-                if let Some(value) = line.strip_prefix("salt=") {
-                    if let Ok(salt_bytes) = hex::decode(value) {
-                        if salt_bytes.len() == 16 {
-                            self.salt.copy_from_slice(&salt_bytes);
-                        }
-                    }
-                } else if let Some(value) = line.strip_prefix("pin_hash=") {
-                    if !value.is_empty() {
-                        self.pin_hash = Some(value.to_string());
-                    }
-                } else if let Some(value) = line.strip_prefix("auto_lock=") {
-                    if let Ok(secs) = value.parse() {
-                        self.auto_lock_seconds = secs;
-                    }
-                }
-            }
-        }
+        let _ = self.load_config();
         
         // Load encrypted vault
         let crypto = match &self.crypto {
@@ -700,9 +741,11 @@ impl PasswordVault {
         
         // Parse credentials
         self.credentials.clear();
+        self.folders.retain(|f| f == "Personal" || f == "Work" || f == "Finance");
         for block in data.split("\n---\n") {
             if !block.trim().is_empty() {
                 if let Some(cred) = deserialize_credential(block) {
+                    self.ensure_folder(&cred.folder);
                     self.credentials.push(cred);
                 }
             }
@@ -782,6 +825,20 @@ impl PasswordVault {
         
         Ok(count)
     }
+
+    pub fn auto_lock_seconds(&self) -> u64 {
+        self.auto_lock_seconds
+    }
+
+    pub fn set_auto_lock_seconds(&mut self, secs: u64) -> Result<(), String> {
+        // Clamp between 30 seconds and 24 hours
+        self.auto_lock_seconds = secs.clamp(30, 86_400);
+        self.save()
+    }
+
+    pub fn folders(&self) -> &[String] {
+        &self.folders
+    }
 }
 
 // ============================================================================
@@ -809,11 +866,11 @@ fn serialize_credential(cred: &Credential) -> String {
     format!(
         "id={}\ntitle={}\nusername={}\npassword={}\nurl={}\nnotes={}\nfolder={}\ntags={}\ncreated={}\nmodified={}\nlast_used={}\nuse_count={}\nfavorite={}\ntotp={}",
         cred.id,
-        base64::encode(&cred.title),
-        base64::encode(&cred.username),
-        base64::encode(&cred.password),
-        base64::encode(&cred.url),
-        base64::encode(&cred.notes),
+        STANDARD.encode(&cred.title),
+        STANDARD.encode(&cred.username),
+        STANDARD.encode(&cred.password),
+        STANDARD.encode(&cred.url),
+        STANDARD.encode(&cred.notes),
         cred.folder.as_deref().unwrap_or(""),
         cred.tags.join(","),
         cred.created_at,
@@ -821,7 +878,7 @@ fn serialize_credential(cred: &Credential) -> String {
         cred.last_used.map(|t| t.to_string()).unwrap_or_default(),
         cred.use_count,
         cred.favorite,
-        cred.totp_secret.as_deref().map(|s| base64::encode(s)).unwrap_or_default(),
+        cred.totp_secret.as_deref().map(|s| STANDARD.encode(s)).unwrap_or_default(),
     )
 }
 
@@ -832,15 +889,15 @@ fn deserialize_credential(data: &str) -> Option<Credential> {
         if let Some(value) = line.strip_prefix("id=") {
             cred.id = value.to_string();
         } else if let Some(value) = line.strip_prefix("title=") {
-            cred.title = String::from_utf8(base64::decode(value).ok()?).ok()?;
+            cred.title = String::from_utf8(STANDARD.decode(value).ok()?).ok()?;
         } else if let Some(value) = line.strip_prefix("username=") {
-            cred.username = String::from_utf8(base64::decode(value).ok()?).ok()?;
+            cred.username = String::from_utf8(STANDARD.decode(value).ok()?).ok()?;
         } else if let Some(value) = line.strip_prefix("password=") {
-            cred.password = String::from_utf8(base64::decode(value).ok()?).ok()?;
+            cred.password = String::from_utf8(STANDARD.decode(value).ok()?).ok()?;
         } else if let Some(value) = line.strip_prefix("url=") {
-            cred.url = String::from_utf8(base64::decode(value).ok()?).ok()?;
+            cred.url = String::from_utf8(STANDARD.decode(value).ok()?).ok()?;
         } else if let Some(value) = line.strip_prefix("notes=") {
-            cred.notes = String::from_utf8(base64::decode(value).ok()?).ok()?;
+            cred.notes = String::from_utf8(STANDARD.decode(value).ok()?).ok()?;
         } else if let Some(value) = line.strip_prefix("folder=") {
             if !value.is_empty() {
                 cred.folder = Some(value.to_string());
@@ -861,7 +918,7 @@ fn deserialize_credential(data: &str) -> Option<Credential> {
             cred.favorite = value == "true";
         } else if let Some(value) = line.strip_prefix("totp=") {
             if !value.is_empty() {
-                cred.totp_secret = String::from_utf8(base64::decode(value).ok()?).ok();
+                cred.totp_secret = String::from_utf8(STANDARD.decode(value).ok()?).ok();
             }
         }
     }
@@ -870,6 +927,16 @@ fn deserialize_credential(data: &str) -> Option<Credential> {
         None
     } else {
         Some(cred)
+    }
+}
+
+impl PasswordVault {
+    fn ensure_folder(&mut self, folder: &Option<String>) {
+        if let Some(name) = folder {
+            if !name.is_empty() && !self.folders.contains(name) {
+                self.folders.push(name.clone());
+            }
+        }
     }
 }
 

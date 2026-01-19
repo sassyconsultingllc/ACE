@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Archive Handler - Full ZIP, RAR, 7z, TAR support with creation
 //!
 //! Features:

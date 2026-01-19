@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Document Editor - Full editing for DOCX, ODT, RTF
 //!
 //! Features:

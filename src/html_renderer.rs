@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables, unused_imports)]
 //! HTML Renderer - Pure Rust HTML/CSS/JS rendering
 //! 
 //! Renders web pages using:
@@ -8,10 +9,9 @@
 //! This is the fallback renderer when system webview isn't available,
 //! or for rendering HTML in file viewers.
 
-use crate::js::{JsInterpreter, DomBridge, Value};
+use crate::js::{JsInterpreter, DomBridge};
 use eframe::egui::{self, Color32, RichText, Ui, Vec2};
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// Parsed HTML document
 #[derive(Debug, Clone)]
@@ -605,7 +605,7 @@ impl HtmlRenderer {
                     }
                     
                     "img" => {
-                        let src = attrs.get("src").cloned().unwrap_or_default();
+                        let _src = attrs.get("src").cloned().unwrap_or_default();
                         let alt = attrs.get("alt").cloned().unwrap_or_else(|| "Image".into());
                         ui.label(RichText::new(format!("[Image: {}]", alt)).italics().color(Color32::GRAY));
                         // TODO: Actually load and display images
@@ -642,7 +642,7 @@ impl HtmlRenderer {
                             }
                             "submit" | "button" => {
                                 let value = attrs.get("value").cloned().unwrap_or_else(|| "Submit".into());
-                                ui.button(&value);
+                                let _ = ui.button(&value);
                             }
                             _ => {}
                         }

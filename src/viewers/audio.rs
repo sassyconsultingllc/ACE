@@ -1,8 +1,8 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Audio Player - MP3, WAV, FLAC, OGG playback with visualization
 
 use crate::file_handler::{AudioContent, FileContent, OpenFile};
 use eframe::egui::{self, Color32, FontId, Pos2, Rect, RichText, Stroke, Vec2};
-
 pub struct AudioViewer {
     is_playing: bool,
     current_position: f64,

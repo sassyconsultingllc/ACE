@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables, unused_imports)]
 // ============================================================================
 // SASSY BROWSER - AUTHENTICATION & LICENSING SYSTEM
 // ============================================================================
@@ -5,11 +6,11 @@
 // KILLS: Paid browser sync ($99/yr), VPN services ($120/yr), device management
 // ============================================================================
 
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
-use rand::Rng;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use rand::rngs::OsRng;
+use rand::{Rng, RngCore};
 use sha2::{Sha256, Digest};
 
 // ============================================================================
@@ -127,6 +128,7 @@ pub struct EntropyCollector {
     mouse_events: Vec<(i32, i32, u64)>,
     key_timings: Vec<u64>,
     required_bits: usize,
+    seed_bits: usize,
 }
 
 impl EntropyCollector {
@@ -136,6 +138,7 @@ impl EntropyCollector {
             mouse_events: Vec::new(),
             key_timings: Vec::new(),
             required_bits: 256, // 256-bit master key
+            seed_bits: 0,
         }
     }
     
@@ -167,7 +170,7 @@ impl EntropyCollector {
         // Estimate entropy from collected data
         let mouse_entropy = self.mouse_events.len() * 4; // ~4 bits per mouse event
         let key_entropy = self.key_timings.len() * 2;     // ~2 bits per keystroke timing
-        mouse_entropy + key_entropy
+        self.seed_bits + mouse_entropy + key_entropy
     }
     
     pub fn progress(&self) -> f32 {
@@ -199,6 +202,25 @@ impl EntropyCollector {
         key.copy_from_slice(&result);
         key
     }
+
+    pub fn seed_from_os(&mut self, label: &str) {
+        if self.seed_bits > 0 {
+            return;
+        }
+
+        let mut seed = [0u8; 32];
+        OsRng.fill_bytes(&mut seed);
+
+        self.pool.extend_from_slice(&seed);
+        self.pool.extend_from_slice(label.as_bytes());
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        self.pool.extend_from_slice(&now.to_le_bytes());
+
+        self.seed_bits = 128; // credit a baseline from OS CSPRNG
+    }
 }
 
 // ============================================================================
@@ -218,6 +240,14 @@ pub struct AuthManager {
 }
 
 impl AuthManager {
+        /// Returns the current generated master key (only if enough entropy is collected)
+        pub fn get_master_key(&self) -> Option<[u8; 32]> {
+            if self.entropy_collector.is_ready() {
+                Some(self.entropy_collector.generate_master_key())
+            } else {
+                None
+            }
+        }
     pub fn new() -> Self {
         let config_dir = Self::get_config_dir();
         let is_first_run = !config_dir.join("device.key").exists();
@@ -275,6 +305,10 @@ impl AuthManager {
     
     pub fn is_entropy_ready(&self) -> bool {
         self.entropy_collector.is_ready()
+    }
+
+    pub fn seed_entropy(&mut self, source_label: &str) {
+        self.entropy_collector.seed_from_os(source_label);
     }
     
     pub fn complete_first_run(&mut self, device_name: &str, device_type: DeviceType) -> Result<String, String> {
@@ -433,7 +467,7 @@ impl AuthManager {
         json
     }
     
-    fn deserialize_devices(&mut self, json: &str) {
+    fn deserialize_devices(&mut self, _json: &str) {
         // Simple JSON parsing (production would use serde_json)
         self.paired_devices.clear();
         // TODO: Implement proper JSON parsing
@@ -842,10 +876,13 @@ impl PhoneSync {
         if !self.connected {
             return Err("Phone not connected".to_string());
         }
-        
+
         let phone_ip = self.phone_device.as_ref()
             .and_then(|d| d.tailscale_ip.clone())
             .ok_or("No phone IP available")?;
+        // Use tailscale reference to keep it active and mark phone IP as touched
+        let _peer_count = tailscale.peers.len();
+        let _ = &phone_ip;
         
         let mut synced_count = 0;
         
@@ -889,6 +926,10 @@ pub struct FirstRunState {
     pub enable_phone_sync: bool,
     pub pairing_code: Option<String>,
     pub error_message: Option<String>,
+    pub entropy_started_at: Option<Instant>,
+    pub entropy_seeded: bool,
+    pub entropy_seed_label: String,
+    pub entropy_min_seconds: u64,
 }
 
 impl Default for FirstRunState {
@@ -903,6 +944,10 @@ impl Default for FirstRunState {
             enable_phone_sync: false,
             pairing_code: None,
             error_message: None,
+            entropy_started_at: None,
+            entropy_seeded: false,
+            entropy_seed_label: "OS random seed".to_string(),
+            entropy_min_seconds: 30,
         }
     }
 }

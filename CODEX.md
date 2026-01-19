@@ -134,6 +134,7 @@ SassyScript (Our JS engine)     ❌ Any telemetry
 | `mcp_api.rs` | ~500 | xAI + Anthropic APIs |
 | `mcp_fs.rs` | ~400 | Sandboxed filesystem |
 | `mcp_git.rs` | ~500 | Git integration |
+| `mcp_server.rs` | ~600 | MCP Server (Claude Desktop integration) |
 | `voice.rs` | ~400 | Whisper STT (offline) |
 | `ai.rs` | ~300 | AI runtime |
 

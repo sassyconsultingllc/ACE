@@ -1,16 +1,16 @@
+#![allow(dead_code, unused_variables, unused_imports)]
 //! Tab management - Represents browser tabs (web pages or file viewers)
 
 use crate::file_handler::{FileType, OpenFile};
-use std::path::PathBuf;
-use uuid::Uuid;
+use rand::random;
 
 /// Unique identifier for a tab
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TabId(pub Uuid);
+pub struct TabId(pub u64);
 
 impl TabId {
     pub fn new() -> Self {
-        Self(Uuid::new_v4())
+        Self(random())
     }
 }
 

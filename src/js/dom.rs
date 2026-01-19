@@ -1,4 +1,6 @@
 //! DOM Bridge - Connects JS interpreter to HTML rendering
+#![allow(dead_code, unused_variables, unused_imports)]
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;

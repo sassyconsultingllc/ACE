@@ -5,6 +5,8 @@
 // NO MYSTERY TRAFFIC. NO HIDDEN REQUESTS. FULL TRANSPARENCY.
 // ============================================================================
 
+#![allow(dead_code, unused_variables, unused_imports)]
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -33,6 +35,7 @@ pub struct ActiveConnection {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConnectionType {
     Document,
+    Download,
     Script,
     Stylesheet,
     Image,
@@ -47,6 +50,7 @@ impl ConnectionType {
     pub fn icon(&self) -> &'static str {
         match self {
             ConnectionType::Document => "📄",
+            ConnectionType::Download => "⬇️",
             ConnectionType::Script => "⚡",
             ConnectionType::Stylesheet => "🎨",
             ConnectionType::Image => "🖼️",
@@ -60,7 +64,9 @@ impl ConnectionType {
     
     pub fn from_content_type(ct: &str) -> Self {
         let ct_lower = ct.to_lowercase();
-        if ct_lower.contains("html") {
+        if ct_lower.contains("octet-stream") || ct_lower.contains("zip") || ct_lower.contains("application/x-msdownload") {
+            ConnectionType::Download
+        } else if ct_lower.contains("html") {
             ConnectionType::Document
         } else if ct_lower.contains("javascript") || ct_lower.contains("ecmascript") {
             ConnectionType::Script
@@ -349,6 +355,7 @@ pub enum ConnectionFilter {
     All,
     Active,
     Documents,
+    Downloads,
     Scripts,
     Images,
     Xhr,

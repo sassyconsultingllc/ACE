@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables, unused_imports)]
 //! Browser Engine - WebView management and coordination
 
 use crate::browser::{
@@ -63,6 +64,7 @@ pub struct BrowserEngine {
     
     // Pending navigations (for new tabs that need webview setup)
     pending_navigations: HashMap<TabId, PendingNavigation>,
+    pending_downloads: Vec<(String, Option<String>)>,
     
     // Settings
     pub home_url: String,
@@ -88,6 +90,7 @@ impl BrowserEngine {
             file_handler: FileHandler::new(),
             messages: Arc::new(Mutex::new(Vec::new())),
             pending_navigations: HashMap::new(),
+            pending_downloads: Vec::new(),
             home_url: "https://duckduckgo.com".into(),
             search_engine: "https://duckduckgo.com/?q=".into(),
             default_zoom: 1.0,
@@ -602,7 +605,8 @@ impl BrowserEngine {
             }
             
             WebViewMessage::DownloadStarted { url, suggested_filename } => {
-                self.start_download(&url, suggested_filename.as_deref());
+                // Defer to caller to enforce policies (parental controls, approvals)
+                self.pending_downloads.push((url, suggested_filename));
             }
             
             WebViewMessage::NewWindowRequested { url } => {
@@ -624,6 +628,11 @@ impl BrowserEngine {
         self.pending_navigations.remove(&tab_id)
     }
     
+    /// Drain any pending download requests emitted from webviews
+    pub fn take_pending_downloads(&mut self) -> Vec<(String, Option<String>)> {
+        std::mem::take(&mut self.pending_downloads)
+    }
+
     /// Check if there are pending navigations
     pub fn has_pending_navigation(&self, tab_id: TabId) -> bool {
         self.pending_navigations.contains_key(&tab_id)

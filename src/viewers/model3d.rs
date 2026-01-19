@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! 3D Model Viewer - OBJ, STL, GLTF/GLB, PLY visualization
 
 use crate::file_handler::{BoundingBox, Face3D, FileContent, Model3DContent, Model3DFormat, OpenFile, Vertex3D};

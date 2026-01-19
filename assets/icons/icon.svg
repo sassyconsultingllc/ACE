@@ -1,10 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sassy Browser">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#58a6ff"/>
-      <stop offset="100%" style="stop-color:#a371f7"/>
+      <stop offset="0%" stop-color="#0f1115" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#161b22" stop-opacity="1"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <text x="256" y="340" font-family="system-ui, sans-serif" font-size="280" font-weight="600" fill="white" text-anchor="middle">S</text>
+  <rect width="512" height="512" rx="64" fill="url(#bg)"/>
+  <g fill="none" stroke="#16f2d6" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Stylized "S" -->
+    <path d="M150 176c0-36 36-68 86-68 46 0 78 22 78 52 0 30-24 44-74 56s-74 28-74 58c0 32 34 54 82 54 38 0 70-16 84-38"/>
+    <!-- Stylized "G" -->
+    <path d="M296 256c0-58 40-106 102-106 54 0 88 34 88 92v20h-86"/>
+    <path d="M486 262c-6 54-48 96-100 96-60 0-104-48-104-104"/>
+  </g>
 </svg>
