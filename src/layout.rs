@@ -424,7 +424,7 @@ impl LayoutEngine {
 
     fn layout_text(&mut self, layout_box: &mut LayoutBox) {
         let font_size = if layout_box.style.font_size > 0.0 { layout_box.style.font_size } else { self.font_size };
-        let text = layout_box.text.as_ref().map(|t| t.as_str()).unwrap_or("");
+        let text = layout_box.text.as_deref().unwrap_or("");
         
         layout_box.content.width = text.len() as f32 * font_size * 0.6;
         layout_box.content.height = font_size * layout_box.style.line_height;

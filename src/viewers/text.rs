@@ -84,10 +84,8 @@ impl TextViewer {
             
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // Show syntax type
-                if let FileContent::Text { syntax, .. } = &file.content {
-                    if let Some(syn) = syntax {
-                        ui.label(format!("📝 {}", syn));
-                    }
+                if let FileContent::Text { syntax: Some(syn), .. } = &file.content {
+                    ui.label(format!("📝 {}", syn));
                 }
                 
                 ui.label(format!("Ln {}, Col {}", self.cursor_line, self.cursor_column));

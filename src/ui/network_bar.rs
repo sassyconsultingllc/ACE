@@ -353,7 +353,7 @@ impl NetworkBar {
             self.peak_bytes_per_sec = self.bytes_per_sec;
         } else {
             // Slowly decay peak
-            self.peak_bytes_per_sec = self.peak_bytes_per_sec * 0.999;
+            self.peak_bytes_per_sec *= 0.999;
             if self.peak_bytes_per_sec < 1024.0 * 10.0 {
                 self.peak_bytes_per_sec = 1024.0 * 10.0; // Min 10KB/s baseline
             }
@@ -370,7 +370,7 @@ impl NetworkBar {
         }
         
         let ratio = self.bytes_per_sec / self.peak_bytes_per_sec;
-        (ratio as f32).min(1.0).max(0.1) // At least 10% when active
+        (ratio as f32).clamp(0.1, 1.0) // At least 10% when active
     }
     
     /// Get status text for display
@@ -566,23 +566,23 @@ pub struct NetworkBarColors {
 impl NetworkBarColors {
     pub fn dark() -> Self {
         Self {
-            background: 0xFF1a1a1a,
-            idle: 0xFF3a3a3a,
-            active: 0xFF4a9eff,
-            receiving: 0xFF4aff9e,
-            text: 0xFFe0e0e0,
-            text_dim: 0xFF808080,
+            background: 0xff1a1a1a,
+            idle: 0xff3a3a3a,
+            active: 0xff4a9eff,
+            receiving: 0xff4aff9e,
+            text: 0xffe0e0e0,
+            text_dim: 0xff808080,
         }
     }
     
     pub fn light() -> Self {
         Self {
-            background: 0xFFf0f0f0,
-            idle: 0xFFd0d0d0,
-            active: 0xFF2080ff,
-            receiving: 0xFF20c060,
-            text: 0xFF202020,
-            text_dim: 0xFF808080,
+            background: 0xfff0f0f0,
+            idle: 0xffd0d0d0,
+            active: 0xff2080ff,
+            receiving: 0xff20c060,
+            text: 0xff202020,
+            text_dim: 0xff808080,
         }
     }
 }

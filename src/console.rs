@@ -181,9 +181,9 @@ impl NetworkEntry {
     
     pub fn status_color(&self) -> Color {
         match self.status {
-            Some(s) if s >= 200 && s < 300 => Color::new(100, 200, 100, 255),
-            Some(s) if s >= 300 && s < 400 => Color::new(100, 180, 255, 255),
-            Some(s) if s >= 400 && s < 500 => Color::new(255, 200, 100, 255),
+            Some(s) if (200..300).contains(&s) => Color::new(100, 200, 100, 255),
+            Some(s) if (300..400).contains(&s) => Color::new(100, 180, 255, 255),
+            Some(s) if (400..500).contains(&s) => Color::new(255, 200, 100, 255),
             Some(s) if s >= 500 => Color::new(255, 100, 100, 255),
             None => Color::new(180, 180, 180, 255),
             _ => Color::new(220, 220, 220, 255),

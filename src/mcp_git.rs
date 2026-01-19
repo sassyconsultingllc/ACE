@@ -299,7 +299,7 @@ impl McpGit {
         
         match result {
             Ok(output) => {
-                let parts: Vec<&str> = output.trim().split_whitespace().collect();
+                let parts: Vec<&str> = output.split_whitespace().collect();
                 if parts.len() >= 2 {
                     let ahead = parts[0].parse().unwrap_or(0);
                     let behind = parts[1].parse().unwrap_or(0);

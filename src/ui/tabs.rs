@@ -9,8 +9,10 @@ use std::collections::VecDeque;
 
 /// Tab content type
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Default)]
 pub enum TabContent {
     /// Standard web page
+    #[default]
     WebPage,
     /// Embedded terminal
     Terminal,
@@ -20,11 +22,6 @@ pub enum TabContent {
     Settings,
 }
 
-impl Default for TabContent {
-    fn default() -> Self {
-        TabContent::WebPage
-    }
-}
 
 /// Embedded terminal state
 #[derive(Debug, Clone)]
@@ -189,14 +186,14 @@ impl TerminalState {
         });
         
         // Handle built-in commands
-        let parts: Vec<&str> = command.trim().split_whitespace().collect();
+        let parts: Vec<&str> = command.split_whitespace().collect();
         if parts.is_empty() {
             return;
         }
         
         match parts[0] {
             "cd" => {
-                let target = parts.get(1).map(|s| *s).unwrap_or("~");
+                let target = parts.get(1).copied().unwrap_or("~");
                 let target = if target == "~" {
                     self.env.get("HOME").or_else(|| self.env.get("USERPROFILE"))
                         .map(|s| s.as_str())
@@ -833,10 +830,10 @@ impl Tab {
     /// Get trust indicator color
     pub fn trust_color(&self) -> u32 {
         match self.sandbox.trust_level {
-            TrustLevel::Untrusted => 0xFFff4444,    // Red
-            TrustLevel::Building => 0xFFffaa44,     // Orange
-            TrustLevel::Trusted => 0xFF44ff44,      // Green
-            TrustLevel::Whitelisted => 0xFF44aaff,  // Blue
+            TrustLevel::Untrusted => 0xffff4444,    // Red
+            TrustLevel::Building => 0xffffaa44,     // Orange
+            TrustLevel::Trusted => 0xff44ff44,      // Green
+            TrustLevel::Whitelisted => 0xff44aaff,  // Blue
         }
     }
 }
@@ -877,7 +874,7 @@ impl TileLayout {
         let mut columns = ((usable_width + gap) / (min_tile_width + gap)).max(1);
         
         // Reduce columns if we have fewer tabs
-        let rows_needed = (tab_count as u32 + columns - 1) / columns;
+        let rows_needed = (tab_count as u32).div_ceil(columns);
         if rows_needed == 1 && tab_count > 0 {
             columns = tab_count as u32;
         }
@@ -911,7 +908,7 @@ impl TileLayout {
             return self.padding * 2;
         }
         
-        let rows = (tab_count as u32 + self.columns - 1) / self.columns;
+        let rows = (tab_count as u32).div_ceil(self.columns);
         self.padding * 2 + rows * self.tile_height + (rows - 1) * self.gap
     }
     
@@ -1011,7 +1008,7 @@ impl TabManager {
                 self.active_tab = if idx > 0 {
                     self.tabs.get(idx - 1).map(|t| t.id)
                 } else {
-                    self.tabs.get(0).map(|t| t.id)
+                    self.tabs.first().map(|t| t.id)
                 };
             }
         }

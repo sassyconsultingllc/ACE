@@ -505,8 +505,8 @@ impl BrowserState {
     
     fn extract_title(doc: &Document) -> Option<String> {
         fn find_title(node: &crate::dom::Node) -> Option<String> {
-            if node.node_type == NodeType::Element {
-                if node.tag_name.as_deref() == Some("title") {
+            if node.node_type == NodeType::Element
+                && node.tag_name.as_deref() == Some("title") {
                     // Get text content
                     for child_ref in &node.children {
                         let child = child_ref.borrow();
@@ -517,7 +517,6 @@ impl BrowserState {
                         }
                     }
                 }
-            }
             for child_ref in &node.children {
                 let child = child_ref.borrow();
                 if let Some(title) = find_title(&child) {
@@ -823,7 +822,7 @@ impl BrowserState {
         
         // Right-aligned controls
         let network_width = 100;
-        let network_x = nav_x + nav_width - (network_width as i32 + 10);
+        let network_x = nav_x + nav_width - (network_width + 10);
         let mut address_right = network_x - 8;
         if self.ui.ai.show_help_button {
             let help_x = network_x - btn_size - 8;
@@ -988,7 +987,7 @@ impl BrowserState {
         let cursor_height = bounds.height - 12;
         
         // Draw cursor line
-        let cursor_color = 0xFFffffff;
+        let cursor_color = 0xffffffff;
         for y in cursor_y..(cursor_y + cursor_height) {
             if y >= 0 && (y as u32) < self.ui.height {
                 let idx = (y as u32 * self.ui.width + cursor_x as u32) as usize;
@@ -1005,7 +1004,7 @@ impl BrowserState {
         let activity = self.network_bar.activity_level();
         
         // Background
-        let bg_color = if theme.meta.name.contains("Dark") { 0xFF2a2a2a } else { 0xFFe0e0e0 };
+        let bg_color = if theme.meta.name.contains("Dark") { 0xff2a2a2a } else { 0xffe0e0e0 };
         for y in bounds.y..(bounds.y + bounds.height) {
             for x in bounds.x..(bounds.x + bounds.width) {
                 if x >= 0 && y >= 0 && (x as u32) < self.ui.width && (y as u32) < self.ui.height {
@@ -1020,7 +1019,7 @@ impl BrowserState {
         // Activity bar
         if activity > 0.0 {
             let bar_width = ((bounds.width - 4) as f32 * activity) as i32;
-            let bar_color = if self.network_bar.is_active { 0xFF4a9eff } else { 0xFF44ff44 };
+            let bar_color = if self.network_bar.is_active { 0xff4a9eff } else { 0xff44ff44 };
             
             for y in (bounds.y + 2)..(bounds.y + bounds.height - 2) {
                 for x in (bounds.x + 2)..(bounds.x + 2 + bar_width) {
@@ -1064,14 +1063,14 @@ impl BrowserState {
             }
             
             // Draw short label with trust status next to the dot
-            self.ui_renderer.draw_text(buffer, &trust_text, dot_x + radius + 6, dot_y - 2, 12.0, trust_color);
+            self.ui_renderer.draw_text(buffer, trust_text, dot_x + radius + 6, dot_y - 2, 12.0, trust_color);
             
             // Show interactions needed if not trusted
             if tab.sandbox.trust_level != TrustLevel::Trusted && 
                tab.sandbox.trust_level != TrustLevel::Whitelisted {
                 let needed = tab.sandbox.interactions_needed();
                 let needed_text = format!("{}", needed.max(0));
-                self.ui_renderer.draw_text(buffer, &needed_text, dot_x - 10, dot_y - 10, 11.0, 0xFFffffff);
+                self.ui_renderer.draw_text(buffer, &needed_text, dot_x - 10, dot_y - 10, 11.0, 0xffffffff);
             }
         }
     }
@@ -1869,12 +1868,12 @@ pub fn run_browser(initial_url: Option<String>) {
     use winit::event::{Event, StartCause};
     use winit::event_loop::ControlFlow;
     
-    println!("");
+    println!();
     println!("  ╔═══════════════════════════════════════╗");
     println!("  ║       Sassy Browser v1.0.1            ║");
     println!("  ║  Pure Rust | SassyScript | Sandboxed  ║");
     println!("  ╚═══════════════════════════════════════╝");
-    println!("");
+    println!();
     println!("  Features:");
     println!("    • Click address bar or Ctrl+L to type URL");
     println!("    • Click links to navigate");
@@ -1882,7 +1881,7 @@ pub fn run_browser(initial_url: Option<String>) {
     println!("    • Alt+Tab for tab tile view");
     println!("    • Network activity indicator (top right)");
     println!("    • Trust indicator (builds with 3 interactions)");
-    println!("");
+    println!();
     
     let event_loop = EventLoop::new().expect("Failed to create event loop");
     
@@ -2059,10 +2058,8 @@ pub fn run_browser(initial_url: Option<String>) {
                             if let Some(tab) = state.ui.tab_manager.active_tab_mut() {
                                 tab.sandbox.focus_gained();
                             }
-                        } else {
-                            if let Some(tab) = state.ui.tab_manager.active_tab_mut() {
-                                tab.sandbox.focus_lost();
-                            }
+                        } else if let Some(tab) = state.ui.tab_manager.active_tab_mut() {
+                            tab.sandbox.focus_lost();
                         }
                     }
                     

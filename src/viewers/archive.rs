@@ -197,7 +197,7 @@ impl ArchiveViewer {
                 f.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
                 zip.write_all(&buffer).map_err(|e| e.to_string())?;
             } else if path.is_dir() {
-                zip.add_directory(&format!("{}/", name), options).map_err(|e| e.to_string())?;
+                zip.add_directory(format!("{}/", name), options).map_err(|e| e.to_string())?;
                 Self::add_directory_to_zip(zip, base, &path, options)?;
             }
         }
@@ -320,7 +320,7 @@ impl ArchiveViewer {
         }
     }
     
-    fn extract_zip(archive: &PathBuf, output: &PathBuf) -> Result<usize, String> {
+    fn extract_zip(archive: &std::path::Path, output: &std::path::Path) -> Result<usize, String> {
         use std::fs::{self, File};
         use std::io::Read;
         use zip::ZipArchive;
@@ -468,17 +468,15 @@ impl ArchiveViewer {
             }
             
             // Add to archive (if format supports it)
-            if archive.format == ArchiveFormat::Zip {
-                if ui.button("📁 Add Files").clicked() {
-                    if let Some(files) = native_dialog::FileDialog::new()
+            if archive.format == ArchiveFormat::Zip
+                && ui.button("📁 Add Files").clicked() {
+                    if let Ok(files) = native_dialog::FileDialog::new()
                         .show_open_multiple_file()
-                        .ok()
                     {
                         self.files_to_add.extend(files);
                         self.mode = ArchiveMode::Edit;
                     }
                 }
-            }
             
             ui.separator();
             
@@ -781,9 +779,8 @@ impl ArchiveViewer {
                 ui.separator();
                 
                 if ui.button("Add Files...").clicked() {
-                    if let Some(files) = native_dialog::FileDialog::new()
+                    if let Ok(files) = native_dialog::FileDialog::new()
                         .show_open_multiple_file()
-                        .ok()
                     {
                         self.new_archive.files.extend(files);
                     }
@@ -828,7 +825,7 @@ impl ArchiveViewer {
                             let _ = Self::create_archive(
                                 &path,
                                 &self.new_archive.files,
-                                self.new_archive.format.clone(),
+                                self.new_archive.format,
                                 self.new_archive.compression,
                             );
                         }

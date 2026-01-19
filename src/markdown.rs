@@ -456,7 +456,7 @@ pub fn render_to_text(blocks: &[MdBlock]) -> String {
                 output.push_str("| ");
                 output.push_str(&headers.join(" | "));
                 output.push_str(" |\n");
-                output.push_str("|");
+                output.push('|');
                 for _ in headers {
                     output.push_str("---|");
                 }

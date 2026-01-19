@@ -284,15 +284,13 @@ pub enum FamilyNotification {
 /// Better: Have conversations, build mutual respect, age-appropriate freedom.
 /// 
 /// The only question we answer: "Is this device allowed to connect?"
-
 #[cfg(test)]
 mod tests {
     use super::*;
     
     #[test]
     fn test_family_flow() {
-        let mut config = FamilyConfig::default();
-        config.require_approval = true;
+        let mut config = FamilyConfig { require_approval: true, ..Default::default() };
         
         // Parent sets up first (becomes admin)
         config.bootstrap_admin("parent-phone".into(), "Dad's Phone".into(), "Dad".into());

@@ -53,18 +53,18 @@ impl JsonValue {
     }
     
     fn parse_null(s: &str) -> Result<(JsonValue, &str), String> {
-        if s.starts_with("null") {
-            Ok((JsonValue::Null, &s[4..]))
+        if let Some(stripped) = s.strip_prefix("null") {
+            Ok((JsonValue::Null, stripped))
         } else {
             Err("Expected 'null'".to_string())
         }
     }
     
     fn parse_bool(s: &str) -> Result<(JsonValue, &str), String> {
-        if s.starts_with("true") {
-            Ok((JsonValue::Bool(true), &s[4..]))
-        } else if s.starts_with("false") {
-            Ok((JsonValue::Bool(false), &s[5..]))
+        if let Some(stripped) = s.strip_prefix("true") {
+            Ok((JsonValue::Bool(true), stripped))
+        } else if let Some(stripped) = s.strip_prefix("false") {
+            Ok((JsonValue::Bool(false), stripped))
         } else {
             Err("Expected 'true' or 'false'".to_string())
         }
@@ -150,8 +150,8 @@ impl JsonValue {
         let mut rest = s[1..].trim_start();
         let mut items = Vec::new();
         
-        if rest.starts_with(']') {
-            return Ok((JsonValue::Array(items), &rest[1..]));
+        if let Some(stripped) = rest.strip_prefix(']') {
+            return Ok((JsonValue::Array(items), stripped));
         }
         
         loop {
@@ -159,10 +159,10 @@ impl JsonValue {
             items.push(value);
             rest = r.trim_start();
             
-            if rest.starts_with(']') {
-                return Ok((JsonValue::Array(items), &rest[1..]));
-            } else if rest.starts_with(',') {
-                rest = rest[1..].trim_start();
+            if let Some(stripped) = rest.strip_prefix(']') {
+                return Ok((JsonValue::Array(items), stripped));
+            } else if let Some(stripped) = rest.strip_prefix(',') {
+                rest = stripped.trim_start();
             } else {
                 return Err("Expected ',' or ']'".to_string());
             }
@@ -177,8 +177,8 @@ impl JsonValue {
         let mut rest = s[1..].trim_start();
         let mut pairs = Vec::new();
         
-        if rest.starts_with('}') {
-            return Ok((JsonValue::Object(pairs), &rest[1..]));
+        if let Some(stripped) = rest.strip_prefix('}') {
+            return Ok((JsonValue::Object(pairs), stripped));
         }
         
         loop {
@@ -201,10 +201,10 @@ impl JsonValue {
             pairs.push((key_str, value));
             rest = r.trim_start();
             
-            if rest.starts_with('}') {
-                return Ok((JsonValue::Object(pairs), &rest[1..]));
-            } else if rest.starts_with(',') {
-                rest = rest[1..].trim_start();
+            if let Some(stripped) = rest.strip_prefix('}') {
+                return Ok((JsonValue::Object(pairs), stripped));
+            } else if let Some(stripped) = rest.strip_prefix(',') {
+                rest = stripped.trim_start();
             } else {
                 return Err("Expected ',' or '}'".to_string());
             }
@@ -488,7 +488,7 @@ impl JsonViewer {
     
     fn expand_path_to(&mut self, path: &str) {
         let mut current = String::new();
-        for part in path.split(|c| c == '.' || c == '[') {
+        for part in path.split(['.', '[']) {
             if current.is_empty() {
                 current = part.trim_end_matches(']').to_string();
             } else if part.ends_with(']') {
@@ -518,7 +518,7 @@ impl JsonViewer {
         }
         
         let mut current = root;
-        let parts: Vec<&str> = path.trim_start_matches('$').trim_start_matches('.').split(|c| c == '.' || c == '[').collect();
+        let parts: Vec<&str> = path.trim_start_matches('$').trim_start_matches('.').split(['.', '[']).collect();
         
         for part in parts {
             if part.is_empty() {

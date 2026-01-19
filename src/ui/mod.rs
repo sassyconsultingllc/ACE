@@ -196,17 +196,14 @@ impl UI {
         
         // Handle dragging
         if let Some(ref drag) = self.dragging {
-            match drag {
-                DragState::SidebarResize { edge, .. } => {
-                    let delta = match edge {
-                        Edge::Top | Edge::Bottom => dy,
-                        Edge::Left | Edge::Right => dx,
-                    };
-                    if let Some(sidebar) = self.sidebar_layout.get_mut(*edge) {
-                        sidebar.handle_resize(delta);
-                    }
+            if let DragState::SidebarResize { edge, .. } = drag {
+                let delta = match edge {
+                    Edge::Top | Edge::Bottom => dy,
+                    Edge::Left | Edge::Right => dx,
+                };
+                if let Some(sidebar) = self.sidebar_layout.get_mut(*edge) {
+                    sidebar.handle_resize(delta);
                 }
-                _ => {}
             }
         }
         

@@ -481,13 +481,12 @@ impl ProfileManager {
         }
         
         // Check allowlist mode
-        if restrictions.use_allowlist_only {
-            if !restrictions.allowlist.iter().any(|a| domain.contains(&a.to_lowercase())) {
+        if restrictions.use_allowlist_only
+            && !restrictions.allowlist.iter().any(|a| domain.contains(&a.to_lowercase())) {
                 let reason = BlockReason::NotOnAllowlist;
                 self.record_blocked_attempt(url, reason.clone());
                 return Err(reason);
             }
-        }
         
         // Check blocklist
         if restrictions.blocklist.iter().any(|b| domain.contains(&b.to_lowercase())) {
@@ -852,7 +851,7 @@ fn verify_pin(pin: &str, stored: &str) -> bool {
     hash_pin(pin) == stored
 }
 
-fn extract_domain(url: &str) -> String {
+pub fn extract_domain(url: &str) -> String {
     let url = url.trim_start_matches("https://")
         .trim_start_matches("http://");
     

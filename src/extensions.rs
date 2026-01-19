@@ -164,9 +164,9 @@ impl Extension {
         };
         
         // Get URL host and path
-        let url_without_scheme = if url.starts_with("https://") { &url[8..] }
-                                 else if url.starts_with("http://") { &url[7..] }
-                                 else { url };
+        let url_without_scheme = if let Some(stripped) = url.strip_prefix("https://") { stripped }
+                     else if let Some(stripped) = url.strip_prefix("http://") { stripped }
+                     else { url };
         
         let (url_host, url_path) = if let Some(idx) = url_without_scheme.find('/') {
             (&url_without_scheme[..idx], &url_without_scheme[idx..])
@@ -176,8 +176,7 @@ impl Extension {
         
         // Match host
         if host_pattern != "*" {
-            if host_pattern.starts_with("*.") {
-                let suffix = &host_pattern[2..];
+            if let Some(suffix) = host_pattern.strip_prefix("*.") {
                 if !url_host.ends_with(suffix) && url_host != suffix { return false; }
             } else if host_pattern != url_host {
                 return false;
@@ -186,8 +185,7 @@ impl Extension {
         
         // Match path
         if path_pattern != "/*" {
-            if path_pattern.ends_with('*') {
-                let prefix = &path_pattern[..path_pattern.len()-1];
+            if let Some(prefix) = path_pattern.strip_suffix('*') {
                 if !url_path.starts_with(prefix) { return false; }
             } else if path_pattern != url_path {
                 return false;
@@ -343,5 +341,55 @@ impl ExtensionAPI {
 
     pub fn get_url(&self, path: &str) -> String {
         format!("sassy-extension://{}/{}", self.extension_id, path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn load_extension_and_apply_assets() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path();
+
+        // Create a simple manifest.json
+        let manifest = serde_json::json!({
+            "manifest_version": 2,
+            "name": "Test Ext",
+            "version": "0.1",
+            "content_scripts": [
+                {
+                    "matches": ["<all_urls>"],
+                    "js": ["script.js"],
+                    "css": ["style.css"]
+                }
+            ]
+        });
+
+        fs::write(path.join("manifest.json"), manifest.to_string()).expect("write manifest");
+        fs::write(path.join("script.js"), "console.log('hi');").expect("write js");
+        fs::write(path.join("style.css"), "p { color: red; }").expect("write css");
+
+        let mut mgr = ExtensionManager::new();
+        mgr.load_extension(path.to_str().unwrap()).expect("load ext");
+
+        let styles = mgr.get_content_styles("http://example/");
+        assert!(!styles.is_empty(), "styles should be found");
+
+        let scripts = mgr.get_content_scripts("http://example/");
+        assert!(!scripts.is_empty(), "scripts should be found");
+
+        // Now test applying styles into HtmlRenderer
+        use crate::html_renderer::HtmlRenderer;
+        let mut renderer = HtmlRenderer::new();
+        let html = "<html><head><title>Test</title></head><body><p>Hello</p></body></html>";
+        renderer.parse_html(html);
+        renderer.apply_content_styles(&styles);
+
+        let doc = renderer.cached_doc.expect("doc");
+        assert!(!doc.styles.is_empty(), "document styles should include extension styles");
     }
 }

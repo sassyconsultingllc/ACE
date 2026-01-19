@@ -188,14 +188,14 @@ impl EntropyCollector {
         // Add system entropy
         let mut rng = rand::thread_rng();
         let system_entropy: [u8; 32] = rng.gen();
-        hasher.update(&system_entropy);
+        hasher.update(system_entropy);
         
         // Add timestamp
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        hasher.update(&now.to_le_bytes());
+        hasher.update(now.to_le_bytes());
         
         let result = hasher.finalize();
         let mut key = [0u8; 32];
@@ -321,7 +321,7 @@ impl AuthManager {
         
         // Generate device ID from master key
         let mut hasher = Sha256::new();
-        hasher.update(&master_key);
+        hasher.update(master_key);
         hasher.update(device_name.as_bytes());
         let device_id = hex::encode(&hasher.finalize()[..16]);
         
@@ -436,8 +436,8 @@ impl AuthManager {
             for line in ts_config.lines() {
                 if line.starts_with("enabled=true") {
                     self.tailscale_enabled = true;
-                } else if line.starts_with("auth_key=") {
-                    self.tailscale_auth_key = Some(line[9..].to_string());
+                } else if let Some(stripped) = line.strip_prefix("auth_key=") {
+                    self.tailscale_auth_key = Some(stripped.to_string());
                 }
             }
         }

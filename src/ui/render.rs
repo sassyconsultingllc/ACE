@@ -143,7 +143,7 @@ impl UIRenderer {
         let (cr, cg, cb) = u32_to_rgb(color);
         
         for row in 0..metrics.height {
-            let py = y + row as i32 - metrics.height as i32 + metrics.ymin as i32 + (size * 0.8) as i32;
+            let py = y + row as i32 - metrics.height as i32 + metrics.ymin + (size * 0.8) as i32;
             if py < 0 || py >= self.height as i32 { continue; }
             
             for col in 0..metrics.width {
@@ -303,7 +303,7 @@ impl UIRenderer {
                 hex_to_u32(&theme.colors.surface_elevated)
             };
             let help_fg = if help_open {
-                0xFFffffff
+                0xffffffff
             } else if help_enabled {
                 text_color
             } else {
@@ -370,22 +370,22 @@ impl UIRenderer {
             
             if tab.loading {
                 // Loading spinner placeholder
-                let spinner_color = if is_active { 0xFFffffff } else { accent };
+                let spinner_color = if is_active { 0xffffffff } else { accent };
                 self.fill_rounded_rect(buffer, favicon_x as i32, favicon_y as i32,
                                         favicon_size, favicon_size, spinner_color, 8);
-            } else {
+                    let spinner_color = if is_active { 0xffffffff } else { accent };
                 // Globe icon placeholder
-                let icon_color = if is_active { 0xFFffffff } else { text_dim };
+                let icon_color = if is_active { 0xffffffff } else { text_dim };
                 self.draw_text(buffer, "○", favicon_x as i32, (favicon_y + 14) as i32, 14.0, icon_color);
             }
-            
+                    let icon_color = if is_active { 0xffffffff } else { text_dim };
             // Title
             let title_x = favicon_x + favicon_size + 8;
             let title_width = bounds.width - (title_x - bounds.x) - 28;
-            let title_color = if is_active { 0xFFffffff } else { text_color };
+            let title_color = if is_active { 0xffffffff } else { text_color };
             self.draw_text_truncated(buffer, &tab.title, title_x as i32, (y + 26) as i32,
                                       title_width, 13.0, title_color);
-            
+                let title_color = if is_active { 0xffffffff } else { text_color };
             // Trust indicator dot
             let trust_color = tab.trust_color();
             let dot_x = bounds.x + bounds.width - 20;
@@ -394,10 +394,10 @@ impl UIRenderer {
             // Close button (X)
             if !tab.pinned {
                 let close_x = bounds.x + bounds.width - 24;
-                let close_color = if is_active { 0xCCffffff } else { text_dim };
+                let close_color = if is_active { 0xccffffff } else { text_dim };
                 self.draw_text(buffer, "×", close_x as i32, (y + 24) as i32, 14.0, close_color);
             }
-            
+                    let close_color = if is_active { 0xccffffff } else { text_dim };
             y += tab_height + 4;
         }
         
@@ -457,7 +457,7 @@ impl UIRenderer {
             }
             
             // Title
-            let title_color = if is_selected { 0xFFffffff } else { hex_to_u32(&theme.colors.text_primary) };
+            let title_color = if is_selected { 0xffffffff } else { hex_to_u32(&theme.colors.text_primary) };
             self.draw_text_truncated(buffer, &tab.title, (x + 8) as i32, (y + preview_h + 20) as i32,
                                       tile_w - 16, 13.0, title_color);
             
@@ -465,13 +465,12 @@ impl UIRenderer {
             let trust_color = tab.trust_color();
             self.fill_rounded_rect(buffer, (x + tile_w - 18) as i32, (y + preview_h + 8) as i32, 
                                     10, 10, trust_color, 5);
-            
             // Keyboard hint
             if i < 9 {
                 let hint = format!("{}", i + 1);
                 let hint_bg = 0x80000000;
                 self.fill_rounded_rect(buffer, (x + 8) as i32, (y + 8) as i32, 20, 20, hint_bg, 4);
-                self.draw_text(buffer, &hint, (x + 13) as i32, (y + 22) as i32, 12.0, 0xFFffffff);
+                self.draw_text(buffer, &hint, (x + 13) as i32, (y + 22) as i32, 12.0, 0xffffffff);
             }
         }
         
@@ -629,12 +628,11 @@ fn wrap_lines(input: &str, max_width: usize) -> Vec<String> {
     let mut current = String::new();
 
     for word in input.split_whitespace() {
-        if current.len() + word.len() + 1 > max_width {
-            if !current.is_empty() {
+        if current.len() + word.len() + 1 > max_width
+            && !current.is_empty() {
                 lines.push(current.clone());
                 current.clear();
             }
-        }
         if !current.is_empty() {
             current.push(' ');
         }

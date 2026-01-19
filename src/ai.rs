@@ -137,17 +137,19 @@ pub fn load_runtime() -> AiRuntime {
         _ => AiProvider::None,
     };
 
-    let mut config = AiConfig::default();
-    config.enabled = parsed.ai.enabled;
-    config.provider = provider.clone();
-    config.api_key = match provider {
-        AiProvider::Anthropic => parsed.ai.keys.anthropic.clone().filter(|s| !s.is_empty()),
-        AiProvider::OpenAI => parsed.ai.keys.openai.clone().filter(|s| !s.is_empty()),
-        AiProvider::Local => None,
-        AiProvider::None => None,
+    let config = AiConfig {
+        enabled: parsed.ai.enabled,
+        provider: provider.clone(),
+        api_key: match provider {
+            AiProvider::Anthropic => parsed.ai.keys.anthropic.clone().filter(|s| !s.is_empty()),
+            AiProvider::OpenAI => parsed.ai.keys.openai.clone().filter(|s| !s.is_empty()),
+            AiProvider::Local => None,
+            AiProvider::None => None,
+        },
+        show_help_button: parsed.help.show_button,
+        learning_mode: parsed.learning.enabled,
+        ..Default::default()
     };
-    config.show_help_button = parsed.help.show_button;
-    config.learning_mode = parsed.learning.enabled;
 
     AiRuntime {
         config,

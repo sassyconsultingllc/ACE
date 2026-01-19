@@ -204,9 +204,8 @@ impl McpFileSystem {
     fn should_exclude(&self, path: &Path) -> bool {
         let _path_str = path.to_string_lossy();
         for pattern in &self.exclude_patterns {
-            if pattern.starts_with("*.") {
+            if let Some(ext) = pattern.strip_prefix("*.") {
                 // Extension pattern
-                let ext = &pattern[2..];
                 if let Some(file_ext) = path.extension() {
                     if file_ext == ext {
                         return true;
@@ -300,7 +299,7 @@ impl McpFileSystem {
                 path: entry_path.to_string_lossy().to_string(),
                 is_dir: metadata.is_dir(),
                 size: metadata.len(),
-                modified: metadata.modified().ok().map(|t| DateTime::<Utc>::from(t)),
+                modified: metadata.modified().ok().map(DateTime::<Utc>::from),
                 extension: entry_path.extension().map(|e| e.to_string_lossy().to_string()),
             });
         }
@@ -356,7 +355,7 @@ impl McpFileSystem {
                     path: entry_path.to_string_lossy().to_string(),
                     is_dir: metadata.is_dir(),
                     size: metadata.len(),
-                    modified: metadata.modified().ok().map(|t| DateTime::<Utc>::from(t)),
+                    modified: metadata.modified().ok().map(DateTime::<Utc>::from),
                     extension: entry_path.extension().map(|e| e.to_string_lossy().to_string()),
                 });
                 
@@ -669,7 +668,7 @@ impl McpFileSystem {
                     path: path.to_string_lossy().to_string(),
                     is_dir: metadata.is_dir(),
                     size: metadata.len(),
-                    modified: metadata.modified().ok().map(|t| DateTime::<Utc>::from(t)),
+                    modified: metadata.modified().ok().map(DateTime::<Utc>::from),
                     extension: path.extension().map(|e| e.to_string_lossy().to_string()),
                 });
             }

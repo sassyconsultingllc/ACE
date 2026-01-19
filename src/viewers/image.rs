@@ -183,7 +183,7 @@ impl ImageViewer {
     }
     
     /// Load image from bytes
-    pub fn load_image(&mut self, data: &[u8], path: &PathBuf) {
+    pub fn load_image(&mut self, data: &[u8], path: &std::path::Path) {
         if let Ok(img) = image::load_from_memory(data) {
             self.resize_width = img.width();
             self.resize_height = img.height();
@@ -635,20 +635,18 @@ impl ImageViewer {
                         
                         ui.horizontal(|ui| {
                             ui.label("Width:");
-                            if ui.add(egui::DragValue::new(&mut self.resize_width).speed(1)).changed() {
-                                if self.resize_maintain_aspect {
+                            if ui.add(egui::DragValue::new(&mut self.resize_width).speed(1)).changed()
+                                && self.resize_maintain_aspect {
                                     self.resize_height = (self.resize_width as f32 / aspect) as u32;
                                 }
-                            }
                         });
                         
                         ui.horizontal(|ui| {
                             ui.label("Height:");
-                            if ui.add(egui::DragValue::new(&mut self.resize_height).speed(1)).changed() {
-                                if self.resize_maintain_aspect {
+                            if ui.add(egui::DragValue::new(&mut self.resize_height).speed(1)).changed()
+                                && self.resize_maintain_aspect {
                                     self.resize_width = (self.resize_height as f32 * aspect) as u32;
                                 }
-                            }
                         });
                         
                         // Preset sizes

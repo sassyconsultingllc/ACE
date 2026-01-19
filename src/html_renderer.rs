@@ -50,7 +50,8 @@ pub struct HtmlRenderer {
     scroll_offset: f32,
     hover_link: Option<String>,
     font_size_base: f32,
-    cached_doc: Option<HtmlDocument>,
+    warn_color: Color32,
+    pub cached_doc: Option<HtmlDocument>,
 }
 
 impl HtmlRenderer {
@@ -64,90 +65,83 @@ impl HtmlRenderer {
             scroll_offset: 0.0,
             hover_link: None,
             font_size_base: 16.0,
+            warn_color: Color32::from_rgb(0xf7, 0x8c, 0x1f),
             cached_doc: None,
         }
     }
-    
-    /// Parse HTML string into a document
-    pub fn parse_html(&mut self, html: &str) -> HtmlDocument {
-        let mut doc = HtmlDocument {
-            title: "Untitled".into(),
-            nodes: Vec::new(),
-            styles: Vec::new(),
-        };
-        
-        // Simple HTML parser (for common patterns)
-        let html = html.trim();
-        
-        // Extract title
-        if let Some(start) = html.find("<title>") {
-            if let Some(end) = html[start..].find("</title>") {
-                doc.title = html[start + 7..start + end].trim().to_string();
-            }
+
+    /// Set the warning accent color used for highlighted links
+    pub fn set_warn_color(&mut self, c: Color32) {
+        self.warn_color = c;
+    }
+
+    /// Execute extension/content scripts in the renderer's JS context
+    pub fn run_content_scripts(&mut self, scripts: &[String]) {
+        for s in scripts {
+            let _ = self.js.execute(s);
         }
-        
-        // Extract styles
-        let mut pos = 0;
-        while let Some(start) = html[pos..].find("<style") {
-            let start = pos + start;
-            if let Some(style_start) = html[start..].find('>') {
-                let style_start = start + style_start + 1;
-                if let Some(end) = html[style_start..].find("</style>") {
-                    let css = &html[style_start..style_start + end];
-                    doc.styles.extend(self.parse_css(css));
-                    pos = style_start + end;
-                } else {
-                    break;
-                }
-            } else {
-                break;
-            }
+    }
+
+    /// Apply extension/content styles by parsing and appending to styles
+    pub fn apply_content_styles(&mut self, styles: &[String]) {
+        // Parse all styles first to avoid borrowing self while mutably borrowing cached_doc
+        let mut all_parsed: Vec<CssRule> = Vec::new();
+        for css in styles {
+            let parsed = self.parse_css(css);
+            all_parsed.extend(parsed);
         }
-        
-        // Extract body content
-        let body_html = if let Some(start) = html.find("<body") {
-            if let Some(body_start) = html[start..].find('>') {
-                let body_start = start + body_start + 1;
-                if let Some(end) = html[body_start..].find("</body>") {
-                    &html[body_start..body_start + end]
-                } else {
-                    &html[body_start..]
+
+        if let Some(doc) = &mut self.cached_doc {
+            doc.styles.extend(all_parsed);
+        }
+    }
+
+    /// Render a single node with link analysis (for flagged links)
+    pub fn render_node_with_link_check<F: Fn(&str) -> Option<&'static str>>(
+        &mut self,
+        ui: &mut Ui,
+        node: &HtmlNode,
+        styles: &[CssRule],
+        link_check: Option<&F>,
+        accent_warn: Color32,
+    ) {
+        match node {
+            HtmlNode::Text(text) => {
+                if !text.trim().is_empty() {
+                    ui.label(text);
                 }
-            } else {
-                html
             }
-        } else {
-            html
-        };
-        
-        // Parse body into nodes
-        doc.nodes = self.parse_nodes(body_html);
-        
-        // Extract and execute scripts
-        let mut script_pos = 0;
-        while let Some(start) = html[script_pos..].find("<script") {
-            let start = script_pos + start;
-            if let Some(script_start) = html[start..].find('>') {
-                let script_start = start + script_start + 1;
-                if let Some(end) = html[script_start..].find("</script>") {
-                    let script = &html[script_start..script_start + end];
-                    if !script.trim().is_empty() {
-                        // Execute JavaScript
-                        if let Err(e) = self.js.execute(script) {
-                            tracing::warn!("JS error: {}", e);
+            HtmlNode::Script(_) => {}
+            HtmlNode::Element { tag, id, class, style, attrs, children } => {
+                let computed = self.compute_styles(tag, id.as_deref(), class, style, styles);
+                match tag.as_str() {
+                    "a" => {
+                        let href = attrs.get("href").cloned().unwrap_or_default();
+                        let text = self.text_content(children);
+                        let display = if text.is_empty() { &href } else { &text };
+                        let flagged_reason = link_check.and_then(|f| f(&href));
+                        let link = ui.link(
+                            if let Some(reason) = flagged_reason {
+                                RichText::new(display).color(accent_warn).underline().strong()
+                            } else {
+                                RichText::new(display)
+                            }
+                        ).on_hover_text(
+                            if let Some(reason) = flagged_reason {
+                                format!("{}\n[Flagged: {}]", href, reason)
+                            } else {
+                                href.clone()
+                            }
+                        );
+                        if link.clicked() {
+                            self.hover_link = Some(href.clone());
                         }
+                        // Optionally: prefetch/analyze flagged links here
                     }
-                    script_pos = script_start + end;
-                } else {
-                    break;
+                    _ => self.render_node(ui, node, styles),
                 }
-            } else {
-                break;
             }
         }
-        
-        self.cached_doc = Some(doc.clone());
-        doc
     }
     
     /// Parse CSS into rules
@@ -192,73 +186,135 @@ impl HtmlRenderer {
         rules
     }
     
-    /// Parse HTML content into nodes
+    /// Parse full HTML and populate cached_doc
+    pub fn parse_html(&mut self, html: &str) {
+        let html = html.to_string();
+
+        // Extract title
+        let mut title = String::new();
+        if let Some(start) = html.to_lowercase().find("<title>") {
+            if let Some(end) = html.to_lowercase()[start..].find("</title>") {
+                let t = &html[start + 7..start + end];
+                title = decode_html_entities(t).trim().to_string();
+            }
+        }
+
+        // Collect style blocks
+        let mut styles: Vec<CssRule> = Vec::new();
+        let mut pos = 0;
+        let lhtml = html.to_lowercase();
+        while let Some(s) = lhtml[pos..].find("<style") {
+            let open = pos + s;
+            if let Some(start_tag_end) = html[open..].find('>') {
+                let content_start = open + start_tag_end + 1;
+                if let Some(close) = lhtml[content_start..].find("</style>") {
+                    let content_end = content_start + close;
+                    let css = &html[content_start..content_end];
+                    let mut parsed = self.parse_css(css);
+                    styles.append(&mut parsed);
+                    pos = content_end + 8; // len("</style>")
+                    continue;
+                }
+            }
+            break;
+        }
+
+        // Try to find body content, else parse whole HTML
+        let body_html = if let Some(bstart) = lhtml.find("<body") {
+            if let Some(bopen_end) = html[bstart..].find('>') {
+                let content_start = bstart + bopen_end + 1;
+                if let Some(bclose) = lhtml[content_start..].find("</body>") {
+                    let content_end = content_start + bclose;
+                    html[content_start..content_end].to_string()
+                } else {
+                    html.clone()
+                }
+            } else {
+                html.clone()
+            }
+        } else {
+            html.clone()
+        };
+
+        let nodes = self.parse_nodes(&body_html);
+
+        let doc = HtmlDocument {
+            title,
+            nodes,
+            styles,
+        };
+
+        self.cached_doc = Some(doc);
+    }
+
+    /// Very small fallback HTML -> nodes parser (returns a single text node for now)
     fn parse_nodes(&self, html: &str) -> Vec<HtmlNode> {
         let mut nodes = Vec::new();
         let mut pos = 0;
-        
+
         while pos < html.len() {
             // Find next tag
-            if let Some(tag_start) = html[pos..].find('<') {
-                let tag_start = pos + tag_start;
-                
+            if let Some(tag_start_rel) = html[pos..].find('<') {
+                let tag_start = pos + tag_start_rel;
+
                 // Text before tag
                 let text = html[pos..tag_start].trim();
                 if !text.is_empty() {
                     nodes.push(HtmlNode::Text(decode_html_entities(text)));
                 }
-                
+
                 // Parse tag
-                if let Some(tag_end) = html[tag_start..].find('>') {
-                    let tag_content = &html[tag_start + 1..tag_start + tag_end];
-                    
+                if let Some(tag_end_rel) = html[tag_start..].find('>') {
+                    let tag_end = tag_start + tag_end_rel;
+                    let tag_content = &html[tag_start + 1..tag_end];
+
                     // Skip comments and doctype
                     if tag_content.starts_with('!') || tag_content.starts_with('?') {
-                        pos = tag_start + tag_end + 1;
+                        pos = tag_end + 1;
                         continue;
                     }
-                    
-                    // Self-closing or closing tag
+
+                    // Closing tag - skip
                     if tag_content.starts_with('/') {
-                        pos = tag_start + tag_end + 1;
+                        pos = tag_end + 1;
                         continue;
                     }
-                    
+
                     let is_self_closing = tag_content.ends_with('/') ||
                         tag_content.split_whitespace().next()
                             .map(|t| matches!(t.to_lowercase().as_str(), 
                                 "br" | "hr" | "img" | "input" | "meta" | "link" | "area" | "base" | "col" | "embed" | "source" | "track" | "wbr"))
                             .unwrap_or(false);
-                    
+
                     let (tag_name, attrs) = self.parse_tag(tag_content);
-                    
+
                     if is_self_closing {
                         nodes.push(self.create_element(&tag_name, attrs, Vec::new()));
-                        pos = tag_start + tag_end + 1;
+                        pos = tag_end + 1;
                     } else {
                         // Find closing tag
                         let close_tag = format!("</{}", tag_name);
-                        if let Some(close_start) = html[tag_start + tag_end + 1..].to_lowercase().find(&close_tag.to_lowercase()) {
-                            let close_start = tag_start + tag_end + 1 + close_start;
-                            let inner_html = &html[tag_start + tag_end + 1..close_start];
-                            
+                        if let Some(close_rel) = html[tag_end + 1..].to_lowercase().find(&close_tag.to_lowercase()) {
+                            let close_start = tag_end + 1 + close_rel;
+                            let inner_html = &html[tag_end + 1..close_start];
+
                             let children = if tag_name.eq_ignore_ascii_case("script") || tag_name.eq_ignore_ascii_case("style") {
                                 vec![HtmlNode::Text(inner_html.to_string())]
                             } else {
                                 self.parse_nodes(inner_html)
                             };
-                            
+
                             nodes.push(self.create_element(&tag_name, attrs, children));
-                            
-                            if let Some(end) = html[close_start..].find('>') {
-                                pos = close_start + end + 1;
+
+                            if let Some(end_rel2) = html[close_start..].find('>') {
+                                pos = close_start + end_rel2 + 1;
                             } else {
                                 pos = close_start;
                             }
                         } else {
                             // No closing tag found
                             nodes.push(self.create_element(&tag_name, attrs, Vec::new()));
-                            pos = tag_start + tag_end + 1;
+                            pos = tag_end + 1;
                         }
                     }
                 } else {
@@ -273,73 +329,86 @@ impl HtmlRenderer {
                 break;
             }
         }
-        
+
         nodes
     }
     
+    
     /// Parse tag name and attributes
     fn parse_tag(&self, content: &str) -> (String, HashMap<String, String>) {
-        let content = content.trim_end_matches('/').trim();
-        let mut parts = content.split_whitespace();
-        let tag_name = parts.next().unwrap_or("div").to_lowercase();
-        
+        let s = content.trim_end_matches('/').trim();
+        let mut i = 0;
+        let bytes = s.as_bytes();
+        let len = bytes.len();
+
+        // Helper to skip ASCII whitespace
+        let skip_ws = |i: &mut usize| {
+            while *i < len && (bytes[*i] == b' ' || bytes[*i] == b'\n' || bytes[*i] == b'\t' || bytes[*i] == b'\r') {
+                *i += 1;
+            }
+        };
+
+        skip_ws(&mut i);
+        // read tag name
+        let name_start = i;
+        while i < len && !bytes[i].is_ascii_whitespace() && bytes[i] != b'/' && bytes[i] != b'>' {
+            i += 1;
+        }
+        let tag_name = if name_start < i { s[name_start..i].to_lowercase() } else { "div".into() };
+
         let mut attrs = HashMap::new();
-        let rest: String = parts.collect::<Vec<_>>().join(" ");
-        
-        // Parse attributes
-        let mut pos = 0;
-        while pos < rest.len() {
-            // Skip whitespace
-            while pos < rest.len() && rest[pos..].starts_with(char::is_whitespace) {
-                pos += 1;
+
+        loop {
+            skip_ws(&mut i);
+            if i >= len { break; }
+            if bytes[i] == b'/' || bytes[i] == b'>' { break; }
+
+            // attr name
+            let an_start = i;
+            while i < len && bytes[i] != b'=' && !bytes[i].is_ascii_whitespace() && bytes[i] != b'/' && bytes[i] != b'>' {
+                i += 1;
             }
-            if pos >= rest.len() {
-                break;
-            }
-            
-            // Find attribute name
-            let attr_start = pos;
-            while pos < rest.len() && !rest[pos..].starts_with('=') && !rest[pos..].starts_with(char::is_whitespace) {
-                pos += 1;
-            }
-            let attr_name = rest[attr_start..pos].trim().to_lowercase();
-            
-            // Check for value
-            if pos < rest.len() && rest[pos..].starts_with('=') {
-                pos += 1; // Skip =
-                
-                // Skip whitespace
-                while pos < rest.len() && rest[pos..].starts_with(char::is_whitespace) {
-                    pos += 1;
-                }
-                
-                // Get value
-                if pos < rest.len() {
-                    let quote = rest[pos..].chars().next().unwrap();
-                    if quote == '"' || quote == '\'' {
-                        pos += 1;
-                        let value_start = pos;
-                        while pos < rest.len() && !rest[pos..].starts_with(quote) {
-                            pos += 1;
-                        }
-                        attrs.insert(attr_name, rest[value_start..pos].to_string());
-                        if pos < rest.len() {
-                            pos += 1;
-                        }
-                    } else {
-                        let value_start = pos;
-                        while pos < rest.len() && !rest[pos..].starts_with(char::is_whitespace) {
-                            pos += 1;
-                        }
-                        attrs.insert(attr_name, rest[value_start..pos].to_string());
+            let an_end = i;
+            let mut attr_name = s[an_start..an_end].trim().to_lowercase();
+
+            skip_ws(&mut i);
+            if i < len && bytes[i] == b'=' {
+                i += 1; // skip '='
+                skip_ws(&mut i);
+
+                // parse value
+                if i < len && (bytes[i] == b'"' || bytes[i] == b'\'') {
+                    let quote = bytes[i];
+                    i += 1;
+                    let val_start = i;
+                    while i < len && bytes[i] != quote {
+                        i += 1;
                     }
+                    let val_end = i;
+                    if i < len { i += 1; }
+                    let raw = &s[val_start..val_end];
+                    let decoded = decode_html_entities(raw).trim().to_string();
+                    if attr_name.is_empty() { attr_name = "".into(); }
+                    attrs.insert(attr_name, decoded);
+                } else {
+                    // unquoted value
+                    let val_start = i;
+                    while i < len && !bytes[i].is_ascii_whitespace() && bytes[i] != b'/' && bytes[i] != b'>' {
+                        i += 1;
+                    }
+                    let val_end = i;
+                    let raw = &s[val_start..val_end];
+                    let decoded = decode_html_entities(raw).trim().to_string();
+                    attrs.insert(attr_name, decoded);
                 }
-            } else if !attr_name.is_empty() {
-                // Boolean attribute
-                attrs.insert(attr_name, "true".into());
+            } else {
+                // boolean attribute
+                if !attr_name.is_empty() {
+                    attrs.insert(attr_name, "true".into());
+                }
             }
         }
-        
+
         (tag_name, attrs)
     }
     
@@ -795,14 +864,14 @@ fn decode_html_entities(s: &str) -> String {
 /// Parse CSS size value
 fn parse_size(s: &str) -> Option<f32> {
     let s = s.trim();
-    if s.ends_with("px") {
-        s[..s.len() - 2].parse().ok()
-    } else if s.ends_with("em") {
-        s[..s.len() - 2].parse::<f32>().ok().map(|v| v * 16.0)
-    } else if s.ends_with("rem") {
-        s[..s.len() - 3].parse::<f32>().ok().map(|v| v * 16.0)
-    } else if s.ends_with('%') {
-        s[..s.len() - 1].parse::<f32>().ok().map(|v| v / 100.0 * 16.0)
+    if let Some(stripped) = s.strip_suffix("px") {
+        stripped.parse().ok()
+    } else if let Some(stripped) = s.strip_suffix("em") {
+        stripped.parse::<f32>().ok().map(|v| v * 16.0)
+    } else if let Some(stripped) = s.strip_suffix("rem") {
+        stripped.parse::<f32>().ok().map(|v| v * 16.0)
+    } else if let Some(stripped) = s.strip_suffix('%') {
+        stripped.parse::<f32>().ok().map(|v| v / 100.0 * 16.0)
     } else {
         s.parse().ok()
     }
@@ -826,8 +895,7 @@ fn parse_color(s: &str) -> Option<Color32> {
     }
     
     // Hex colors
-    if s.starts_with('#') {
-        let hex = &s[1..];
+    if let Some(hex) = s.strip_prefix('#') {
         if hex.len() == 3 {
             let r = u8::from_str_radix(&hex[0..1], 16).ok()? * 17;
             let g = u8::from_str_radix(&hex[1..2], 16).ok()? * 17;

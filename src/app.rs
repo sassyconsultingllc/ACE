@@ -10,6 +10,7 @@ use crate::auth::{AuthManager, FirstRunState, FirstRunStep, DeviceType, Tailscal
 use crate::browser::{BrowserEngine, DownloadState, Tab, TabContent, TabId, HistoryManager};
 use crate::file_handler::{FileType, OpenFile};
 use crate::html_renderer::HtmlRenderer;
+use crate::extensions::ExtensionManager;
 use crate::input::FocusManager;
 use crate::network_monitor::{NetworkMonitor, ActivityIndicatorState, ConnectionType, ConnectionState, ConnectionFilter, ConnectionSort, format_bytes, format_speed, format_duration};
 use crate::password_vault::{PasswordVault, Credential, PasswordGeneratorOptions, generate_password};
@@ -47,6 +48,7 @@ struct TrackedDownload {
 /// Browser application state
 pub struct BrowserApp {
     engine: BrowserEngine,
+    extension_manager: ExtensionManager,
     
     // Authentication & licensing
     auth: AuthManager,
@@ -115,6 +117,7 @@ pub struct BrowserApp {
     // 👨‍👩‍👧‍👦 Family Profiles - Parental controls that work
     profile_manager: ProfileManager,
     profiles_panel_visible: bool,
+    extensions_panel_visible: bool,
     profile_status: String,
     profile_new_name: String,
     profile_new_pin: String,
@@ -169,6 +172,7 @@ pub struct BrowserApp {
     bookmark_import_buffer: String,
     bookmark_export_buffer: String,
     download_url_input: String,
+    extension_load_path: String,
 }
 
 impl BrowserApp {
@@ -205,6 +209,77 @@ impl BrowserApp {
                 self.status_message = msg;
             }
         }
+    }
+
+    fn render_extensions_panel(&mut self, ctx: &egui::Context) {
+        if !self.extensions_panel_visible {
+            return;
+        }
+
+        let extensions_snapshot = self.extension_manager.list_extensions();
+
+        egui::Window::new("🧩 Extensions")
+            .open(&mut self.extensions_panel_visible)
+            .resizable(true)
+            .default_size(Vec2::new(640.0, 420.0))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.heading("Extensions");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let _ = ui.small_button("Close");
+                    });
+                });
+
+                ui.separator();
+
+                ui.horizontal(|ui| {
+                    ui.label("Load extension from path:");
+                    ui.text_edit_singleline(&mut self.extension_load_path);
+                    if ui.button("Load").clicked() {
+                        let path = self.extension_load_path.trim();
+                        if !path.is_empty() {
+                            match self.extension_manager.load_extension(path) {
+                                Ok(()) => {
+                                    self.status_message = format!("Loaded extension: {}", path);
+                                    self.extension_load_path.clear();
+                                }
+                                Err(e) => {
+                                    self.status_message = format!("Failed to load extension: {}", e);
+                                }
+                            }
+                        }
+                    }
+                });
+
+                ui.separator();
+
+                if extensions_snapshot.is_empty() {
+                    ui.label("No extensions installed.");
+                } else {
+                    for ext in extensions_snapshot {
+                        ui.horizontal(|ui| {
+                            let mut enabled = ext.enabled;
+                            if ui.checkbox(&mut enabled, &ext.name).changed() {
+                                if enabled {
+                                    self.extension_manager.enable_extension(&ext.id);
+                                } else {
+                                    self.extension_manager.disable_extension(&ext.id);
+                                }
+                            }
+                            ui.label(format!("v{}", ext.version));
+                            if ui.small_button("Unload").clicked() {
+                                self.extension_manager.unload_extension(&ext.id);
+                            }
+                        });
+
+                        if !ext.description.is_empty() {
+                            ui.label(RichText::new(ext.description).small());
+                        }
+
+                        ui.separator();
+                    }
+                }
+            });
     }
 
     fn submit_address_bar(&mut self) {
@@ -272,7 +347,7 @@ impl BrowserApp {
             .ok()
             .and_then(|u| {
                 u.path_segments()
-                    .and_then(|segments| segments.filter(|s| !s.is_empty()).last())
+                    .and_then(|segments| segments.filter(|s| !s.is_empty()).next_back())
                     .map(|s| decode(s).unwrap_or_else(|_| s.into()).to_string())
             })
             .filter(|s| !s.is_empty())
@@ -290,9 +365,7 @@ impl BrowserApp {
         let first_run = if auth.is_first_run {
             FirstRunState::default()
         } else {
-            let mut state = FirstRunState::default();
-            state.step = FirstRunStep::Complete;
-            state
+            FirstRunState { step: FirstRunStep::Complete, ..Default::default() }
         };
         
         // Get config directory for vault
@@ -331,6 +404,7 @@ impl BrowserApp {
 
         Self {
             engine: BrowserEngine::new(),
+            extension_manager: ExtensionManager::new(),
             auth,
             tailscale,
             first_run,
@@ -387,6 +461,7 @@ impl BrowserApp {
             history_last_title: None,
             profile_manager: ProfileManager::new(),
             profiles_panel_visible: false,
+            extensions_panel_visible: false,
             profile_status: String::new(),
             profile_new_name: String::new(),
             profile_new_pin: String::new(),
@@ -426,6 +501,7 @@ impl BrowserApp {
             bookmark_import_buffer: String::new(),
             bookmark_export_buffer: String::new(),
             download_url_input: String::new(),
+            extension_load_path: String::new(),
         }
     }
     
@@ -448,12 +524,10 @@ impl BrowserApp {
                     .clicked() {
                     self.engine.go_back();
                 }
-            } else {
-                if ui.add_enabled(can_back, egui::Button::new("◀").min_size(Vec2::new(28.0, 24.0)))
-                    .on_hover_text("Back (Alt+Left)")
-                    .clicked() {
-                    self.engine.go_back();
-                }
+            } else if ui.add_enabled(can_back, egui::Button::new("◀").min_size(Vec2::new(28.0, 24.0)))
+                .on_hover_text("Back (Alt+Left)")
+                .clicked() {
+                self.engine.go_back();
             }
 
             if let Some(tex) = self.icons.get("forward") {
@@ -462,22 +536,18 @@ impl BrowserApp {
                     .clicked() {
                     self.engine.go_forward();
                 }
-            } else {
-                if ui.add_enabled(can_forward, egui::Button::new("▶").min_size(Vec2::new(28.0, 24.0)))
-                    .on_hover_text("Forward (Alt+Right)")
-                    .clicked() {
-                    self.engine.go_forward();
-                }
+            } else if ui.add_enabled(can_forward, egui::Button::new("▶").min_size(Vec2::new(28.0, 24.0)))
+                .on_hover_text("Forward (Alt+Right)")
+                .clicked() {
+                self.engine.go_forward();
             }
             
             if is_loading {
                 if ui.button("✕").on_hover_text("Stop").clicked() {
                     self.engine.stop();
                 }
-            } else {
-                if ui.button("↻").on_hover_text("Reload (F5)").clicked() {
-                    self.engine.reload();
-                }
+            } else if ui.button("↻").on_hover_text("Reload (F5)").clicked() {
+                self.engine.reload();
             }
             
             if ui.button("Home").on_hover_text("Home").clicked() {
@@ -517,7 +587,7 @@ impl BrowserApp {
                 }
 
                 if response.gained_focus() {
-                    self.focus_manager.focus_address_bar(&self.engine.address_bar_text());
+                    self.focus_manager.focus_address_bar(self.engine.address_bar_text());
                     self.engine.set_address_bar_focused(true);
                 }
 
@@ -565,11 +635,9 @@ impl BrowserApp {
                         self.guarded_navigate("sassy://bookmarks");
                         ui.close_menu();
                     }
-                } else {
-                    if ui.button("Bookmarks").clicked() {
-                        self.guarded_navigate("sassy://bookmarks");
-                        ui.close_menu();
-                    }
+                } else if ui.button("Bookmarks").clicked() {
+                    self.guarded_navigate("sassy://bookmarks");
+                    ui.close_menu();
                 }
                 if ui.button("History").clicked() {
                     self.history_panel_visible = true;
@@ -614,6 +682,10 @@ impl BrowserApp {
                 }
                 if ui.button("Settings").clicked() {
                     self.guarded_navigate("sassy://settings");
+                    ui.close_menu();
+                }
+                if ui.button("Extensions").clicked() {
+                    self.extensions_panel_visible = true;
                     ui.close_menu();
                 }
             });
@@ -702,7 +774,7 @@ impl BrowserApp {
                 ui.horizontal(|ui| {
                     ui.label(icon);
                     ui.label(RichText::new(&conn.domain).color(color32));
-                    ui.label(format!("{}", format_bytes(total)));
+                    ui.label(format_bytes(total).to_string());
                     ui.label(format_duration(elapsed));
                     if let Some(code) = conn.status_code {
                         ui.label(format!("{}", code));
@@ -1048,11 +1120,10 @@ impl BrowserApp {
                             });
                             
                             // Close button (not for pinned tabs)
-                            if !*pinned {
-                                if ui.small_button("×").clicked() {
+                            if !*pinned
+                                && ui.small_button("×").clicked() {
                                     close_tab = Some(idx);
                                 }
-                            }
                         });
                     });
                 
@@ -1130,24 +1201,78 @@ impl BrowserApp {
     fn render_content(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         // Extract content info first to avoid borrow conflicts
         let content_type = self.engine.active_tab().map(|t| match &t.content {
-            TabContent::NewTab => ("newtab", String::new()),
-            TabContent::Settings => ("settings", String::new()),
-            TabContent::History => ("history", String::new()),
-            TabContent::Bookmarks => ("bookmarks", String::new()),
-            TabContent::Downloads => ("downloads", String::new()),
-            TabContent::Web { url, .. } => ("web", url.clone()),
-            TabContent::File(_) => ("file", String::new()),
+            TabContent::NewTab => ("New Tab", String::new()),
+            TabContent::Settings => ("Settings", String::new()),
+            TabContent::History => ("History", String::new()),
+            TabContent::Bookmarks => ("Bookmarks", String::new()),
+            TabContent::Downloads => ("Downloads", String::new()),
+            TabContent::Web { url, .. } => ("Web", url.clone()),
+            TabContent::File(_) => ("File", String::new()),
         });
         
         match content_type {
-            Some(("newtab", _)) => self.render_new_tab_page(ui),
-            Some(("settings", _)) => self.render_settings_page(ui),
-            Some(("history", _)) => self.render_history_page(ui),
-            Some(("bookmarks", _)) => self.render_bookmarks_page(ui),
-            Some(("downloads", _)) => self.render_downloads_page(ui),
-            Some(("web", url)) => {
-                self.render_web_content(ctx, ui, &url);
-                self.network_monitor.cleanup_old(Duration::from_secs(30));
+            Some(("New Tab", _)) => self.render_new_tab_page(ui),
+            Some(("Settings", _)) => self.render_settings_page(ui),
+            Some(("History", _)) => self.render_history_page(ui),
+            Some(("Bookmarks", _)) => self.render_bookmarks_page(ui),
+            Some(("Downloads", _)) => self.render_downloads_page(ui),
+            Some(("Web", url)) => {
+                // Check if navigation is blocked (status_message starts with "Navigation blocked:")
+                if self.status_message.starts_with("Navigation blocked:") {
+                    let reason = self.status_message.clone();
+                    let domain = crate::family_profiles::extract_domain(&url);
+                    let approval_requests: Vec<_> = self.profile_manager.all_approval_requests()
+                        .iter()
+                        .filter(|r| matches!(&r.action, crate::family_profiles::Action::AccessBlockedSite(u) if crate::family_profiles::extract_domain(u) == domain))
+                        .cloned()
+                        .collect();
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(60.0);
+                        ui.heading(RichText::new("🚫 Site Blocked").size(36.0).color(Color32::RED));
+                        ui.add_space(10.0);
+                        ui.label(RichText::new(reason).size(20.0).color(Color32::RED));
+                        ui.add_space(10.0);
+                        if let Some(profile) = self.profile_manager.active_profile() {
+                            if profile.is_restricted()
+                                && approval_requests.iter().all(|r| r.status != crate::family_profiles::ApprovalStatus::Pending)
+                                    && ui.button("Request Parent Approval").clicked() {
+                                        let req_id = self.profile_manager.request_approval(crate::family_profiles::Action::AccessBlockedSite(url.clone()));
+                                        self.status_message = format!("Approval requested: {}", req_id);
+                                    }
+                        }
+                        if !approval_requests.is_empty() {
+                            ui.add_space(10.0);
+                            ui.heading("Approval Requests for this Site:");
+                            for req in &approval_requests {
+                                let (status_text, color, tooltip) = match req.status {
+                                    crate::family_profiles::ApprovalStatus::Pending => ("Pending", Color32::YELLOW, "Waiting for parent approval"),
+                                    crate::family_profiles::ApprovalStatus::Approved => ("Approved", Color32::from_rgb(0x16, 0xf2, 0xd6), "Approved by parent"),
+                                    crate::family_profiles::ApprovalStatus::Denied => ("Denied", Color32::RED, req.parent_response.as_deref().unwrap_or("Denied by parent")),
+                                    crate::family_profiles::ApprovalStatus::Expired => ("Expired", Color32::GRAY, "Approval request expired"),
+                                };
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new(status_text).color(color)).on_hover_text(tooltip);
+                                    if (req.status == crate::family_profiles::ApprovalStatus::Denied || req.status == crate::family_profiles::ApprovalStatus::Expired)
+                                        && ui.button("Resubmit").on_hover_text("Request approval again").clicked() {
+                                            let new_id = self.profile_manager.request_approval(req.action.clone());
+                                            self.status_message = format!("Resubmitted approval request: {}", new_id);
+                                        }
+                                    if let Some(resp) = &req.parent_response {
+                                        if req.status == crate::family_profiles::ApprovalStatus::Denied {
+                                            ui.label(RichText::new(format!("Reason: {}", resp)).color(Color32::RED)).on_hover_text("Parent's reason for denial");
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                        ui.add_space(20.0);
+                        ui.label(RichText::new("If you believe this site should be allowed, ask your parent or guardian for approval.").italics().color(Color32::GRAY));
+                        ui.label(RichText::new("Parents: Review requests in the Profiles panel.").italics().color(Color32::GRAY));
+                    });
+                } else {
+                    self.render_web_content(ctx, ui, &url);
+                    self.network_monitor.cleanup_old(Duration::from_secs(30));
+                }
             }
             Some(("file", _)) => {
                 // Get file reference carefully
@@ -1192,7 +1317,7 @@ impl BrowserApp {
                 ui.add_space(60.0);
                 
                 // Logo
-                ui.heading(RichText::new("🌐 Sassy Browser").size(48.0));
+                ui.heading(RichText::new("Sassy Browser").size(48.0));
                 ui.add_space(10.0);
                 ui.label(RichText::new("Fast • Free • Handles Everything").size(16.0).color(Color32::GRAY));
                 
@@ -1233,28 +1358,28 @@ impl BrowserApp {
                 ui.add_space(10.0);
                 
                 ui.horizontal_wrapped(|ui| {
-                    ui.label("🖼️ Images (PNG, JPG, RAW, PSD, SVG)");
-                    ui.label("📄 PDF");
-                    ui.label("📝 Office Docs (DOCX, ODT, RTF)");
-                    ui.label("📊 Spreadsheets (XLSX, CSV)");
+                    ui.label("Images (PNG, JPG, RAW, PSD, SVG)");
+                    ui.label("PDF");
+                    ui.label("Office Docs (DOCX, ODT, RTF)");
+                    ui.label("Spreadsheets (XLSX, CSV)");
                 });
                 
                 ui.add_space(8.0);
                 
                 ui.horizontal_wrapped(|ui| {
-                    ui.label("🧬 Chemical (PDB, MOL, XYZ, CIF)");
-                    ui.label("📦 Archives (ZIP, 7z, RAR, TAR)");
-                    ui.label("🎲 3D Models (OBJ, STL, GLTF)");
-                    ui.label("🔤 Fonts (TTF, OTF, WOFF)");
+                    ui.label("Scientific (PDB, MOL, XYZ, CIF)");
+                    ui.label("Archive Files (ZIP, 7z, RAR, TAR)");
+                    ui.label("3D-Rendered Models (OBJ, STL, GLTF)");
+                    ui.label("Fonts (TTF, OTF, WOFF)");
                 });
                 
                 ui.add_space(8.0);
                 
                 ui.horizontal_wrapped(|ui| {
-                    ui.label("🎵 Audio (MP3, FLAC, WAV, OGG)");
-                    ui.label("🎬 Video (MP4, MKV, WebM)");
-                    ui.label("📚 eBooks (EPUB, MOBI)");
-                    ui.label("💻 Code (100+ languages)");
+                    ui.label("Audio (MP3, FLAC, WAV, OGG)");
+                    ui.label("Video (MP4, MKV, WebM)");
+                    ui.label("eBooks (EPUB, MOBI)");
+                    ui.label("Code (100+ languages)");
                 });
                 
                 ui.add_space(20.0);
@@ -1266,25 +1391,66 @@ impl BrowserApp {
     fn render_web_content(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui, url: &str) {
         let url = url.to_string();
         let available = ui.available_size();
-        
+        let accent_warn = Color32::from_rgb(0xf7, 0x8c, 0x1f);
         // Dark/light mode background
         let bg = if self.dark_mode { Color32::from_gray(25) } else { Color32::WHITE };
-        
         egui::Frame::none()
             .fill(bg)
             .inner_margin(16.0)
             .show(ui, |ui| {
                 ui.set_min_size(available);
-                
-                // Render HTML with our JS interpreter
-                self.html_renderer.render(ui, &url);
-                
+                // Render HTML with flagged link highlighting
+                let smart_history = &self.smart_history;
+                let profile_manager = &self.profile_manager;
+                let blocklist = profile_manager.active_profile().map(|p| p.restrictions.blocklist.clone()).unwrap_or_default();
+                let link_check = |href: &str| {
+                    let domain = crate::family_profiles::extract_domain(href);
+                    // Blocklist
+                    if blocklist.contains(&domain) {
+                        return Some("Blocklist");
+                    }
+                    // NSFW
+                    let (is_nsfw, _score) = smart_history.analyze(href, "");
+                    if is_nsfw {
+                        return Some("NSFW");
+                    }
+                    // Ad/sponsored/spam/unsafe (simple heuristics)
+                    let href_lc = href.to_lowercase();
+                    if href_lc.contains("ad") || href_lc.contains("sponsored") {
+                        return Some("Ad/Sponsored");
+                    }
+                    if href_lc.contains("spam") {
+                        return Some("Spam");
+                    }
+                    if href_lc.contains("unsafe") {
+                        return Some("Unsafe");
+                    }
+                    None
+                };
+                // Render with link check
+                // Ensure renderer uses the same warning accent color
+                self.html_renderer.set_warn_color(accent_warn);
+                // Run extension content scripts/styles for this URL
+                let scripts = self.extension_manager.get_content_scripts(&url);
+                if !scripts.is_empty() {
+                    self.html_renderer.run_content_scripts(&scripts);
+                }
+                let styles = self.extension_manager.get_content_styles(&url);
+                if !styles.is_empty() {
+                    self.html_renderer.apply_content_styles(&styles);
+                }
+                if let Some(doc) = self.html_renderer.cached_doc.clone() {
+                    for node in &doc.nodes {
+                        self.html_renderer.render_node_with_link_check(ui, node, &doc.styles, Some(&link_check), accent_warn);
+                    }
+                } else {
+                    self.html_renderer.render(ui, &url);
+                }
                 // Handle clicked links
                 if let Some(href) = self.html_renderer.take_clicked_link() {
                     self.guarded_navigate(&href);
                     self.html_renderer.clear_cache();
                 }
-                
                 // Show console output if dev tools enabled
                 if self.show_dev_tools {
                     ui.separator();
@@ -1294,7 +1460,6 @@ impl BrowserApp {
                         }
                     });
                 }
-                
                 // Show option to open in system browser
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
@@ -1577,12 +1742,11 @@ impl BrowserApp {
                             ui.label(RichText::new(filename).strong());
                             ui.label(format!("{:.1} MB", *size as f32 / 1_048_576.0));
                             ui.label(RichText::new(status_text).color(color)).on_hover_text(tooltip);
-                            if req.status == ApprovalStatus::Denied || req.status == ApprovalStatus::Expired {
-                                if ui.button("Resubmit").on_hover_text("Request approval again").clicked() {
+                            if (req.status == ApprovalStatus::Denied || req.status == ApprovalStatus::Expired)
+                                && ui.button("Resubmit").on_hover_text("Request approval again").clicked() {
                                     let new_id = self.profile_manager.request_approval(req.action.clone());
                                     self.status_message = format!("Resubmitted approval request: {}", new_id);
                                 }
-                            }
                             if let Some(resp) = &req.parent_response {
                                 if req.status == ApprovalStatus::Denied {
                                     ui.label(RichText::new(format!("Reason: {}", resp)).color(Color32::RED)).on_hover_text("Parent's reason for denial");
@@ -2218,7 +2382,7 @@ impl BrowserApp {
                     if reused_owned.is_empty() {
                         ui.label("None");
                     }
-                    for (_hash, creds) in &reused_owned {
+                    for creds in reused_owned.values() {
                         if creds.len() > 1 {
                             ui.label(format!("{} entries share a password", creds.len()));
                             for cred in creds {
@@ -2292,12 +2456,23 @@ impl BrowserApp {
                     if let Some(profile) = active_profile_info.as_ref() {
                         let color = profile.profile_type.color();
                         ui.colored_label(Color32::from_rgb(color[0], color[1], color[2]), profile.profile_type.icon());
-                        ui.label(format!("Active: {} ({:?})", profile.name, profile.profile_type));
+                        ui.label(format!("Active: {} ({:?})", profile.name, profile.profile_type))
+                            .on_hover_text("Currently active profile. Click 'Switch' below to change.");
                         if let Some(rem) = self.profile_manager.remaining_time_minutes() {
-                            ui.label(format!("Time left today: {} min", rem));
+                            let warn = rem <= 10;
+                            ui.label(RichText::new(format!("Time left today: {} min", rem))
+                                .color(if warn { Color32::YELLOW } else { Color32::GREEN }))
+                                .on_hover_text("Daily time limit. When time runs out, access will be blocked until tomorrow or a parent extends time.");
+                        }
+                        if let Some(r) = &profile.restrictions.bedtime_start {
+                            if let Some(e) = &profile.restrictions.bedtime_end {
+                                ui.label(RichText::new(format!("Bedtime: {:02}:{:02}–{:02}:{:02}", r.0, r.1, e.0, e.1)).color(Color32::LIGHT_RED))
+                                    .on_hover_text("No access allowed during bedtime hours. Ask a parent to adjust bedtime if needed.");
+                            }
                         }
                         if profile.is_restricted() && profile.requires_approval(&Action::InstallExtension) {
-                            ui.label(RichText::new("Approvals required for extensions").color(Color32::YELLOW));
+                            ui.label(RichText::new("Approvals required for extensions").color(Color32::YELLOW))
+                                .on_hover_text("This profile needs parent approval for installing extensions.");
                         }
                     } else {
                         ui.label("No active profile");
@@ -2305,7 +2480,7 @@ impl BrowserApp {
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if let Some(id) = active_profile_id.clone() {
-                            if ui.small_button("Weekly Report").clicked() {
+                            if ui.small_button("Weekly Report").on_hover_text("Show usage and blocked activity for this profile").clicked() {
                                 if let Some(report) = self.profile_manager.generate_weekly_report(&id) {
                                     self.profile_report_output = format!(
                                         "{}: {} mins, blocked {} sites, {} downloads",
@@ -2543,10 +2718,12 @@ impl BrowserApp {
                         let color = profile.profile_type.color();
                         ui.horizontal(|ui| {
                             ui.colored_label(Color32::from_rgb(color[0], color[1], color[2]), profile.profile_type.icon());
-                            ui.label(format!("{} ({:?})", profile.name, profile.profile_type));
-                            ui.label(format!("Visits tracked: {} | Blocked: {}", profile.usage_stats.sites_visited.len(), profile.usage_stats.blocked_attempts.len()));
+                            ui.label(format!("{} ({:?})", profile.name, profile.profile_type))
+                                .on_hover_text("Profile type determines restrictions and required approvals.");
+                            ui.label(format!("Visits tracked: {} | Blocked: {}", profile.usage_stats.sites_visited.len(), profile.usage_stats.blocked_attempts.len()))
+                                .on_hover_text("Number of sites visited and blocked for this profile.");
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.small_button("Switch").clicked() {
+                                if ui.small_button("Switch").on_hover_text("Switch to this profile").clicked() {
                                     let pin_opt = if profile.pin.is_some() { Some(self.profile_switch_pin.as_str()) } else { None };
                                     if let Err(e) = self.profile_manager.switch_profile(&profile.id, pin_opt) {
                                         self.profile_status = format!("Switch failed: {}", e);
@@ -2558,21 +2735,23 @@ impl BrowserApp {
                         });
 
                         ui.horizontal(|ui| {
-                            ui.label("PIN (if set)");
+                            ui.label("PIN (if set)").on_hover_text("Enter PIN if this profile is protected");
                             ui.add(egui::TextEdit::singleline(&mut self.profile_switch_pin).password(true));
                         });
 
                         ui.horizontal(|ui| {
-                            ui.label(format!("Total minutes: {}", profile.usage_stats.total_time_minutes));
-                            ui.label(format!("Today: {}", profile.usage_stats.today_time_minutes));
+                            ui.label(format!("Total minutes: {}", profile.usage_stats.total_time_minutes))
+                                .on_hover_text("Total usage time for this profile.");
+                            ui.label(format!("Today: {}", profile.usage_stats.today_time_minutes))
+                                .on_hover_text("Usage time today. Subject to daily limits.");
                         });
 
-                        if ui.small_button("Record sample search").clicked() {
+                        if ui.small_button("Record sample search").on_hover_text("Simulate a search for testing").clicked() {
                             self.profile_manager.record_search("sample query");
                             self.profile_status = "Sample search recorded".into();
                         }
 
-                        if ui.small_button("Delete").clicked() {
+                        if ui.small_button("Delete").on_hover_text("Delete this profile").clicked() {
                             if let Err(e) = self.profile_manager.delete_profile(&profile.id) {
                                 self.profile_status = format!("Delete failed: {}", e);
                             } else {
@@ -3098,7 +3277,7 @@ impl BrowserApp {
                         ui.separator();
                         ui.label(RichText::new("Backup your key seed!").strong().color(Color32::YELLOW));
                         if let Some(seed) = self.auth.get_master_key() {
-                            let seed_hex = hex::encode(&seed);
+                            let seed_hex = hex::encode(seed);
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new(&seed_hex).monospace());
                                 if ui.small_button("Copy").clicked() {
@@ -3111,7 +3290,7 @@ impl BrowserApp {
                             // Show QR code if requested
                             if let Some(ref qr) = self.first_run.error_message {
                                 if qr == &seed_hex {
-                                    if let Ok(code) = qrcode::QrCode::new(&seed) {
+                                    if let Ok(code) = qrcode::QrCode::new(seed) {
                                         let image = code.render::<qrcode::render::svg::Color>()
                                             .min_dimensions(200, 200)
                                             .build();
@@ -3560,6 +3739,8 @@ impl eframe::App for BrowserApp {
 
         // Profiles/parental controls panel
         self.render_profiles_panel(ctx);
+        // Extensions manager panel
+        self.render_extensions_panel(ctx);
 
         // History / activity panel
         self.render_history_panel(ctx);
@@ -3637,6 +3818,8 @@ fn configure_style(ctx: &egui::Context, dark_mode: bool) {
         visuals.widgets.hovered.bg_fill = Color32::from_rgb(0xdf, 0xe8, 0xf3);
         visuals.widgets.active.bg_fill = Color32::from_rgb(0xd4, 0xe1, 0xf1);
         visuals.override_text_color = Some(Color32::from_rgb(0x14, 0x1a, 0x22));
+        // Use warning accent for hyperlinks in the UI so it matches renderer
+        visuals.hyperlink_color = accent_warn;
         visuals.selection.bg_fill = Color32::from_rgb(0x0f, 0xb8, 0x9b);
         visuals.selection.stroke = egui::Stroke::new(1.5, Color32::from_rgb(0x0b, 0x87, 0x72));
     }

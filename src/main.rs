@@ -244,8 +244,7 @@ fn run_mcp_server_mode(args: &[String]) {
     println!("🤖 Starting Sassy Browser MCP Server...");
     println!("Connect from Claude Desktop or any MCP client.");
     
-    let mut config = mcp_server::McpServerConfig::default();
-    config.enabled = true;
+    let mut config = mcp_server::McpServerConfig { enabled: true, ..Default::default() };
     
     // Parse additional args
     let mut i = 0;

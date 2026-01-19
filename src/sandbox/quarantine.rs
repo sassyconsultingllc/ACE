@@ -301,6 +301,7 @@ fn mark_as_downloaded(path: &std::path::Path, source_url: &str) -> Result<(), St
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
+        .truncate(true)
         .open(&stream_path)
         .map_err(|e| format!("Zone.Identifier open failed: {}", e))?;
 

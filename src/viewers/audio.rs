@@ -94,16 +94,13 @@ impl AudioViewer {
     
     fn render_track_info(&self, ui: &mut egui::Ui, audio: &AudioContent) {
         ui.vertical_centered(|ui| {
-            let title = audio.title.as_ref()
-                .map(|t| t.as_str())
+            let title = audio.title.as_deref()
                 .unwrap_or("Unknown Track");
             
-            let artist = audio.artist.as_ref()
-                .map(|a| a.as_str())
+            let artist = audio.artist.as_deref()
                 .unwrap_or("Unknown Artist");
             
-            let album = audio.album.as_ref()
-                .map(|a| a.as_str())
+            let album = audio.album.as_deref()
                 .unwrap_or("");
             
             ui.label(RichText::new(title).size(24.0).strong());

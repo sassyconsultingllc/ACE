@@ -23,8 +23,10 @@ use chrono::{DateTime, Utc};
 
 /// Hosting mode for MCP agents
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum HostingMode {
     /// Use cloud APIs (xAI, Anthropic, Google)
+    #[default]
     Cloud,
     /// Use self-hosted endpoints (Hugging Face Inference)
     SelfHosted,
@@ -34,11 +36,6 @@ pub enum HostingMode {
     Local,
 }
 
-impl Default for HostingMode {
-    fn default() -> Self {
-        HostingMode::Cloud
-    }
-}
 
 /// Provider for AI model hosting
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -1045,8 +1042,8 @@ impl McpOrchestrator {
         AuditResult {
             id,
             verdict,
-            feasibility_score: feasibility_score.max(0.0).min(1.0),
-            compatibility_score: compatibility_score.max(0.0).min(1.0),
+            feasibility_score: feasibility_score.clamp(0.0, 1.0),
+            compatibility_score: compatibility_score.clamp(0.0, 1.0),
             issues,
             suggestions,
             affected_files,

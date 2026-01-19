@@ -102,12 +102,7 @@ impl TailscaleInfo {
         if let Some(ref dns) = self.magic_dns {
             // Use MagicDNS name (works across networks)
             Some(format!("ws://{}:{}", dns.trim_end_matches('.'), port))
-        } else if let Some(ip) = self.ip {
-            // Fallback to IP
-            Some(format!("ws://{}:{}", ip, port))
-        } else {
-            None
-        }
+        } else { self.ip.map(|ip| format!("ws://{}:{}", ip, port)) }
     }
 }
 

@@ -167,10 +167,46 @@ pub fn analyze_password(password: &str) -> PasswordStrength {
     match score {
         0..=2 => PasswordStrength::VeryWeak,
         3..=4 => PasswordStrength::Weak,
-        5..=6 => PasswordStrength::Fair,
-        7..=8 => PasswordStrength::Strong,
+        5 => PasswordStrength::Fair,
+        6..=7 => PasswordStrength::Strong,
         _ => PasswordStrength::VeryStrong,
     }
+}
+
+/// Validate a candidate password against a simple policy inspired by
+/// NIST SP 800-63B: require minimum length, check against a small blacklist,
+/// and require a measured strength of at least `Strong` for acceptance.
+pub fn validate_password_policy(password: &str) -> Result<(), String> {
+    // Minimum length per NIST: at least 8 characters for user-chosen secrets
+    if password.chars().count() < 8 {
+        return Err("Password must be at least 8 characters".to_string());
+    }
+
+    // Small local blacklist of extremely common passwords and patterns.
+    let lower = password.to_lowercase();
+    let blacklist = [
+        "password",
+        "123456",
+        "12345678",
+        "qwerty",
+        "letmein",
+        "welcome",
+        "admin",
+        "111111",
+        "password1",
+    ];
+
+    if blacklist.iter().any(|b| lower.contains(b)) {
+        return Err("Password is too common or contains common patterns".to_string());
+    }
+
+    // Require measured strength of at least Strong
+    let strength = analyze_password(password);
+    if strength.score() < PasswordStrength::Strong.score() {
+        return Err("Password is not strong enough; choose a longer or less-guessable secret".to_string());
+    }
+
+    Ok(())
 }
 
 // ============================================================================
@@ -501,7 +537,11 @@ impl PasswordVault {
         if !self.is_unlocked {
             return Err("Vault is locked".to_string());
         }
-        
+        // Validate password strength/policy before adding (NIST-inspired checks)
+        if let Err(e) = validate_password_policy(&credential.password) {
+            return Err(format!("Password policy validation failed: {}", e));
+        }
+
         self.ensure_folder(&credential.folder);
         self.credentials.push(credential);
         self.save()?;
@@ -710,7 +750,7 @@ impl PasswordVault {
         // Save config (non-sensitive)
         let config = format!(
             "salt={}\npin_hash={}\nauto_lock={}\nbreach_check={}\n",
-            hex::encode(&self.salt),
+            hex::encode(self.salt),
             self.pin_hash.as_deref().unwrap_or(""),
             self.auto_lock_seconds,
             if self.breach_check_enabled { 1 } else { 0 }
@@ -796,7 +836,7 @@ impl PasswordVault {
             let fields: Vec<&str> = parse_csv_line(line);
             if fields.len() >= 4 {
                 let mut cred = Credential::new(
-                    fields.get(0).unwrap_or(&""),
+                    fields.first().unwrap_or(&""),
                     fields.get(2).unwrap_or(&""),
                     fields.get(3).unwrap_or(&""),
                     fields.get(1).unwrap_or(&""),

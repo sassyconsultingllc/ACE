@@ -233,10 +233,10 @@ impl PageSandbox {
     #[allow(dead_code)]
     pub fn status_text(&self) -> String {
         match self.trust {
-            PageTrust::Untrusted => format!("Sandboxed (0/3)"),
-            PageTrust::Cautious => format!("Cautious (1/3)"),
-            PageTrust::Warming => format!("Warming (2/3)"),
-            PageTrust::Trusted => format!("Trusted"),
+            PageTrust::Untrusted => "Sandboxed (0/3)".to_string(),
+            PageTrust::Cautious => "Cautious (1/3)".to_string(),
+            PageTrust::Warming => "Warming (2/3)".to_string(),
+            PageTrust::Trusted => "Trusted".to_string(),
         }
     }
     

@@ -56,7 +56,7 @@ impl Renderer {
         let style = self.style_engine.compute_style(node);
         self.computed_styles.insert(node.as_ref() as *const _, style);
         
-        let children: Vec<NodeRef> = node.borrow().children.iter().cloned().collect();
+        let children: Vec<NodeRef> = node.borrow().children.to_vec();
         for child in children {
             self.compute_node_styles(&child);
         }

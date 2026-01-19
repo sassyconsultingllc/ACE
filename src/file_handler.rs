@@ -279,7 +279,9 @@ pub struct MergedRange {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub enum CellValue {
+    #[default]
     Empty,
     Text(String),
     Number(f64),
@@ -290,11 +292,6 @@ pub enum CellValue {
     Currency(f64, String),
 }
 
-impl Default for CellValue {
-    fn default() -> Self {
-        CellValue::Empty
-    }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHEMICAL CONTENT
@@ -992,15 +989,14 @@ impl FileHandler {
                     in_text = true;
                 } else if tag == "/w:t" {
                     in_text = false;
-                } else if tag == "/w:p" {
-                    if !current_para.is_empty() {
+                } else if tag == "/w:p"
+                    && !current_para.is_empty() {
                         document.paragraphs.push(Paragraph {
                             text: current_para.clone(),
                             style: ParagraphStyle::default(),
                         });
                         current_para.clear();
                     }
-                }
             } else if in_text {
                 current_para.push(c);
             }
@@ -1368,10 +1364,7 @@ impl FileHandler {
         
         let mut content = ArchiveContent {
             format: ArchiveFormat::Zip,
-            comment: archive.comment().is_empty().then_some(()).map_or(
-                None, 
-                |_| Some(String::from_utf8_lossy(archive.comment()).to_string())
-            ),
+            comment: archive.comment().is_empty().then_some(()).map(|_| String::from_utf8_lossy(archive.comment()).to_string()),
             ..Default::default()
         };
         
@@ -1435,26 +1428,24 @@ impl FileHandler {
     }
     
     fn read_tar_entries<R: Read>(&self, archive: &mut tar::Archive<R>, content: &mut ArchiveContent) -> Result<()> {
-        for entry in archive.entries()? {
-            if let Ok(entry) = entry {
-                let path = entry.path()?.to_string_lossy().to_string();
-                let size = entry.size();
-                
-                content.entries.push(ArchiveEntry {
-                    path,
-                    is_dir: entry.header().entry_type().is_dir(),
-                    size,
-                    compressed_size: size,
-                    modified: entry.header().mtime().ok().map(|t| {
-                        chrono::DateTime::from_timestamp(t as i64, 0)
-                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                            .unwrap_or_default()
-                    }),
-                    crc: None,
-                    is_encrypted: false,
-                });
-                content.total_size += size;
-            }
+        for entry in (archive.entries()?).flatten() {
+            let path = entry.path()?.to_string_lossy().to_string();
+            let size = entry.size();
+            
+            content.entries.push(ArchiveEntry {
+                path,
+                is_dir: entry.header().entry_type().is_dir(),
+                size,
+                compressed_size: size,
+                modified: entry.header().mtime().ok().map(|t| {
+                    chrono::DateTime::from_timestamp(t as i64, 0)
+                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                        .unwrap_or_default()
+                }),
+                crc: None,
+                is_encrypted: false,
+            });
+            content.total_size += size;
         }
         Ok(())
     }
@@ -1495,20 +1486,18 @@ impl FileHandler {
             .open_for_listing()
             .map_err(|e| anyhow!("RAR error: {:?}", e))?;
         
-        for entry in archive {
-            if let Ok(entry) = entry {
-                content.entries.push(ArchiveEntry {
-                    path: entry.filename.to_string_lossy().to_string(),
-                    is_dir: entry.is_directory(),
-                    size: entry.unpacked_size as u64,
-                    compressed_size: entry.unpacked_size as u64, // RAR doesn't expose packed size in this API
-                    modified: None,
-                    crc: Some(entry.file_crc),
-                    is_encrypted: entry.is_encrypted(),
-                });
-                content.total_size += entry.unpacked_size as u64;
-                content.compressed_size += entry.unpacked_size as u64;
-            }
+        for entry in archive.flatten() {
+            content.entries.push(ArchiveEntry {
+                path: entry.filename.to_string_lossy().to_string(),
+                is_dir: entry.is_directory(),
+                size: entry.unpacked_size,
+                compressed_size: entry.unpacked_size, // RAR doesn't expose packed size in this API
+                modified: None,
+                crc: Some(entry.file_crc),
+                is_encrypted: entry.is_encrypted(),
+            });
+            content.total_size += entry.unpacked_size;
+            content.compressed_size += entry.unpacked_size;
         }
         
         Ok(FileContent::Archive(content))
@@ -1845,8 +1834,8 @@ impl FileHandler {
         if let Ok(context) = mp4parse::read_mp4(&mut std::io::Cursor::new(&data)) {
             if let Some(track) = context.tracks.iter().find(|t| t.track_type == mp4parse::TrackType::Video) {
                 if let Some(tkhd) = &track.tkhd {
-                    video.width = tkhd.width as u32;
-                    video.height = tkhd.height as u32;
+                    video.width = tkhd.width;
+                    video.height = tkhd.height;
                 }
                 
                 if let Some(duration) = track.duration {

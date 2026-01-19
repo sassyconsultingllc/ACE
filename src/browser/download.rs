@@ -213,7 +213,7 @@ impl DownloadManager {
         url::Url::parse(url).ok()
             .and_then(|u| {
                 u.path_segments()
-                    .and_then(|segments| segments.last())
+                    .and_then(|mut segments| segments.next_back())
                     .filter(|s| !s.is_empty())
                     .map(|s| urlencoding::decode(s).unwrap_or_else(|_| s.into()).to_string())
             })

@@ -554,15 +554,12 @@ impl JsInterpreter {
         
         match method {
             "then" => {
-                let on_fulfilled = args.get(0).cloned();
-                match state {
-                    PromiseState::Fulfilled(value) => {
-                        if let Some(cb) = on_fulfilled {
-                            let result = self.call_value(&cb, &[*value])?;
-                            new_handle.resolve(result);
-                        }
+                let on_fulfilled = args.first().cloned();
+                if let PromiseState::Fulfilled(value) = state {
+                    if let Some(cb) = on_fulfilled {
+                        let result = self.call_value(&cb, &[*value])?;
+                        new_handle.resolve(result);
                     }
-                    _ => {}
                 }
                 Ok(Value::Promise(new_handle))
             }
@@ -599,7 +596,7 @@ impl JsInterpreter {
             "toLowerCase" => Ok(Value::String(s.to_lowercase())),
             "trim" => Ok(Value::String(s.trim().to_string())),
             "split" => {
-                let sep = args.get(0).map(|v| v.to_string_value()).unwrap_or_default();
+                let sep = args.first().map(|v| v.to_string_value()).unwrap_or_default();
                 let parts: Vec<Value> = if sep.is_empty() {
                     s.chars().map(|c| Value::String(c.to_string())).collect()
                 } else {
@@ -607,18 +604,18 @@ impl JsInterpreter {
                 };
                 Ok(Value::Array(Rc::new(RefCell::new(parts))))
             }
-            "includes" => Ok(Value::Boolean(s.contains(&args.get(0).map(|v| v.to_string_value()).unwrap_or_default()))),
+            "includes" => Ok(Value::Boolean(s.contains(&args.first().map(|v| v.to_string_value()).unwrap_or_default()))),
             "indexOf" => {
-                let search = args.get(0).map(|v| v.to_string_value()).unwrap_or_default();
+                let search = args.first().map(|v| v.to_string_value()).unwrap_or_default();
                 Ok(Value::Number(s.find(&search).map(|i| i as f64).unwrap_or(-1.0)))
             }
             "substring" | "slice" => {
-                let start = args.get(0).map(|v| v.to_number() as usize).unwrap_or(0);
+                let start = args.first().map(|v| v.to_number() as usize).unwrap_or(0);
                 let end = args.get(1).map(|v| v.to_number() as usize).unwrap_or(s.len());
                 Ok(Value::String(s.chars().skip(start).take(end.saturating_sub(start)).collect()))
             }
             "replace" => {
-                let search = args.get(0).map(|v| v.to_string_value()).unwrap_or_default();
+                let search = args.first().map(|v| v.to_string_value()).unwrap_or_default();
                 let replace = args.get(1).map(|v| v.to_string_value()).unwrap_or_default();
                 Ok(Value::String(s.replacen(&search, &replace, 1)))
             }
@@ -632,11 +629,11 @@ impl JsInterpreter {
             "pop" => Ok(arr.borrow_mut().pop().unwrap_or(Value::Undefined)),
             "shift" => Ok(if arr.borrow().is_empty() { Value::Undefined } else { arr.borrow_mut().remove(0) }),
             "join" => {
-                let sep = args.get(0).map(|v| v.to_string_value()).unwrap_or_else(|| ",".to_string());
+                let sep = args.first().map(|v| v.to_string_value()).unwrap_or_else(|| ",".to_string());
                 Ok(Value::String(arr.borrow().iter().map(|v| v.to_string_value()).collect::<Vec<_>>().join(&sep)))
             }
             "map" => {
-                let cb = args.get(0).cloned().unwrap_or(Value::Undefined);
+                let cb = args.first().cloned().unwrap_or(Value::Undefined);
                 let mut result = Vec::new();
                 for (i, v) in arr.borrow().iter().enumerate() {
                     result.push(self.call_value(&cb, &[v.clone(), Value::Number(i as f64)])?);
@@ -644,7 +641,7 @@ impl JsInterpreter {
                 Ok(Value::Array(Rc::new(RefCell::new(result))))
             }
             "filter" => {
-                let cb = args.get(0).cloned().unwrap_or(Value::Undefined);
+                let cb = args.first().cloned().unwrap_or(Value::Undefined);
                 let mut result = Vec::new();
                 for (i, v) in arr.borrow().iter().enumerate() {
                     if self.call_value(&cb, &[v.clone(), Value::Number(i as f64)])?.is_truthy() {
@@ -654,24 +651,24 @@ impl JsInterpreter {
                 Ok(Value::Array(Rc::new(RefCell::new(result))))
             }
             "forEach" => {
-                let cb = args.get(0).cloned().unwrap_or(Value::Undefined);
+                let cb = args.first().cloned().unwrap_or(Value::Undefined);
                 for (i, v) in arr.borrow().clone().iter().enumerate() {
                     self.call_value(&cb, &[v.clone(), Value::Number(i as f64)])?;
                 }
                 Ok(Value::Undefined)
             }
             "includes" => {
-                let search = args.get(0).cloned().unwrap_or(Value::Undefined);
+                let search = args.first().cloned().unwrap_or(Value::Undefined);
                 Ok(Value::Boolean(arr.borrow().iter().any(|v| v.strict_equals(&search))))
             }
             "indexOf" => {
-                let search = args.get(0).cloned().unwrap_or(Value::Undefined);
+                let search = args.first().cloned().unwrap_or(Value::Undefined);
                 Ok(Value::Number(arr.borrow().iter().position(|v| v.strict_equals(&search)).map(|i| i as f64).unwrap_or(-1.0)))
             }
             "reverse" => { arr.borrow_mut().reverse(); Ok(Value::Array(arr.clone())) }
             "slice" => {
                 let len = arr.borrow().len() as i64;
-                let start = args.get(0).map(|v| { let n = v.to_number() as i64; if n < 0 { (len + n).max(0) as usize } else { n as usize } }).unwrap_or(0);
+                let start = args.first().map(|v| { let n = v.to_number() as i64; if n < 0 { (len + n).max(0) as usize } else { n as usize } }).unwrap_or(0);
                 let end = args.get(1).map(|v| { let n = v.to_number() as i64; if n < 0 { (len + n).max(0) as usize } else { n as usize } }).unwrap_or(len as usize);
                 Ok(Value::Array(Rc::new(RefCell::new(arr.borrow().iter().skip(start).take(end.saturating_sub(start)).cloned().collect()))))
             }
@@ -681,7 +678,7 @@ impl JsInterpreter {
     
     fn call_math_method(&mut self, method: &str, args: &[Expr]) -> Result<Value, String> {
         let vals: Vec<f64> = args.iter().filter_map(|a| self.evaluate(a).ok()).map(|v| v.to_number()).collect();
-        let a = vals.get(0).copied().unwrap_or(0.0);
+        let a = vals.first().copied().unwrap_or(0.0);
         let b = vals.get(1).copied();
         Ok(Value::Number(match method {
             "abs" => a.abs(), "floor" => a.floor(), "ceil" => a.ceil(), "round" => a.round(),
@@ -695,9 +692,9 @@ impl JsInterpreter {
     
     fn call_json_method(&mut self, method: &str, args: &[Expr]) -> Result<Value, String> {
         match method {
-            "stringify" => Ok(Value::String(format!("{:?}", self.evaluate(args.get(0).ok_or("No arg")?)?).replace("\"", "\\\""))),
+            "stringify" => Ok(Value::String(format!("{:?}", self.evaluate(args.first().ok_or("No arg")?)?).replace("\"", "\\\""))),
             "parse" => {
-                let s = self.evaluate(args.get(0).ok_or("No arg")?)?.to_string_value();
+                let s = self.evaluate(args.first().ok_or("No arg")?)?.to_string_value();
                 // Basic JSON parse
                 if let Ok(n) = s.parse::<f64>() { return Ok(Value::Number(n)); }
                 if s == "null" { return Ok(Value::Null); }
@@ -712,12 +709,12 @@ impl JsInterpreter {
     fn call_object_method(&mut self, method: &str, args: &[Expr]) -> Result<Value, String> {
         match method {
             "keys" => {
-                if let Ok(Value::Object(map)) = self.evaluate(args.get(0).ok_or("No arg")?) {
+                if let Ok(Value::Object(map)) = self.evaluate(args.first().ok_or("No arg")?) {
                     Ok(Value::Array(Rc::new(RefCell::new(map.borrow().keys().map(|k| Value::String(k.clone())).collect()))))
                 } else { Ok(Value::Array(Rc::new(RefCell::new(Vec::new())))) }
             }
             "values" => {
-                if let Ok(Value::Object(map)) = self.evaluate(args.get(0).ok_or("No arg")?) {
+                if let Ok(Value::Object(map)) = self.evaluate(args.first().ok_or("No arg")?) {
                     Ok(Value::Array(Rc::new(RefCell::new(map.borrow().values().cloned().collect()))))
                 } else { Ok(Value::Array(Rc::new(RefCell::new(Vec::new())))) }
             }
@@ -727,7 +724,7 @@ impl JsInterpreter {
     
     fn call_array_static_method(&mut self, method: &str, args: &[Expr]) -> Result<Value, String> {
         match method {
-            "isArray" => Ok(Value::Boolean(matches!(self.evaluate(args.get(0).ok_or("No arg")?)?, Value::Array(_)))),
+            "isArray" => Ok(Value::Boolean(matches!(self.evaluate(args.first().ok_or("No arg")?)?, Value::Array(_)))),
             _ => Ok(Value::Undefined)
         }
     }
@@ -739,31 +736,31 @@ impl Default for JsInterpreter {
 
 // Native functions
 fn native_parse_int(args: Vec<Value>) -> Value {
-    Value::Number(args.get(0).map(|v| v.to_string_value()).unwrap_or_default().trim().parse::<i64>().map(|n| n as f64).unwrap_or(f64::NAN))
+    Value::Number(args.first().map(|v| v.to_string_value()).unwrap_or_default().trim().parse::<i64>().map(|n| n as f64).unwrap_or(f64::NAN))
 }
 fn native_parse_float(args: Vec<Value>) -> Value {
-    Value::Number(args.get(0).map(|v| v.to_string_value()).unwrap_or_default().trim().parse().unwrap_or(f64::NAN))
+    Value::Number(args.first().map(|v| v.to_string_value()).unwrap_or_default().trim().parse().unwrap_or(f64::NAN))
 }
-fn native_is_nan(args: Vec<Value>) -> Value { Value::Boolean(args.get(0).map(|v| v.to_number()).unwrap_or(f64::NAN).is_nan()) }
-fn native_is_finite(args: Vec<Value>) -> Value { Value::Boolean(args.get(0).map(|v| v.to_number()).unwrap_or(f64::NAN).is_finite()) }
-fn native_boolean(args: Vec<Value>) -> Value { Value::Boolean(args.get(0).cloned().unwrap_or(Value::Undefined).is_truthy()) }
-fn native_number(args: Vec<Value>) -> Value { Value::Number(args.get(0).cloned().unwrap_or(Value::Undefined).to_number()) }
-fn native_string_fn(args: Vec<Value>) -> Value { Value::String(args.get(0).cloned().unwrap_or(Value::Undefined).to_string_value()) }
+fn native_is_nan(args: Vec<Value>) -> Value { Value::Boolean(args.first().map(|v| v.to_number()).unwrap_or(f64::NAN).is_nan()) }
+fn native_is_finite(args: Vec<Value>) -> Value { Value::Boolean(args.first().map(|v| v.to_number()).unwrap_or(f64::NAN).is_finite()) }
+fn native_boolean(args: Vec<Value>) -> Value { Value::Boolean(args.first().cloned().unwrap_or(Value::Undefined).is_truthy()) }
+fn native_number(args: Vec<Value>) -> Value { Value::Number(args.first().cloned().unwrap_or(Value::Undefined).to_number()) }
+fn native_string_fn(args: Vec<Value>) -> Value { Value::String(args.first().cloned().unwrap_or(Value::Undefined).to_string_value()) }
 fn native_set_timeout(_args: Vec<Value>) -> Value { Value::Number(0.0) }
 fn native_clear_timeout(_args: Vec<Value>) -> Value { Value::Undefined }
 fn native_set_interval(_args: Vec<Value>) -> Value { Value::Number(0.0) }
-fn native_alert(args: Vec<Value>) -> Value { println!("[ALERT] {}", args.get(0).map(|v| v.to_string_value()).unwrap_or_default()); Value::Undefined }
+fn native_alert(args: Vec<Value>) -> Value { println!("[ALERT] {}", args.first().map(|v| v.to_string_value()).unwrap_or_default()); Value::Undefined }
 fn native_confirm(_args: Vec<Value>) -> Value { Value::Boolean(true) }
 fn native_prompt(_args: Vec<Value>) -> Value { Value::Null }
 
 fn native_promise_constructor(args: Vec<Value>) -> Value {
     let handle = PromiseHandle::new();
-    if let Some(Value::Function { params, body, .. }) = args.get(0) {
+    if let Some(Value::Function { params, body, .. }) = args.first() {
         for stmt in body {
             if let Stmt::Expr(Expr::Call { callee, args: call_args }) = stmt {
                 if let Expr::Identifier(name) = callee.as_ref() {
-                    if name == params.get(0).map(|s| s.as_str()).unwrap_or("") {
-                        if let Some(Expr::Number(n)) = call_args.get(0) {
+                    if name == params.first().map(|s| s.as_str()).unwrap_or("") {
+                        if let Some(Expr::Number(n)) = call_args.first() {
                             handle.resolve(Value::Number(*n));
                         }
                     }
@@ -775,7 +772,7 @@ fn native_promise_constructor(args: Vec<Value>) -> Value {
 }
 
 fn native_fetch(args: Vec<Value>) -> Value {
-    let url = args.get(0).map(|v| v.to_string_value()).unwrap_or_default();
+    let url = args.first().map(|v| v.to_string_value()).unwrap_or_default();
     let handle = PromiseHandle::new();
     
     // Sync fetch using ureq if available, otherwise mock

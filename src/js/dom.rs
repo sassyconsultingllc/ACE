@@ -54,15 +54,15 @@ impl DomBridge {
             let el = element.borrow();
             
             // ID selector
-            if selector.starts_with('#') {
-                if el.attributes.get("id") == Some(&selector[1..].to_string()) {
+            if let Some(stripped) = selector.strip_prefix('#') {
+                if el.attributes.get("id").map(|s| s.as_str()) == Some(stripped) {
                     return Value::DomElement(element.clone());
                 }
             }
             // Class selector
-            else if selector.starts_with('.') {
+            else if let Some(stripped) = selector.strip_prefix('.') {
                 if let Some(classes) = el.attributes.get("class") {
-                    if classes.split_whitespace().any(|c| c == &selector[1..]) {
+                    if classes.split_whitespace().any(|c| c == stripped) {
                         return Value::DomElement(element.clone());
                     }
                 }
@@ -80,11 +80,11 @@ impl DomBridge {
         
         for element in self.elements.borrow().values() {
             let el = element.borrow();
-            let matches = if selector.starts_with('#') {
-                el.attributes.get("id") == Some(&selector[1..].to_string())
-            } else if selector.starts_with('.') {
+            let matches = if let Some(stripped) = selector.strip_prefix('#') {
+                el.attributes.get("id").map(|s| s.as_str()) == Some(stripped)
+            } else if let Some(stripped) = selector.strip_prefix('.') {
                 el.attributes.get("class")
-                    .map(|c| c.split_whitespace().any(|cls| cls == &selector[1..]))
+                    .map(|c| c.split_whitespace().any(|cls| cls == stripped))
                     .unwrap_or(false)
             } else {
                 el.tag.eq_ignore_ascii_case(selector)
@@ -157,7 +157,7 @@ impl DomBridge {
         let key = (element_id, event.to_string());
         self.event_listeners.borrow_mut()
             .entry(key)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(callback);
     }
     

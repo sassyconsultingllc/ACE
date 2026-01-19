@@ -251,7 +251,7 @@ impl DocumentViewer {
     }
     
     /// Load document from content
-    pub fn load(&mut self, content: &DocumentContent, path: &PathBuf) {
+    pub fn load(&mut self, content: &DocumentContent, path: &std::path::Path) {
         self.paragraphs.clear();
         
         for para in &content.paragraphs {
@@ -263,7 +263,7 @@ impl DocumentViewer {
             });
         }
         
-        self.original_path = Some(path.clone());
+        self.original_path = Some(path.to_path_buf());
         self.update_stats();
         self.push_history();
         self.has_unsaved_changes = false;
@@ -489,7 +489,7 @@ impl DocumentViewer {
         }
     }
     
-    fn detect_format(&self, path: &PathBuf) -> DocExportFormat {
+    fn detect_format(&self, path: &std::path::Path) -> DocExportFormat {
         match path.extension().and_then(|e| e.to_str()) {
             Some("docx") => DocExportFormat::Docx,
             Some("odt") => DocExportFormat::Odt,

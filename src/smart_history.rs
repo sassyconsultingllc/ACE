@@ -202,6 +202,11 @@ impl SmartHistory {
             entries_pruned: 0,
         }
     }
+
+    /// Analyze a URL/title for NSFW characteristics (convenience wrapper)
+    pub fn analyze(&self, url: &str, title: &str) -> (bool, f32) {
+        self.nsfw_detector.analyze(url, title)
+    }
     
     // ========================================================================
     // VISIT TRACKING

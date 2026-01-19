@@ -138,7 +138,7 @@ impl Node {
     pub fn add_event_listener(&mut self, event: &str, callback_id: String) {
         self.event_listeners
             .entry(event.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(callback_id);
     }
 
@@ -281,11 +281,10 @@ impl Document {
 
     fn match_selector(node: &NodeRef, selector: &str, results: &mut Vec<NodeRef>) {
         let n = node.borrow();
-        if Self::node_matches_selector(&n, selector) {
-            if !results.iter().any(|r| Rc::ptr_eq(r, node)) {
+        if Self::node_matches_selector(&n, selector)
+            && !results.iter().any(|r| Rc::ptr_eq(r, node)) {
                 results.push(Rc::clone(node));
             }
-        }
         for child in &n.children {
             Self::match_selector(child, selector, results);
         }
@@ -293,10 +292,10 @@ impl Document {
 
     fn node_matches_selector(node: &Node, selector: &str) -> bool {
         let selector = selector.trim();
-        if selector.starts_with('#') {
-            node.get_id().as_deref() == Some(&selector[1..])
-        } else if selector.starts_with('.') {
-            node.has_class(&selector[1..])
+        if let Some(stripped) = selector.strip_prefix('#') {
+            node.get_id().as_deref() == Some(stripped)
+        } else if let Some(stripped) = selector.strip_prefix('.') {
+            node.has_class(stripped)
         } else if selector.contains('.') {
             let parts: Vec<&str> = selector.splitn(2, '.').collect();
             node.tag_name.as_deref() == Some(parts[0]) && node.has_class(parts[1])
@@ -373,7 +372,7 @@ impl FormData {
             .unwrap_or_else(|| "application/x-www-form-urlencoded".to_string());
         
         let mut fields = Vec::new();
-        Self::collect_inputs(&form_node, &mut fields);
+        Self::collect_inputs(form_node, &mut fields);
         
         FormData { action, method, enctype, fields }
     }
@@ -426,15 +425,14 @@ impl FormData {
                         // Find selected option
                         for child in &n.children {
                             let c = child.borrow();
-                            if c.tag_name.as_deref() == Some("option") {
-                                if c.get_attribute("selected").is_some() {
+                            if c.tag_name.as_deref() == Some("option")
+                                && c.get_attribute("selected").is_some() {
                                     let value = c.get_attribute("value")
                                         .or_else(|| c.text_content.clone())
                                         .unwrap_or_default();
                                     fields.push((name.clone(), value));
                                     break;
                                 }
-                            }
                         }
                     }
                 }

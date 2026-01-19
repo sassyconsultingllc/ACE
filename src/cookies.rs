@@ -26,17 +26,14 @@ pub struct Cookie {
 
 /// SameSite cookie attribute
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Default)]
 pub enum SameSite {
     Strict,
+    #[default]
     Lax,
     None,
 }
 
-impl Default for SameSite {
-    fn default() -> Self {
-        SameSite::Lax
-    }
-}
 
 impl Cookie {
     pub fn new(name: &str, value: &str, domain: &str) -> Self {
@@ -217,7 +214,7 @@ impl CookieJar {
         let domain = cookie.domain.clone();
         let name = cookie.name.clone();
         
-        let cookies = self.cookies.entry(domain).or_insert_with(Vec::new);
+        let cookies = self.cookies.entry(domain).or_default();
         
         // Remove existing cookie with same name and path
         cookies.retain(|c| !(c.name == name && c.path == cookie.path));

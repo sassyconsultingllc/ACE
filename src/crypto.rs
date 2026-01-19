@@ -266,7 +266,7 @@ impl RecoveryKey {
     pub fn generate(master: &MasterSecret) -> Self {
         // Recovery key is derived deterministically
         let recovery_bytes = master.derive_key("recovery-key");
-        let encoded = BASE64.encode(&recovery_bytes);
+        let encoded = BASE64.encode(recovery_bytes);
         
         // Create verification hash
         let hash = digest(&SHA256, &recovery_bytes);

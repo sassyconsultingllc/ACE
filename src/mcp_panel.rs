@@ -546,7 +546,7 @@ impl McpTheme {
 
 /// Detect language from file extension
 fn detect_language(path: &str) -> Language {
-    if let Some(ext) = path.split('.').last() {
+    if let Some(ext) = path.split('.').next_back() {
         match ext.to_lowercase().as_str() {
             "rs" => Language::Rust,
             "js" | "jsx" | "mjs" => Language::JavaScript,

@@ -32,10 +32,12 @@ use serde::{Deserialize, Serialize};
 
 /// Whisper model size - tradeoff between speed and accuracy
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum WhisperModel {
     /// Fastest, least accurate (~39 MB)
     Tiny,
     /// Fast, good for quick transcription (~74 MB)
+    #[default]
     Base,
     /// Balanced speed/accuracy (~244 MB)
     Small,
@@ -71,11 +73,6 @@ impl WhisperModel {
     }
 }
 
-impl Default for WhisperModel {
-    fn default() -> Self {
-        WhisperModel::Base  // Good balance for real-time
-    }
-}
 
 /// Voice input configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

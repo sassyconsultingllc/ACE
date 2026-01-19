@@ -125,7 +125,7 @@ impl HttpClient {
 
     fn store_cookie(&mut self, url: &Url, cookie_str: &str) {
         let host = url.host_str().unwrap_or("").to_string();
-        let cookies = self.cookies.entry(host).or_insert_with(HashMap::new);
+        let cookies = self.cookies.entry(host).or_default();
         
         // Parse cookie (simplified)
         if let Some((name_value, _)) = cookie_str.split_once(';') {
@@ -150,7 +150,7 @@ impl HttpClient {
     }
 
     pub fn set_cookie(&mut self, host: &str, name: &str, value: &str) {
-        let cookies = self.cookies.entry(host.to_string()).or_insert_with(HashMap::new);
+        let cookies = self.cookies.entry(host.to_string()).or_default();
         cookies.insert(name.to_string(), value.to_string());
     }
 
@@ -201,10 +201,7 @@ impl FetchOptions {
     pub fn get() -> Self { FetchOptions::default() }
     
     pub fn post(body: &str) -> Self {
-        let mut opts = FetchOptions::default();
-        opts.method = "POST".to_string();
-        opts.body = Some(body.to_string());
-        opts
+        FetchOptions { method: "POST".to_string(), body: Some(body.to_string()), ..Default::default() }
     }
     
     pub fn with_header(mut self, key: &str, value: &str) -> Self {

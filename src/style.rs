@@ -168,7 +168,7 @@ impl Stylesheet {
 
     fn skip_at_rule(chars: &mut std::iter::Peekable<std::str::Chars>) {
         let mut brace_count = 0;
-        while let Some(c) = chars.next() {
+        for c in chars.by_ref() {
             match c {
                 '{' => brace_count += 1,
                 '}' => { brace_count -= 1; if brace_count <= 0 { break; } }
@@ -192,7 +192,7 @@ impl Stylesheet {
         let mut current = String::new();
         let mut brace_count = 0;
         
-        while let Some(c) = chars.next() {
+        for c in chars.by_ref() {
             match c {
                 '{' => { brace_count += 1; current.push(c); }
                 '}' => { if brace_count == 0 { break; } brace_count -= 1; current.push(c); }
@@ -243,10 +243,10 @@ impl Stylesheet {
         let tag = n.tag_name.as_deref().unwrap_or("");
         
         if selector == "*" { return true; }
-        if selector.starts_with('#') { return n.get_id().as_deref() == Some(&selector[1..]); }
-        if selector.starts_with('.') { return n.has_class(&selector[1..]); }
+        if let Some(stripped) = selector.strip_prefix('#') { return n.get_id().as_deref() == Some(stripped); }
+        if let Some(stripped) = selector.strip_prefix('.') { return n.has_class(stripped); }
         
-        let parts: Vec<&str> = selector.split(|c| c == '.' || c == '#').collect();
+        let parts: Vec<&str> = selector.split(['.', '#']).collect();
         if parts.is_empty() { return false; }
         
         if !parts[0].is_empty() && parts[0] != tag { return false; }
@@ -453,7 +453,7 @@ impl StyleEngine {
     }
 
     fn parse_edge_sizes(v: &str) -> EdgeSizes {
-        let parts: Vec<f32> = v.split_whitespace().map(|p| Self::parse_length(p)).collect();
+        let parts: Vec<f32> = v.split_whitespace().map(Self::parse_length).collect();
         match parts.len() {
             1 => EdgeSizes { top: parts[0], right: parts[0], bottom: parts[0], left: parts[0] },
             2 => EdgeSizes { top: parts[0], right: parts[1], bottom: parts[0], left: parts[1] },

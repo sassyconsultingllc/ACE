@@ -177,8 +177,8 @@ impl PopupManager {
             let since_interaction = Instant::now().duration_since(last_interaction);
             
             // Popup within 1 second of click is likely user-initiated
-            if since_interaction < Duration::from_secs(1) {
-                if matches!(self.interaction_type, Some(InteractionType::Click | InteractionType::FormSubmit)) {
+            if since_interaction < Duration::from_secs(1)
+                && matches!(self.interaction_type, Some(InteractionType::Click | InteractionType::FormSubmit)) {
                     self.total_allowed += 1;
                     return PopupDecision {
                         allow: true,
@@ -187,7 +187,6 @@ impl PopupManager {
                         show_notification: false,
                     };
                 }
-            }
         }
         
         // Rate limit check - too many popups is suspicious
@@ -359,11 +358,10 @@ fn is_probable_captcha(url: &str, opener_domain: &str) -> bool {
     
     // Frame-based captcha detection
     // Many captchas open in same-origin or related iframes
-    if url_lower.contains("iframe") || url_lower.contains("frame") {
-        if url_lower.contains("verify") || url_lower.contains("check") {
+    if (url_lower.contains("iframe") || url_lower.contains("frame"))
+        && (url_lower.contains("verify") || url_lower.contains("check")) {
             return true;
         }
-    }
     
     // Some sites use their own captcha endpoints
     if url_lower.contains(&format!("{}/captcha", opener_domain)) ||

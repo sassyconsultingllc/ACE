@@ -325,11 +325,10 @@ impl PdfViewer {
             }
             ui.label(format!("/ {}", self.total_pages));
             
-            if ui.button("▶").on_hover_text("Next page").clicked() {
-                if self.current_page + 1 < self.total_pages {
+            if ui.button("▶").on_hover_text("Next page").clicked()
+                && self.current_page + 1 < self.total_pages {
                     self.current_page += 1;
                 }
-            }
             if ui.button("⏭").on_hover_text("Last page").clicked() {
                 self.current_page = self.total_pages.saturating_sub(1);
             }

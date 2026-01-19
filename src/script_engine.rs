@@ -28,22 +28,22 @@ struct StoredTimer {
 }
 
 thread_local! {
-    static PENDING_POPUPS: CellAlias<Vec<String>> = CellAlias::new(Vec::new());
-    static CURRENT_DOC: CellAlias<Option<*const Document>> = CellAlias::new(None);
+    static PENDING_POPUPS: CellAlias<Vec<String>> = const { CellAlias::new(Vec::new()) };
+    static CURRENT_DOC: CellAlias<Option<*const Document>> = const { CellAlias::new(None) };
     // Event listeners: element_id -> event_type -> Vec<callback>
     static EVENT_REGISTRY: CellAlias<std::collections::HashMap<String, std::collections::HashMap<String, Vec<Value>>>> = 
         CellAlias::new(std::collections::HashMap::new());
     // Timer storage: timer_id -> StoredTimer (callback + delay + repeat)
     static TIMER_STORAGE: CellAlias<std::collections::HashMap<u32, StoredTimer>> = CellAlias::new(std::collections::HashMap::new());
     // Next timer ID
-    static NEXT_TIMER_ID: CellAlias<u32> = CellAlias::new(1);
+    static NEXT_TIMER_ID: CellAlias<u32> = const { CellAlias::new(1) };
     // DOM mutation flag
-    static DOM_MUTATED: CellAlias<bool> = CellAlias::new(false);
+    static DOM_MUTATED: CellAlias<bool> = const { CellAlias::new(false) };
     // Node registry: maps JS object pointer to actual DOM NodeRef
     // Key is the address of the JS Value::Object's Rc<RefCell<HashMap>>
     static NODE_REGISTRY: CellAlias<std::collections::HashMap<usize, NodeRef>> = CellAlias::new(std::collections::HashMap::new());
     // Next node ID for created elements
-    static NEXT_NODE_ID: CellAlias<u64> = CellAlias::new(1);
+    static NEXT_NODE_ID: CellAlias<u64> = const { CellAlias::new(1) };
 }
 struct DocumentBridge {
     document: *const Document,
@@ -190,8 +190,8 @@ impl ScriptEngine {
 
     pub fn execute(&mut self, script: &str) -> Result<Value, String> {
         self.dom_changed = false;
-        let result = self.interpreter.execute(script);
-        result
+        
+        self.interpreter.execute(script)
     }
 
     pub fn execute_with_dom(&mut self, script: &str, doc: &Document) -> Result<Value, String> {
@@ -289,7 +289,7 @@ impl ScriptEngine {
         
         let mut results = Vec::new();
         for callback in callbacks {
-            results.push(self.interpreter.call_value(&callback, &[event.clone()]));
+            results.push(self.interpreter.call_value(&callback, std::slice::from_ref(&event)));
         }
         results
     }
@@ -591,7 +591,7 @@ fn element_replace_child(args: Vec<Value>) -> Value {
 
 fn element_clone_node(args: Vec<Value>) -> Value {
     // cloneNode(deep) - returns a copy of the node
-    let deep = args.get(0)
+    let deep = args.first()
         .map(|v| v.is_truthy())
         .unwrap_or(false);
     
@@ -650,7 +650,7 @@ fn element_dispatch_event(args: Vec<Value>) -> Value {
 fn element_focus(args: Vec<Value>) -> Value {
     // Focus the element - in a full impl, this would update the focused element
     // and potentially scroll into view
-    let _element = args.get(0); // The element being focused
+    let _element = args.first(); // The element being focused
     // Signal that UI state changed (for cursor positioning, etc.)
     DOM_MUTATED.with(|d| *d.borrow_mut() = true);
     Value::Undefined
@@ -658,14 +658,14 @@ fn element_focus(args: Vec<Value>) -> Value {
 
 fn element_blur(args: Vec<Value>) -> Value {
     // Blur (unfocus) the element
-    let _element = args.get(0);
+    let _element = args.first();
     DOM_MUTATED.with(|d| *d.borrow_mut() = true);
     Value::Undefined
 }
 
 fn element_click(args: Vec<Value>) -> Value {
     // Programmatic click - should dispatch click event
-    let _element = args.get(0);
+    let _element = args.first();
     // In a full implementation, this would:
     // 1. Dispatch mousedown event
     // 2. Dispatch mouseup event  
@@ -789,7 +789,7 @@ fn native_set_interval(args: Vec<Value>) -> Value {
 }
 
 fn native_window_open(args: Vec<Value>) -> Value {
-    if let Some(Value::String(url)) = args.get(0) {
+    if let Some(Value::String(url)) = args.first() {
         // Enqueue popup request; BrowserState will evaluate via PopupManager
         PENDING_POPUPS.with(|p| p.borrow_mut().push(url.clone()));
     }
@@ -797,7 +797,7 @@ fn native_window_open(args: Vec<Value>) -> Value {
 }
 
 fn native_clear_timeout(args: Vec<Value>) -> Value {
-    if let Some(id) = args.get(0) {
+    if let Some(id) = args.first() {
         let timer_id = id.to_number() as u32;
         TIMER_STORAGE.with(|timers| {
             timers.borrow_mut().remove(&timer_id);
@@ -866,14 +866,14 @@ thread_local! {
 }
 
 fn native_storage_get(args: Vec<Value>) -> Value {
-    let key = args.get(0).map(|v| v.to_string_value()).unwrap_or_default();
+    let key = args.first().map(|v| v.to_string_value()).unwrap_or_default();
     STORAGE.with(|s| {
         s.borrow().get(&key).map(|v| Value::String(v.clone())).unwrap_or(Value::Null)
     })
 }
 
 fn native_storage_set(args: Vec<Value>) -> Value {
-    let key = args.get(0).map(|v| v.to_string_value()).unwrap_or_default();
+    let key = args.first().map(|v| v.to_string_value()).unwrap_or_default();
     let value = args.get(1).map(|v| v.to_string_value()).unwrap_or_default();
     STORAGE.with(|s| {
         s.borrow_mut().insert(key, value);
@@ -882,7 +882,7 @@ fn native_storage_set(args: Vec<Value>) -> Value {
 }
 
 fn native_storage_remove(args: Vec<Value>) -> Value {
-    let key = args.get(0).map(|v| v.to_string_value()).unwrap_or_default();
+    let key = args.first().map(|v| v.to_string_value()).unwrap_or_default();
     STORAGE.with(|s| {
         s.borrow_mut().remove(&key);
     });
@@ -897,7 +897,7 @@ fn native_storage_clear(_args: Vec<Value>) -> Value {
 }
 
 fn native_storage_key(args: Vec<Value>) -> Value {
-    let index = args.get(0).map(|v| v.to_number() as usize).unwrap_or(0);
+    let index = args.first().map(|v| v.to_number() as usize).unwrap_or(0);
     STORAGE.with(|s| {
         let storage = s.borrow();
         storage.keys().nth(index).map(|k| Value::String(k.clone())).unwrap_or(Value::Null)
