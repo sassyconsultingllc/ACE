@@ -3770,41 +3770,9 @@ fn parse_ymd(input: &str) -> Option<(i32, u32, u32)> {
 }
 
 fn configure_fonts(ctx: &egui::Context) {
-    let mut fonts = egui::FontDefinitions::default();
-    // Ensure a safe fallback font is available when named system fonts
-    // (e.g. "Space Grotesk") are not installed. Embed a bundled font
-    // from `assets/fonts/` and register it under the Space Grotesk name.
-    // This prevents a panic when epaint can't find a named font.
-    // NOTE: using `include_bytes!` embeds the font into the binary.
-    // Register an embedded fallback font under a unique key so we can
-    // reliably reference it in the family list without depending on
-    // system-installed font names.
-    // Use the provided Space Grotesk static Regular font in the workspace.
-    let fallback_bytes = include_bytes!("../Space_Grotesk/static/SpaceGrotesk-Regular.ttf");
-    fonts.font_data.insert(
-        "SassyFallback".into(),
-        egui::FontData::from_static(fallback_bytes),
-    );
-    // Also register under the commonly-referenced name so any code that
-    // still asks for "Space Grotesk" will find the embedded bytes.
-    fonts.font_data.insert(
-        "Space Grotesk".into(),
-        egui::FontData::from_static(fallback_bytes),
-    );
-    // Prefer open-source system fonts if available; fall back to egui defaults.
-    // Space Grotesk (OFL) for headings if installed, otherwise default proportional.
-    fonts
-        .families
-        .entry(egui::FontFamily::Proportional)
-        .or_default()
-        .insert(0, "SassyFallback".into());
-
-    // Prefer JetBrains Mono (Apache 2.0) for status / microtext when present.
-    fonts
-        .families
-        .entry(egui::FontFamily::Monospace)
-        .or_default()
-        .insert(0, "JetBrains Mono".into());
+    // Use egui defaults to avoid font lookup panics; embedding Space
+    // Grotesk is available in the repo but not forced as primary here.
+    let fonts = egui::FontDefinitions::default();
 
     ctx.set_fonts(fonts);
 }
