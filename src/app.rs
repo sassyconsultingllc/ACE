@@ -3779,7 +3779,8 @@ fn configure_fonts(ctx: &egui::Context) {
     // Register an embedded fallback font under a unique key so we can
     // reliably reference it in the family list without depending on
     // system-installed font names.
-    let fallback_bytes = include_bytes!("../assets/fonts/Metamorphous-7wZ4.ttf");
+    // Use the provided Space Grotesk static Regular font in the workspace.
+    let fallback_bytes = include_bytes!("../Space_Grotesk/static/SpaceGrotesk-Regular.ttf");
     fonts.font_data.insert(
         "SassyFallback".into(),
         egui::FontData::from_static(fallback_bytes),
