@@ -3776,8 +3776,11 @@ fn configure_fonts(ctx: &egui::Context) {
     // from `assets/fonts/` and register it under the Space Grotesk name.
     // This prevents a panic when epaint can't find a named font.
     // NOTE: using `include_bytes!` embeds the font into the binary.
+    // Register an embedded fallback font under a unique key so we can
+    // reliably reference it in the family list without depending on
+    // system-installed font names.
     fonts.font_data.insert(
-        "Space Grotesk".into(),
+        "SassyFallback".into(),
         egui::FontData::from_static(include_bytes!("../assets/fonts/Metamorphous-7wZ4.ttf")),
     );
     // Prefer open-source system fonts if available; fall back to egui defaults.
@@ -3786,7 +3789,7 @@ fn configure_fonts(ctx: &egui::Context) {
         .families
         .entry(egui::FontFamily::Proportional)
         .or_default()
-        .insert(0, "Space Grotesk".into());
+        .insert(0, "SassyFallback".into());
 
     // Prefer JetBrains Mono (Apache 2.0) for status / microtext when present.
     fonts
