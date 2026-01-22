@@ -1,4 +1,4 @@
-//! Secure sync via Tailscale/WireGuard mesh
+﻿//! Secure sync via Tailscale/WireGuard mesh
 //! 
 //! Instead of exposing a port on the local network:
 //! 1. Bind ONLY to Tailscale interface (100.x.x.x) or localhost
@@ -171,7 +171,7 @@ impl SyncConfig {
             }
             BindMode::AllInterfaces => {
                 // Not recommended but available for legacy/testing
-                eprintln!("⚠️  WARNING: Binding to all interfaces is insecure!");
+                eprintln!("âš ï¸  WARNING: Binding to all interfaces is insecure!");
                 Ok(format!("0.0.0.0:{}", self.port))
             }
         }
@@ -299,10 +299,10 @@ impl SecureSyncServer {
                     "Bound to localhost only. Use Tailscale port forwarding.".into()
                 }
                 BindMode::TailscaleOnly => {
-                    "⚠️ Tailscale not detected. Install Tailscale to enable phone sync.".into()
+                    "âš ï¸ Tailscale not detected. Install Tailscale to enable phone sync.".into()
                 }
                 BindMode::AllInterfaces => {
-                    format!("⚠️ INSECURE: Listening on 0.0.0.0:{}", self.config.port)
+                    format!("âš ï¸ INSECURE: Listening on 0.0.0.0:{}", self.config.port)
                 }
             }
         }

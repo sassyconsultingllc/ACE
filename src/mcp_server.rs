@@ -1,4 +1,4 @@
-//! MCP Server - Expose Sassy Browser as an MCP Server
+﻿//! MCP Server - Expose Sassy Browser as an MCP Server
 //!
 //! Allows external MCP clients (Claude Desktop, etc.) to control Sassy Browser
 //! via the Model Context Protocol (JSON-RPC 2.0 over stdio or socket).
@@ -233,7 +233,7 @@ pub enum McpResponse {
     TabList { tabs: Vec<TabInfo>, active_tab: usize },
 
     // Reading
-    PageTree { tree: ElementInfo, depth: u32, filter: String },
+    PageTree { tree: Box<ElementInfo>, depth: u32, filter: String },
     TextContent { text: String, length: usize },
     FindResult { elements: Vec<ElementInfo>, query: String, count: usize },
 
@@ -277,7 +277,8 @@ pub struct McpBridge {
 }
 
 impl McpBridge {
-    pub fn new() -> (McpBridgeSender, McpBridgeReceiver) {
+    /// Creates a sender/receiver pair for cross-thread MCP communication
+    pub fn create() -> (McpBridgeSender, McpBridgeReceiver) {
         let (cmd_tx, cmd_rx) = channel();
         let (resp_tx, resp_rx) = channel();
 
@@ -292,6 +293,13 @@ impl McpBridge {
         };
 
         (sender, receiver)
+    }
+
+    /// Backwards-compatible alias: historically callers used `McpBridge::new()`
+    /// Keep a `new` method that delegates to `create()` to avoid breaking call-sites.
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new() -> (McpBridgeSender, McpBridgeReceiver) {
+        Self::create()
     }
 }
 
@@ -1427,7 +1435,7 @@ fn process_command(
             let root_ref = format!("ref_{}", ref_counter);
             
             McpResponse::PageTree {
-                tree: ElementInfo {
+                tree: Box::new(ElementInfo {
                     ref_id: root_ref,
                     tag: "html".to_string(),
                     id: None,
@@ -1449,7 +1457,7 @@ fn process_command(
                             children: vec![],
                         }
                     ],
-                },
+                }),
                 depth,
                 filter,
             }
@@ -1595,7 +1603,7 @@ fn process_command(
                         success: true,
                         path,
                         format: format!("{:?}", format),
-                        viewer: format!("{:?}_viewer", format).to_lowercase(),
+                        viewer: crate::fontcase::ascii_lower(&format!("{:?}_viewer", format)),
                     }
                 }
                 Err(e) => McpResponse::Error {

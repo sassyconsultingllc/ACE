@@ -1,4 +1,4 @@
-//! MCP File System Tools - AI-Controlled File Operations
+﻿//! MCP File System Tools - AI-Controlled File Operations
 //!
 //! Provides safe, sandboxed file system access for the AI agents.
 //! All operations are logged and can be reviewed before execution.
@@ -659,10 +659,10 @@ impl McpFileSystem {
             }
             
             let name = path.file_name()
-                .map(|n| n.to_string_lossy().to_lowercase())
+                .map(|n| crate::fontcase::ascii_lower(&n.to_string_lossy()))
                 .unwrap_or_default();
             
-            if name.contains(&pattern.to_lowercase()) {
+            if crate::fontcase::ascii_lower(&name).contains(&crate::fontcase::ascii_lower(pattern)) {
                 let metadata = entry.metadata()?;
                 matches.push(FileInfo {
                     path: path.to_string_lossy().to_string(),
@@ -726,12 +726,12 @@ impl McpFileSystem {
                 // Read and search file
                 if let Ok(content) = self.read_file(&path.to_string_lossy()) {
                     for (line_num, line) in content.lines().enumerate() {
-                        if line.to_lowercase().contains(&pattern.to_lowercase()) {
+                        if crate::fontcase::ascii_lower(line).contains(&crate::fontcase::ascii_lower(pattern)) {
                             matches.push(GrepMatch {
                                 file: path.to_string_lossy().to_string(),
                                 line: line_num + 1,
                                 content: line.to_string(),
-                                column: line.to_lowercase().find(&pattern.to_lowercase()),
+                                column: crate::fontcase::ascii_lower(line).find(&crate::fontcase::ascii_lower(pattern)),
                             });
                         }
                     }

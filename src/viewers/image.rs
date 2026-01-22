@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Image Editor - Full editing capabilities for all image formats
 //! 
 //! Features:
@@ -10,7 +10,7 @@
 use eframe::egui::{self, Color32, ColorImage, TextureHandle, Vec2, Rect, Pos2, Sense, Stroke};
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba, imageops};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Editing tool modes
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -261,16 +261,16 @@ impl ImageViewer {
         }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // TRANSFORMATIONS
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     /// Rotate 90 degrees clockwise
     pub fn rotate_cw(&mut self) {
         if let Some(img) = &self.working_image {
             self.working_image = Some(img.rotate90());
             self.working_texture = None;
-            self.push_history("Rotate 90° CW");
+            self.push_history("Rotate 90Â° CW");
         }
     }
     
@@ -279,7 +279,7 @@ impl ImageViewer {
         if let Some(img) = &self.working_image {
             self.working_image = Some(img.rotate270());
             self.working_texture = None;
-            self.push_history("Rotate 90° CCW");
+            self.push_history("Rotate 90Â° CCW");
         }
     }
     
@@ -288,7 +288,7 @@ impl ImageViewer {
         if let Some(img) = &self.working_image {
             self.working_image = Some(img.rotate180());
             self.working_texture = None;
-            self.push_history("Rotate 180°");
+            self.push_history("Rotate 180Â°");
         }
     }
     
@@ -344,9 +344,9 @@ impl ImageViewer {
         }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // ADJUSTMENTS
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     /// Apply brightness adjustment (-100 to 100)
     pub fn apply_adjustments(&mut self) {
@@ -408,12 +408,12 @@ impl ImageViewer {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // EXPORT / SAVE
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     /// Save image to file
-    pub fn save(&self, path: &PathBuf) -> Result<(), String> {
+    pub fn save(&self, path: &Path) -> Result<(), String> {
         if let Some(img) = &self.working_image {
             img.save(path).map_err(|e| e.to_string())
         } else {
@@ -422,7 +422,7 @@ impl ImageViewer {
     }
     
     /// Export to specific format
-    pub fn export(&self, path: &PathBuf, format: ExportFormat, quality: u8) -> Result<(), String> {
+    pub fn export(&self, path: &Path, format: ExportFormat, quality: u8) -> Result<(), String> {
         use image::codecs::jpeg::JpegEncoder;
         use std::fs::File;
         use std::io::BufWriter;
@@ -457,9 +457,9 @@ impl ImageViewer {
         self.working_image.as_ref().map(|img| img.dimensions())
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // UI RENDERING
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     pub fn render(&mut self, ui: &mut egui::Ui, file: &crate::file_handler::OpenFile, zoom: f32) {
         // Load image if not already loaded
@@ -499,13 +499,13 @@ impl ImageViewer {
     fn render_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             // File operations
-            if ui.button("💾 Save").clicked() {
+            if ui.button("ðŸ’¾ Save").clicked() {
                 self.show_export = true;
             }
-            if ui.button("📤 Export").clicked() {
+            if ui.button("ðŸ“¤ Export").clicked() {
                 self.show_export = true;
             }
-            if ui.button("🖨️ Print").clicked() {
+            if ui.button("ðŸ–¨ï¸ Print").clicked() {
                 // TODO: System print dialog
             }
             
@@ -513,55 +513,55 @@ impl ImageViewer {
             
             // Undo/Redo
             ui.add_enabled_ui(self.history_index > 0, |ui| {
-                if ui.button("↩ Undo").clicked() {
+                if ui.button("â†© Undo").clicked() {
                     self.undo();
                 }
             });
             ui.add_enabled_ui(self.history_index < self.history.len().saturating_sub(1), |ui| {
-                if ui.button("↪ Redo").clicked() {
+                if ui.button("â†ª Redo").clicked() {
                     self.redo();
                 }
             });
-            if ui.button("🔄 Reset").clicked() {
+            if ui.button("ðŸ”„ Reset").clicked() {
                 self.reset();
             }
             
             ui.separator();
             
             // Transform tools
-            if ui.button("↺").on_hover_text("Rotate Left").clicked() {
+            if ui.button("â†º").on_hover_text("Rotate Left").clicked() {
                 self.rotate_ccw();
             }
-            if ui.button("↻").on_hover_text("Rotate Right").clicked() {
+            if ui.button("â†»").on_hover_text("Rotate Right").clicked() {
                 self.rotate_cw();
             }
-            if ui.button("⟷").on_hover_text("Flip Horizontal").clicked() {
+            if ui.button("âŸ·").on_hover_text("Flip Horizontal").clicked() {
                 self.flip_horizontal();
             }
-            if ui.button("⥯").on_hover_text("Flip Vertical").clicked() {
+            if ui.button("â¥¯").on_hover_text("Flip Vertical").clicked() {
                 self.flip_vertical();
             }
             
             ui.separator();
             
             // Tool selection
-            ui.selectable_value(&mut self.current_tool, EditTool::Select, "☝ Select");
-            ui.selectable_value(&mut self.current_tool, EditTool::Crop, "✂ Crop");
+            ui.selectable_value(&mut self.current_tool, EditTool::Select, "â˜ Select");
+            ui.selectable_value(&mut self.current_tool, EditTool::Crop, "âœ‚ Crop");
             
             ui.separator();
             
             // Panel toggles
-            ui.toggle_value(&mut self.show_adjustments, "🎨 Adjust");
-            ui.toggle_value(&mut self.show_filters, "✨ Filters");
-            ui.toggle_value(&mut self.show_resize, "📐 Resize");
+            ui.toggle_value(&mut self.show_adjustments, "ðŸŽ¨ Adjust");
+            ui.toggle_value(&mut self.show_filters, "âœ¨ Filters");
+            ui.toggle_value(&mut self.show_resize, "ðŸ“ Resize");
             
             // Right side - image info
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if let Some((w, h)) = self.dimensions() {
-                    ui.label(format!("{}×{}", w, h));
+                    ui.label(format!("{}Ã—{}", w, h));
                 }
                 if self.has_unsaved_changes {
-                    ui.label("●").on_hover_text("Unsaved changes");
+                    ui.label("â—").on_hover_text("Unsaved changes");
                 }
             });
         });
@@ -571,7 +571,7 @@ impl ImageViewer {
         egui::ScrollArea::vertical().show(ui, |ui| {
             // Adjustments panel
             if self.show_adjustments {
-                ui.collapsing("🎨 Adjustments", |ui| {
+                ui.collapsing("ðŸŽ¨ Adjustments", |ui| {
                     let mut changed = false;
                     
                     ui.label("Brightness");
@@ -602,7 +602,7 @@ impl ImageViewer {
             
             // Filters panel
             if self.show_filters {
-                ui.collapsing("✨ Filters", |ui| {
+                ui.collapsing("âœ¨ Filters", |ui| {
                     let filters = [
                         (ImageFilter::None, "None"),
                         (ImageFilter::Grayscale, "Grayscale"),
@@ -627,7 +627,7 @@ impl ImageViewer {
             
             // Resize panel
             if self.show_resize {
-                ui.collapsing("📐 Resize", |ui| {
+                ui.collapsing("ðŸ“ Resize", |ui| {
                     if let Some((orig_w, orig_h)) = self.dimensions() {
                         let aspect = orig_w as f32 / orig_h as f32;
                         
@@ -685,10 +685,10 @@ impl ImageViewer {
                     if ui.button("16:9").clicked() { self.crop_aspect = Some(16.0/9.0); }
                 });
                 
-                if ui.button("✓ Apply Crop").clicked() {
+                if ui.button("âœ“ Apply Crop").clicked() {
                     self.apply_crop();
                 }
-                if ui.button("✗ Cancel").clicked() {
+                if ui.button("âœ— Cancel").clicked() {
                     self.crop_selection = None;
                 }
             }
@@ -906,7 +906,7 @@ impl ImageViewer {
                 }
                 
                 if let Some((w, h)) = self.dimensions() {
-                    ui.label(format!("Size: {}×{} pixels", w, h));
+                    ui.label(format!("Size: {}Ã—{} pixels", w, h));
                 }
                 
                 ui.separator();

@@ -1,4 +1,4 @@
-//! User-based sync sessions
+﻿//! User-based sync sessions
 //! 
 //! Connection model:
 //! 1. Phone connects via Tailscale (encrypted mesh)
@@ -83,7 +83,7 @@ impl UserProfile {
         self
     }
     
-    pub fn as_admin(mut self) -> Self {
+    pub fn into_admin(mut self) -> Self {
         self.is_admin = true;
         self
     }
@@ -207,7 +207,7 @@ impl UserManager {
     pub fn bootstrap(&mut self, name: String, pin: Option<&str>) -> Result<BootstrapResult, String> {
         let id = generate_id();
         let (user, _master, recovery_key) = UserProfile::new(id.clone(), name, pin)?;
-        let user = user.as_admin();
+        let user = user.into_admin();
         self.users.insert(id.clone(), user);
         
         Ok(BootstrapResult {
@@ -354,7 +354,7 @@ fn name_to_color(name: &str) -> String {
     use std::hash::{Hash, Hasher};
     
     let mut hasher = DefaultHasher::new();
-    name.to_lowercase().hash(&mut hasher);
+    crate::fontcase::ascii_lower(name).hash(&mut hasher);
     let hash = hasher.finish();
     
     // Muted, professional palette

@@ -1,4 +1,4 @@
-//! Cryptographic User Identity and Key Management
+﻿//! Cryptographic User Identity and Key Management
 //!
 //! SECURITY MODEL:
 //! ================

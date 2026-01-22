@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Document Editor - Full editing for DOCX, ODT, RTF
 //!
 //! Features:
@@ -10,7 +10,8 @@
 
 use crate::file_handler::{DocumentContent, FileContent, OpenFile};
 use eframe::egui::{self, Color32, RichText, TextEdit, Vec2, Rect, Pos2, Sense, Stroke};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use crate::fontcase;
 
 /// Text formatting
 #[derive(Debug, Clone, Default)]
@@ -306,9 +307,9 @@ impl DocumentViewer {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // FORMATTING
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     /// Toggle bold on selection
     pub fn toggle_bold(&mut self) {
@@ -387,9 +388,9 @@ impl DocumentViewer {
         }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // FIND / REPLACE
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     /// Find text in document
     pub fn find(&mut self, text: &str) {
@@ -399,14 +400,14 @@ impl DocumentViewer {
         let search = if self.find_replace.case_sensitive {
             text.to_string()
         } else {
-            text.to_lowercase()
+            crate::fontcase::ascii_lower(text)
         };
         
         for (para_idx, para) in self.paragraphs.iter().enumerate() {
             let para_text = if self.find_replace.case_sensitive {
                 para.text.clone()
             } else {
-                para.text.to_lowercase()
+                crate::fontcase::ascii_lower(&para.text)
             };
             
             let mut start = 0;
@@ -444,10 +445,10 @@ impl DocumentViewer {
                 para.text = para.text.replace(&find, &replace);
             } else {
                 // Case-insensitive replace is more complex
-                let lower_find = find.to_lowercase();
+                let lower_find = crate::fontcase::ascii_lower(&find);
                 let mut result = String::new();
                 let mut last_end = 0;
-                for (start, _) in para.text.to_lowercase().match_indices(&lower_find) {
+                for (start, _) in crate::fontcase::ascii_lower(&para.text).match_indices(&lower_find) {
                     result.push_str(&para.text[last_end..start]);
                     result.push_str(&replace);
                     last_end = start + find.len();
@@ -463,9 +464,9 @@ impl DocumentViewer {
         self.find_replace.results.clear();
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // SAVE / EXPORT
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     /// Save to original format
     pub fn save(&self) -> Result<(), String> {
@@ -477,7 +478,7 @@ impl DocumentViewer {
     }
     
     /// Save as specific format
-    pub fn save_as(&self, path: &PathBuf, format: DocExportFormat) -> Result<(), String> {
+    pub fn save_as(&self, path: &Path, format: DocExportFormat) -> Result<(), String> {
         match format {
             DocExportFormat::Docx => self.save_docx(path),
             DocExportFormat::Odt => self.save_odt(path),
@@ -501,7 +502,7 @@ impl DocumentViewer {
         }
     }
     
-    fn save_docx(&self, path: &PathBuf) -> Result<(), String> {
+    fn save_docx(&self, path: &Path) -> Result<(), String> {
         use std::io::Write;
         use zip::ZipWriter;
         use zip::write::SimpleFileOptions;
@@ -562,13 +563,13 @@ impl DocumentViewer {
         Ok(())
     }
     
-    fn save_odt(&self, path: &PathBuf) -> Result<(), String> {
+    fn save_odt(&self, path: &Path) -> Result<(), String> {
         // Similar structure to DOCX but ODF format
         // Simplified: just save as plain text for now
         self.save_txt(path)
     }
     
-    fn save_rtf(&self, path: &PathBuf) -> Result<(), String> {
+    fn save_rtf(&self, path: &Path) -> Result<(), String> {
         let mut rtf = String::from("{\\rtf1\\ansi\\deff0\n");
         
         for para in &self.paragraphs {
@@ -589,7 +590,7 @@ impl DocumentViewer {
         std::fs::write(path, rtf).map_err(|e| e.to_string())
     }
     
-    fn save_html(&self, path: &PathBuf) -> Result<(), String> {
+    fn save_html(&self, path: &Path) -> Result<(), String> {
         let mut html = String::from("<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>Document</title></head><body>\n");
         
         for para in &self.paragraphs {
@@ -612,7 +613,7 @@ impl DocumentViewer {
         std::fs::write(path, html).map_err(|e| e.to_string())
     }
     
-    fn save_txt(&self, path: &PathBuf) -> Result<(), String> {
+    fn save_txt(&self, path: &Path) -> Result<(), String> {
         let text: String = self.paragraphs.iter()
             .map(|p| p.text.clone())
             .collect::<Vec<_>>()
@@ -620,7 +621,7 @@ impl DocumentViewer {
         std::fs::write(path, text).map_err(|e| e.to_string())
     }
     
-    fn save_markdown(&self, path: &PathBuf) -> Result<(), String> {
+    fn save_markdown(&self, path: &Path) -> Result<(), String> {
         let mut md = String::new();
         
         for para in &self.paragraphs {
@@ -641,14 +642,14 @@ impl DocumentViewer {
         std::fs::write(path, md).map_err(|e| e.to_string())
     }
     
-    fn save_pdf(&self, _path: &PathBuf) -> Result<(), String> {
+    fn save_pdf(&self, _path: &Path) -> Result<(), String> {
         // Would use printpdf crate
         Err("PDF export not yet implemented".to_string())
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // UI RENDERING
-    // ═══════════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
         // Load document if empty
@@ -693,13 +694,13 @@ impl DocumentViewer {
     fn render_toolbar(&mut self, ui: &mut egui::Ui) {
         // Row 1: File operations
         ui.horizontal(|ui| {
-            if ui.button("💾 Save").clicked() {
+            if ui.button("ðŸ’¾ Save").clicked() {
                 let _ = self.save();
             }
-            if ui.button("📤 Export").clicked() {
+            if ui.button("ðŸ“¤ Export").clicked() {
                 self.show_export = true;
             }
-            if ui.button("🖨️ Print").clicked() {
+            if ui.button("ðŸ–¨ï¸ Print").clicked() {
                 // TODO: Print
             }
             
@@ -707,12 +708,12 @@ impl DocumentViewer {
             
             // Undo/Redo
             ui.add_enabled_ui(self.history_index > 0, |ui| {
-                if ui.button("↩").on_hover_text("Undo").clicked() {
+                if ui.button("â†©").on_hover_text("Undo").clicked() {
                     self.undo();
                 }
             });
             ui.add_enabled_ui(self.history_index < self.history.len().saturating_sub(1), |ui| {
-                if ui.button("↪").on_hover_text("Redo").clicked() {
+                if ui.button("â†ª").on_hover_text("Redo").clicked() {
                     self.redo();
                 }
             });
@@ -720,21 +721,21 @@ impl DocumentViewer {
             ui.separator();
             
             // Find/Replace
-            if ui.button("🔍").on_hover_text("Find & Replace").clicked() {
+            if ui.button("ðŸ”").on_hover_text("Find & Replace").clicked() {
                 self.show_find_replace = !self.show_find_replace;
             }
             
             ui.separator();
             
             // Styles toggle
-            ui.toggle_value(&mut self.show_styles, "¶ Styles");
-            ui.checkbox(&mut self.show_formatting, "Show ¶");
+            ui.toggle_value(&mut self.show_styles, "Â¶ Styles");
+            ui.checkbox(&mut self.show_formatting, "Show Â¶");
             
             // Stats
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(format!("Words: {} | Chars: {}", self.word_count, self.char_count));
                 if self.has_unsaved_changes {
-                    ui.label("●").on_hover_text("Unsaved changes");
+                    ui.label("â—").on_hover_text("Unsaved changes");
                 }
             });
         });
@@ -786,16 +787,16 @@ impl DocumentViewer {
             
             // Alignment
             let align = self.current_format.alignment;
-            if ui.selectable_label(align == TextAlignment::Left, "⬅").on_hover_text("Align Left").clicked() {
+            if ui.selectable_label(align == TextAlignment::Left, "â¬…").on_hover_text("Align Left").clicked() {
                 self.set_alignment(TextAlignment::Left);
             }
-            if ui.selectable_label(align == TextAlignment::Center, "⬌").on_hover_text("Center").clicked() {
+            if ui.selectable_label(align == TextAlignment::Center, "â¬Œ").on_hover_text("Center").clicked() {
                 self.set_alignment(TextAlignment::Center);
             }
-            if ui.selectable_label(align == TextAlignment::Right, "➡").on_hover_text("Align Right").clicked() {
+            if ui.selectable_label(align == TextAlignment::Right, "âž¡").on_hover_text("Align Right").clicked() {
                 self.set_alignment(TextAlignment::Right);
             }
-            if ui.selectable_label(align == TextAlignment::Justify, "☰").on_hover_text("Justify").clicked() {
+            if ui.selectable_label(align == TextAlignment::Justify, "â˜°").on_hover_text("Justify").clicked() {
                 self.set_alignment(TextAlignment::Justify);
             }
             
@@ -918,7 +919,7 @@ impl DocumentViewer {
                                     
                                     // Show formatting marks
                                     if self.show_formatting {
-                                        ui.label(RichText::new("¶").color(Color32::LIGHT_GRAY).small());
+                                        ui.label(RichText::new("Â¶").color(Color32::LIGHT_GRAY).small());
                                     }
                                 });
                                 

@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // SASSY BROWSER - NETWORK ACTIVITY MONITOR
 // ============================================================================
 // Always-visible activity indicator showing all connections, downloads, traffic
@@ -49,21 +49,21 @@ pub enum ConnectionType {
 impl ConnectionType {
     pub fn icon(&self) -> &'static str {
         match self {
-            ConnectionType::Document => "📄",
-            ConnectionType::Download => "⬇️",
-            ConnectionType::Script => "⚡",
-            ConnectionType::Stylesheet => "🎨",
-            ConnectionType::Image => "🖼️",
-            ConnectionType::Font => "🔤",
-            ConnectionType::Xhr => "📡",
-            ConnectionType::WebSocket => "🔌",
-            ConnectionType::Media => "🎬",
-            ConnectionType::Other => "❓",
+            ConnectionType::Document => "ðŸ“„",
+            ConnectionType::Download => "â¬‡ï¸",
+            ConnectionType::Script => "âš¡",
+            ConnectionType::Stylesheet => "ðŸŽ¨",
+            ConnectionType::Image => "ðŸ–¼ï¸",
+            ConnectionType::Font => "ðŸ”¤",
+            ConnectionType::Xhr => "ðŸ“¡",
+            ConnectionType::WebSocket => "ðŸ”Œ",
+            ConnectionType::Media => "ðŸŽ¬",
+            ConnectionType::Other => "â“",
         }
     }
     
     pub fn from_content_type(ct: &str) -> Self {
-        let ct_lower = ct.to_lowercase();
+        let ct_lower = crate::fontcase::ascii_lower(ct);
         if ct_lower.contains("octet-stream") || ct_lower.contains("zip") || ct_lower.contains("application/x-msdownload") {
             ConnectionType::Download
         } else if ct_lower.contains("html") {

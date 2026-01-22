@@ -1,4 +1,4 @@
-//! Built-in REST Client
+﻿//! Built-in REST Client
 //!
 //! Test APIs directly in the browser - like Postman built-in.
 //! The killer feature for developers.
@@ -10,44 +10,52 @@ use std::collections::HashMap;
 
 /// HTTP method
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::upper_case_acronyms)] // These are HTTP method names
 pub enum Method {
-    GET,
-    POST,
-    PUT,
-    PATCH,
-    DELETE,
-    HEAD,
-    OPTIONS,
+    #[serde(rename = "GET")]
+    Get,
+    #[serde(rename = "POST")]
+    Post,
+    #[serde(rename = "PUT")]
+    Put,
+    #[serde(rename = "PATCH")]
+    Patch,
+    #[serde(rename = "DELETE")]
+    Delete,
+    #[serde(rename = "HEAD")]
+    Head,
+    #[serde(rename = "OPTIONS")]
+    Options,
 }
 
 impl Method {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Method::GET => "GET",
-            Method::POST => "POST",
-            Method::PUT => "PUT",
-            Method::PATCH => "PATCH",
-            Method::DELETE => "DELETE",
-            Method::HEAD => "HEAD",
-            Method::OPTIONS => "OPTIONS",
+            Method::Get => "GET",
+            Method::Post => "POST",
+            Method::Put => "PUT",
+            Method::Patch => "PATCH",
+            Method::Delete => "DELETE",
+            Method::Head => "HEAD",
+            Method::Options => "OPTIONS",
         }
     }
     
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
-            "GET" => Some(Method::GET),
-            "POST" => Some(Method::POST),
-            "PUT" => Some(Method::PUT),
-            "PATCH" => Some(Method::PATCH),
-            "DELETE" => Some(Method::DELETE),
-            "HEAD" => Some(Method::HEAD),
-            "OPTIONS" => Some(Method::OPTIONS),
+            "GET" => Some(Method::Get),
+            "POST" => Some(Method::Post),
+            "PUT" => Some(Method::Put),
+            "PATCH" => Some(Method::Patch),
+            "DELETE" => Some(Method::Delete),
+            "HEAD" => Some(Method::Head),
+            "OPTIONS" => Some(Method::Options),
             _ => None,
         }
     }
     
     pub fn has_body(&self) -> bool {
-        matches!(self, Method::POST | Method::PUT | Method::PATCH)
+        matches!(self, Method::Post | Method::Put | Method::Patch)
     }
 }
 
@@ -151,7 +159,7 @@ impl RestResponse {
     /// Get content type from headers
     pub fn content_type(&self) -> Option<&str> {
         self.headers.iter()
-            .find(|(k, _)| k.to_lowercase() == "content-type")
+            .find(|(k, _)| crate::fontcase::ascii_lower(k) == "content-type")
             .map(|(_, v)| v.as_str())
     }
     
@@ -198,7 +206,7 @@ pub struct RestClient {
 impl RestClient {
     pub fn new() -> Self {
         RestClient {
-            method: Method::GET,
+            method: Method::Get,
             url: String::new(),
             headers: vec![
                 ("Content-Type".to_string(), "application/json".to_string(), true),
@@ -253,13 +261,13 @@ impl RestClient {
         
         // Build request
         let mut request = match self.method {
-            Method::GET => ureq::get(&url),
-            Method::POST => ureq::post(&url),
-            Method::PUT => ureq::put(&url),
-            Method::PATCH => ureq::patch(&url),
-            Method::DELETE => ureq::delete(&url),
-            Method::HEAD => ureq::head(&url),
-            Method::OPTIONS => ureq::request("OPTIONS", &url),
+            Method::Get => ureq::get(&url),
+            Method::Post => ureq::post(&url),
+            Method::Put => ureq::put(&url),
+            Method::Patch => ureq::patch(&url),
+            Method::Delete => ureq::delete(&url),
+            Method::Head => ureq::head(&url),
+            Method::Options => ureq::request("OPTIONS", &url),
         };
         
         // Add headers
@@ -388,7 +396,7 @@ impl RestClient {
     
     /// Clear the current request
     pub fn clear(&mut self) {
-        self.method = Method::GET;
+        self.method = Method::Get;
         self.url.clear();
         self.headers = vec![
             ("Content-Type".to_string(), "application/json".to_string(), true),
@@ -517,7 +525,7 @@ mod tests {
     #[test]
     fn test_to_curl() {
         let mut client = RestClient::new();
-        client.method = Method::POST;
+        client.method = Method::Post;
         client.url = "https://api.example.com/users".to_string();
         client.body = r#"{"name": "test"}"#.to_string();
         

@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+﻿#![allow(dead_code, unused_variables, unused_imports)]
 // ============================================================================
 // SASSY BROWSER - PASSWORD VAULT
 // ============================================================================
@@ -77,8 +77,8 @@ impl Credential {
     }
     
     pub fn matches_url(&self, url: &str) -> bool {
-        let cred_domain = self.domain().to_lowercase();
-        let url_domain = extract_domain(url).to_lowercase();
+        let cred_domain = crate::fontcase::ascii_lower(&self.domain());
+        let url_domain = crate::fontcase::ascii_lower(&extract_domain(url));
         
         // Exact match or subdomain match
         cred_domain == url_domain || 
@@ -158,7 +158,7 @@ pub fn analyze_password(password: &str) -> PasswordStrength {
     if has_special { score += 2; }
     
     // Penalize common patterns
-    let lower = password.to_lowercase();
+    let lower = crate::fontcase::ascii_lower(password);
     let common = ["password", "123456", "qwerty", "admin", "letmein", "welcome"];
     if common.iter().any(|p| lower.contains(p)) {
         score = score.saturating_sub(3);
@@ -183,7 +183,7 @@ pub fn validate_password_policy(password: &str) -> Result<(), String> {
     }
 
     // Small local blacklist of extremely common passwords and patterns.
-    let lower = password.to_lowercase();
+    let lower = crate::fontcase::ascii_lower(password);
     let blacklist = [
         "password",
         "123456",
@@ -295,6 +295,19 @@ pub fn generate_password(opts: &PasswordGeneratorOptions) -> String {
         for _ in 0..opts.min_symbols {
             password.push(sym_chars[rng.gen_range(0..sym_chars.len())]);
         }
+    }
+
+    // Ensure at least one lowercase/uppercase character when requested
+    if opts.lowercase {
+        let low_chars: Vec<char> = (if opts.exclude_ambiguous { lowercase } else { lowercase_full })
+            .chars().collect();
+        password.push(low_chars[rng.gen_range(0..low_chars.len())]);
+    }
+
+    if opts.uppercase {
+        let up_chars: Vec<char> = (if opts.exclude_ambiguous { uppercase } else { uppercase_full })
+            .chars().collect();
+        password.push(up_chars[rng.gen_range(0..up_chars.len())]);
     }
     
     // Fill rest
@@ -627,15 +640,15 @@ impl PasswordVault {
             return Vec::new();
         }
         
-        let query_lower = query.to_lowercase();
+        let query_lower = crate::fontcase::ascii_lower(query);
         
         self.credentials.iter()
             .filter(|c| {
-                c.title.to_lowercase().contains(&query_lower) ||
-                c.username.to_lowercase().contains(&query_lower) ||
-                c.url.to_lowercase().contains(&query_lower) ||
-                c.notes.to_lowercase().contains(&query_lower) ||
-                c.tags.iter().any(|t| t.to_lowercase().contains(&query_lower))
+                crate::fontcase::ascii_lower(&c.title).contains(&query_lower) ||
+                crate::fontcase::ascii_lower(&c.username).contains(&query_lower) ||
+                crate::fontcase::ascii_lower(&c.url).contains(&query_lower) ||
+                crate::fontcase::ascii_lower(&c.notes).contains(&query_lower) ||
+                c.tags.iter().any(|t| crate::fontcase::ascii_lower(t).contains(&query_lower))
             })
             .collect()
     }

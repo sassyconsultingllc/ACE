@@ -1,4 +1,4 @@
-// Style - CSS parsing and style computation
+﻿// Style - CSS parsing and style computation
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
@@ -87,7 +87,7 @@ impl Color {
     pub fn black() -> Self { Color::new(0, 0, 0, 255) }
     pub fn white() -> Self { Color::new(255, 255, 255, 255) }
     pub fn transparent() -> Self { Color::new(0, 0, 0, 0) }
-    pub fn to_u32(&self) -> u32 { ((self.a as u32) << 24) | ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32) }
+    pub fn to_u32(self) -> u32 { ((self.a as u32) << 24) | ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32) }
 }
 
 impl ComputedStyle {
@@ -198,7 +198,7 @@ impl Stylesheet {
                 '}' => { if brace_count == 0 { break; } brace_count -= 1; current.push(c); }
                 ';' if brace_count == 0 => {
                     if let Some((name, value)) = current.split_once(':') {
-                        props.insert(name.trim().to_lowercase(), value.trim().to_string());
+                        props.insert(crate::fontcase::ascii_lower(name.trim()), value.trim().to_string());
                     }
                     current.clear();
                 }
@@ -207,7 +207,7 @@ impl Stylesheet {
         }
         if !current.trim().is_empty() {
             if let Some((name, value)) = current.split_once(':') {
-                props.insert(name.trim().to_lowercase(), value.trim().to_string());
+                props.insert(crate::fontcase::ascii_lower(name.trim()), value.trim().to_string());
             }
         }
         props
@@ -361,7 +361,7 @@ impl StyleEngine {
         let mut props = HashMap::new();
         for decl in style.split(';') {
             if let Some((name, value)) = decl.split_once(':') {
-                props.insert(name.trim().to_lowercase(), value.trim().to_string());
+                props.insert(crate::fontcase::ascii_lower(name.trim()), value.trim().to_string());
             }
         }
         props
@@ -416,7 +416,7 @@ impl StyleEngine {
     }
 
     fn parse_display(v: &str) -> Display {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "block" => Display::Block, "inline" => Display::Inline,
             "inline-block" => Display::InlineBlock, "flex" => Display::Flex,
             "grid" => Display::Grid, "none" => Display::None, _ => Display::Block
@@ -424,7 +424,7 @@ impl StyleEngine {
     }
 
     fn parse_position(v: &str) -> Position {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "static" => Position::Static, "relative" => Position::Relative,
             "absolute" => Position::Absolute, "fixed" => Position::Fixed,
             "sticky" => Position::Sticky, _ => Position::Static
@@ -432,7 +432,7 @@ impl StyleEngine {
     }
 
     fn parse_dimension(v: &str) -> Dimension {
-        let v = v.trim().to_lowercase();
+        let v = crate::fontcase::ascii_lower(v.trim());
         if v == "auto" { return Dimension::Auto; }
         if v.ends_with('%') { return Dimension::Percent(v[..v.len()-1].parse().unwrap_or(0.0)); }
         if v.ends_with("px") { return Dimension::Px(v[..v.len()-2].parse().unwrap_or(0.0)); }
@@ -444,7 +444,7 @@ impl StyleEngine {
     }
 
     fn parse_length(v: &str) -> f32 {
-        let v = v.trim().to_lowercase();
+        let v = crate::fontcase::ascii_lower(v.trim());
         if v.ends_with("px") { v[..v.len()-2].parse().unwrap_or(0.0) }
         else if v.ends_with("em") { v[..v.len()-2].parse::<f32>().unwrap_or(0.0) * 16.0 }
         else if v.ends_with("rem") { v[..v.len()-3].parse::<f32>().unwrap_or(0.0) * 16.0 }
@@ -464,7 +464,7 @@ impl StyleEngine {
     }
 
     fn parse_color(v: &str) -> Color {
-        let v = v.trim().to_lowercase();
+        let v = crate::fontcase::ascii_lower(v.trim());
         match v.as_str() {
             "black" => Color::black(), "white" => Color::white(),
             "red" => Color::new(255, 0, 0, 255), "green" => Color::new(0, 128, 0, 255),
@@ -505,21 +505,21 @@ impl StyleEngine {
     }
 
     fn parse_font_weight(v: &str) -> u16 {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "normal" => 400, "bold" => 700, "lighter" => 300, "bolder" => 700,
             _ => v.parse().unwrap_or(400)
         }
     }
 
     fn parse_text_align(v: &str) -> TextAlign {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "left" => TextAlign::Left, "center" => TextAlign::Center,
             "right" => TextAlign::Right, "justify" => TextAlign::Justify, _ => TextAlign::Left
         }
     }
 
     fn parse_text_decoration(v: &str) -> TextDecoration {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "underline" => TextDecoration::Underline, "line-through" => TextDecoration::LineThrough,
             "overline" => TextDecoration::Overline, _ => TextDecoration::None
         }
@@ -531,21 +531,21 @@ impl StyleEngine {
     }
 
     fn parse_overflow(v: &str) -> Overflow {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "visible" => Overflow::Visible, "hidden" => Overflow::Hidden,
             "scroll" => Overflow::Scroll, "auto" => Overflow::Auto, _ => Overflow::Visible
         }
     }
 
     fn parse_visibility(v: &str) -> Visibility {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "visible" => Visibility::Visible, "hidden" => Visibility::Hidden,
             "collapse" => Visibility::Collapse, _ => Visibility::Visible
         }
     }
 
     fn parse_cursor(v: &str) -> Cursor {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "pointer" => Cursor::Pointer, "text" => Cursor::Text, "move" => Cursor::Move,
             "not-allowed" => Cursor::NotAllowed, "crosshair" => Cursor::Crosshair,
             "wait" => Cursor::Wait, _ => Cursor::Default
@@ -553,7 +553,7 @@ impl StyleEngine {
     }
 
     fn parse_flex_direction(v: &str) -> FlexDirection {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "row" => FlexDirection::Row, "row-reverse" => FlexDirection::RowReverse,
             "column" => FlexDirection::Column, "column-reverse" => FlexDirection::ColumnReverse,
             _ => FlexDirection::Row
@@ -561,7 +561,7 @@ impl StyleEngine {
     }
 
     fn parse_justify_content(v: &str) -> JustifyContent {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "flex-start" => JustifyContent::FlexStart, "flex-end" => JustifyContent::FlexEnd,
             "center" => JustifyContent::Center, "space-between" => JustifyContent::SpaceBetween,
             "space-around" => JustifyContent::SpaceAround, "space-evenly" => JustifyContent::SpaceEvenly,
@@ -570,7 +570,7 @@ impl StyleEngine {
     }
 
     fn parse_align_items(v: &str) -> AlignItems {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "stretch" => AlignItems::Stretch, "flex-start" => AlignItems::FlexStart,
             "flex-end" => AlignItems::FlexEnd, "center" => AlignItems::Center,
             "baseline" => AlignItems::Baseline, _ => AlignItems::Stretch
@@ -578,7 +578,7 @@ impl StyleEngine {
     }
 
     fn parse_flex_wrap(v: &str) -> FlexWrap {
-        match v.trim().to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(v.trim()).as_str() {
             "nowrap" => FlexWrap::NoWrap, "wrap" => FlexWrap::Wrap,
             "wrap-reverse" => FlexWrap::WrapReverse, _ => FlexWrap::NoWrap
         }

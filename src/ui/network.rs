@@ -1,4 +1,4 @@
-//! Network Activity Indicator
+﻿//! Network Activity Indicator
 //!
 //! Always-visible network status bar showing:
 //! - Current state (idle, loading, uploading)

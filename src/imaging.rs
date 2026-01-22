@@ -1,4 +1,4 @@
-//! Image Loading and Decoding
+﻿//! Image Loading and Decoding
 //!
 //! Handles loading images from URLs and decoding them into pixel buffers.
 //! Supports PNG, JPEG, GIF, and WebP.

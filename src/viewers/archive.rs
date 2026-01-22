@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Archive Handler - Full ZIP, RAR, 7z, TAR support with creation
 //!
 //! Features:
@@ -11,7 +11,7 @@
 use crate::file_handler::{ArchiveContent, ArchiveEntry, ArchiveFormat, FileContent, OpenFile};
 use eframe::egui::{self, Color32, FontId, RichText, Vec2, Sense};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 
 /// Archive operation mode
@@ -119,7 +119,7 @@ impl ArchiveViewer {
     
     /// Create a new archive
     pub fn create_archive(
-        output_path: &PathBuf,
+        output_path: &Path,
         files: &[PathBuf],
         format: ArchiveFormat,
         compression: CompressionLevel,
@@ -135,7 +135,7 @@ impl ArchiveViewer {
         }
     }
     
-    fn create_zip(output: &PathBuf, files: &[PathBuf], level: CompressionLevel) -> Result<(), String> {
+    fn create_zip(output: &Path, files: &[PathBuf], level: CompressionLevel) -> Result<(), String> {
         use std::fs::File;
         use std::io::{Read, Write};
         use zip::{ZipWriter, write::SimpleFileOptions};
@@ -175,8 +175,8 @@ impl ArchiveViewer {
     
     fn add_directory_to_zip<W: Write + std::io::Seek>(
         zip: &mut zip::ZipWriter<W>,
-        base: &PathBuf,
-        dir: &PathBuf,
+        base: &Path,
+        dir: &Path,
         options: zip::write::SimpleFileOptions,
     ) -> Result<(), String> {
         use std::fs::{self, File};
@@ -204,7 +204,7 @@ impl ArchiveViewer {
         Ok(())
     }
     
-    fn create_tar(output: &PathBuf, files: &[PathBuf]) -> Result<(), String> {
+    fn create_tar(output: &Path, files: &[PathBuf]) -> Result<(), String> {
         use std::fs::File;
         use tar::Builder;
         
@@ -225,7 +225,7 @@ impl ArchiveViewer {
         Ok(())
     }
     
-    fn create_tar_gz(output: &PathBuf, files: &[PathBuf], _level: CompressionLevel) -> Result<(), String> {
+    fn create_tar_gz(output: &Path, files: &[PathBuf], _level: CompressionLevel) -> Result<(), String> {
         use std::fs::File;
         use flate2::write::GzEncoder;
         use flate2::Compression;
@@ -250,7 +250,7 @@ impl ArchiveViewer {
         Ok(())
     }
     
-    fn create_tar_bz2(output: &PathBuf, files: &[PathBuf]) -> Result<(), String> {
+    fn create_tar_bz2(output: &Path, files: &[PathBuf]) -> Result<(), String> {
         use std::fs::File;
         use bzip2::write::BzEncoder;
         use bzip2::Compression;
@@ -272,7 +272,7 @@ impl ArchiveViewer {
         Ok(())
     }
     
-    fn create_tar_xz(output: &PathBuf, files: &[PathBuf]) -> Result<(), String> {
+    fn create_tar_xz(output: &Path, files: &[PathBuf]) -> Result<(), String> {
         use std::fs::File;
         use xz2::write::XzEncoder;
         use tar::Builder;
@@ -293,7 +293,7 @@ impl ArchiveViewer {
         Ok(())
     }
     
-    fn create_7z(_output: &PathBuf, _files: &[PathBuf], _level: CompressionLevel) -> Result<(), String> {
+    fn create_7z(_output: &Path, _files: &[PathBuf], _level: CompressionLevel) -> Result<(), String> {
         // sevenz-rust is read-only, would need sevenz-rust2 or external tool
         Err("7z creation requires external tool".to_string())
     }
@@ -303,11 +303,11 @@ impl ArchiveViewer {
     // ═══════════════════════════════════════════════════════════════════════════
     
     /// Extract all files
-    pub fn extract_all(archive_path: &PathBuf, output_dir: &PathBuf) -> Result<usize, String> {
+    pub fn extract_all(archive_path: &Path, output_dir: &Path) -> Result<usize, String> {
         let ext = archive_path.extension()
             .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
+            .map(crate::fontcase::ascii_lower)
+            .unwrap_or_default();
         
         match ext.as_str() {
             "zip" => Self::extract_zip(archive_path, output_dir),
@@ -347,7 +347,7 @@ impl ArchiveViewer {
         Ok(count)
     }
     
-    fn extract_tar(archive: &PathBuf, output: &PathBuf) -> Result<usize, String> {
+    fn extract_tar(archive: &Path, output: &Path) -> Result<usize, String> {
         use std::fs::File;
         use tar::Archive;
         
@@ -363,7 +363,7 @@ impl ArchiveViewer {
         Ok(count)
     }
     
-    fn extract_tar_gz(archive: &PathBuf, output: &PathBuf) -> Result<usize, String> {
+    fn extract_tar_gz(archive: &Path, output: &Path) -> Result<usize, String> {
         use std::fs::File;
         use flate2::read::GzDecoder;
         use tar::Archive;
@@ -376,7 +376,7 @@ impl ArchiveViewer {
         Ok(0) // Can't easily count without re-reading
     }
     
-    fn extract_tar_bz2(archive: &PathBuf, output: &PathBuf) -> Result<usize, String> {
+    fn extract_tar_bz2(archive: &Path, output: &Path) -> Result<usize, String> {
         use std::fs::File;
         use bzip2::read::BzDecoder;
         use tar::Archive;
@@ -389,7 +389,7 @@ impl ArchiveViewer {
         Ok(0)
     }
     
-    fn extract_tar_xz(archive: &PathBuf, output: &PathBuf) -> Result<usize, String> {
+    fn extract_tar_xz(archive: &Path, output: &Path) -> Result<usize, String> {
         use std::fs::File;
         use xz2::read::XzDecoder;
         use tar::Archive;
@@ -402,7 +402,7 @@ impl ArchiveViewer {
         Ok(0)
     }
     
-    fn extract_7z(archive: &PathBuf, output: &PathBuf) -> Result<usize, String> {
+    fn extract_7z(archive: &Path, output: &Path) -> Result<usize, String> {
         use sevenz_rust::decompress_file;
         decompress_file(archive, output).map_err(|e| e.to_string())?;
         Ok(0)
@@ -438,7 +438,7 @@ impl ArchiveViewer {
         }
     }
     
-    fn render_toolbar(&mut self, ui: &mut egui::Ui, archive: &ArchiveContent, archive_path: &PathBuf) {
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, archive: &ArchiveContent, archive_path: &Path) {
         ui.horizontal(|ui| {
             // Extract buttons
             if ui.button("📦 Extract All").clicked() {
@@ -522,14 +522,14 @@ impl ArchiveViewer {
     
     fn render_entries(&mut self, ui: &mut egui::Ui, archive: &ArchiveContent, _zoom: f32) {
         // Filter entries
-        let filter = self.filter_query.to_lowercase();
+        let filter = crate::fontcase::ascii_lower(&self.filter_query);
         let filtered: Vec<_> = archive.entries.iter()
             .enumerate()
             .filter(|(_, e)| {
                 if !self.show_hidden && e.path.starts_with('.') {
                     return false;
                 }
-                if !filter.is_empty() && !e.path.to_lowercase().contains(&filter) {
+                if !filter.is_empty() && !crate::fontcase::ascii_lower(&e.path).contains(&filter) {
                     return false;
                 }
                 true
@@ -838,7 +838,7 @@ impl ArchiveViewer {
             });
     }
     
-    fn render_extract_dialog(&mut self, ui: &mut egui::Ui, archive_path: &PathBuf) {
+    fn render_extract_dialog(&mut self, ui: &mut egui::Ui, archive_path: &Path) {
         egui::Window::new("Extract Archive")
             .collapsible(false)
             .show(ui.ctx(), |ui| {
@@ -900,7 +900,7 @@ impl ArchiveViewer {
     }
     
     fn get_file_icon(path: &str) -> &'static str {
-        let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
+        let ext = crate::fontcase::ascii_lower(path.rsplit('.').next().unwrap_or(""));
         match ext.as_str() {
             "txt" | "md" | "log" => "📝",
             "rs" | "py" | "js" | "ts" | "c" | "cpp" | "h" | "java" | "go" => "💻",
@@ -918,3 +918,4 @@ impl ArchiveViewer {
         }
     }
 }
+

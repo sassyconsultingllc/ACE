@@ -1,4 +1,4 @@
-//! Browser engine - integrates all components with new UI system
+﻿//! Browser engine - integrates all components with new UI system
 //! v1.0.1 - Production ready with input, network bar, sandbox, link clicking
 
 #![allow(dead_code)]
@@ -534,7 +534,7 @@ impl BrowserState {
             <html>
             <head><title>Error</title></head>
             <body style="font-family: system-ui; padding: 40px; background: #0d1117; color: #e6edf3;">
-                <h1 style="color: #f85149;">⚠️ Error</h1>
+                <h1 style="color: #f85149;">âš ï¸ Error</h1>
                 <pre style="background: #161b22; padding: 20px; border-radius: 8px; overflow: auto;">{}</pre>
                 <p><a href="about:blank" style="color: #58a6ff;">Go to blank page</a></p>
             </body>
@@ -901,12 +901,14 @@ impl BrowserState {
                     bounds,
                     theme,
                     display_url,
-                    can_back,
-                    can_forward,
-                    loading,
-                    self.ui.ai.show_help_button,
-                    self.ui.ai.enabled,
-                    self.ui.help_pane_open,
+                    crate::ui::render::NavBarState {
+                        can_back,
+                        can_forward,
+                        loading,
+                        show_help_button: self.ui.ai.show_help_button,
+                        help_enabled: self.ui.ai.enabled,
+                        help_open: self.ui.help_pane_open,
+                    },
                 );
                 
                 // Draw cursor in address bar if focused
@@ -1586,7 +1588,7 @@ impl BrowserState {
             let hour = ((secs % 86400) / 3600) as u32;
             if (2..5).contains(&hour) {
                 if let Some(reward) = self.ui.ai.discover_easter_egg("night_owl") {
-                    println!("🦉 Easter Egg: {}", reward.message);
+                    println!("ðŸ¦‰ Easter Egg: {}", reward.message);
                     println!("   Redeem at: {}", reward.redeem_url);
                 }
             }
@@ -1595,7 +1597,7 @@ impl BrowserState {
         // First popup blocked
         if self.popup_manager.total_blocked == 1 {
             if let Some(reward) = self.ui.ai.discover_easter_egg("first_block") {
-                println!("🛡️ Easter Egg: {}", reward.message);
+                println!("ðŸ›¡ï¸ Easter Egg: {}", reward.message);
                 println!("   Redeem at: {}", reward.redeem_url);
             }
         }
@@ -1604,7 +1606,7 @@ impl BrowserState {
         if let Some(tab) = self.ui.tab_manager.active_tab() {
             if tab.sandbox.trust_level == TrustLevel::Trusted {
                 if let Some(reward) = self.ui.ai.discover_easter_egg("trust_watcher") {
-                    println!("🔒 Easter Egg: {}", reward.message);
+                    println!("ðŸ”’ Easter Egg: {}", reward.message);
                     println!("   Redeem at: {}", reward.redeem_url);
                 }
             }
@@ -1617,14 +1619,14 @@ impl BrowserState {
             let status = self.update_checker.check();
             match status {
                 UpdateStatus::Available(ref info) => {
-                    println!("📦 Update available: v{}", info.version);
+                    println!("ðŸ“¦ Update available: v{}", info.version);
                     println!("   Changelog: {}", info.changelog);
                     if info.required {
-                        println!("   ⚠️ This is a security update - please install soon!");
+                        println!("   âš ï¸ This is a security update - please install soon!");
                     }
                 }
                 UpdateStatus::UpToDate => {
-                    println!("✓ Sassy Browser is up to date");
+                    println!("âœ“ Sassy Browser is up to date");
                 }
                 UpdateStatus::Error(ref e) => {
                     eprintln!("Update check failed: {}", e);
@@ -1643,9 +1645,9 @@ impl BrowserState {
     pub fn download_update(&self) -> Result<std::path::PathBuf, String> {
         match self.update_checker.status() {
             UpdateStatus::Available(info) => {
-                println!("⬇️ Downloading update v{}...", info.version);
+                println!("â¬‡ï¸ Downloading update v{}...", info.version);
                 let path = self.update_checker.download(info)?;
-                println!("✅ Downloaded to: {:?}", path);
+                println!("âœ… Downloaded to: {:?}", path);
                 Ok(path)
             }
             UpdateStatus::UpToDate => Err("Already up to date".to_string()),
@@ -1659,7 +1661,7 @@ impl BrowserState {
         // Check if download is allowed by sandbox
         if let Some(tab) = self.ui.tab_manager.active_tab() {
             if !self.sandbox_manager.check(tab.id, "download") {
-                println!("⛔ Download blocked: page not trusted enough");
+                println!("â›” Download blocked: page not trusted enough");
                 return;
             }
         }
@@ -1673,17 +1675,17 @@ impl BrowserState {
         );
         
         let id = self.quarantine.add(file);
-        println!("📥 Download quarantined: {} (id: {})", filename, id);
+        println!("ðŸ“¥ Download quarantined: {} (id: {})", filename, id);
         println!("   Three interactions required to release");
         
         // Display warnings
         if let Some(q_file) = self.quarantine.get(&id) {
             for warning in &q_file.warnings {
                 let icon = match warning.level {
-                    crate::sandbox::WarningLevel::Info => "ℹ️",
-                    crate::sandbox::WarningLevel::Caution => "⚠️",
-                    crate::sandbox::WarningLevel::Warning => "🔶",
-                    crate::sandbox::WarningLevel::Danger => "🔴",
+                    crate::sandbox::WarningLevel::Info => "â„¹ï¸",
+                    crate::sandbox::WarningLevel::Caution => "âš ï¸",
+                    crate::sandbox::WarningLevel::Warning => "ðŸ”¶",
+                    crate::sandbox::WarningLevel::Danger => "ðŸ”´",
                 };
                 println!("   {} {}: {}", icon, warning.message, warning.detail);
             }
@@ -1696,16 +1698,16 @@ impl BrowserState {
             file.interact(crate::sandbox::InteractionType::Acknowledge);
             match file.can_release() {
                 ReleaseStatus::Ready => {
-                    println!("✅ File ready for release: {}", file.filename);
+                    println!("âœ… File ready for release: {}", file.filename);
                 }
                 ReleaseStatus::NeedsInteraction { current, required } => {
-                    println!("🔄 Progress: {}/{} interactions", current, required);
+                    println!("ðŸ”„ Progress: {}/{} interactions", current, required);
                 }
                 ReleaseStatus::Waiting { seconds_remaining } => {
-                    println!("⏳ Wait {} more seconds", seconds_remaining);
+                    println!("â³ Wait {} more seconds", seconds_remaining);
                 }
                 ReleaseStatus::Blocked { reason } => {
-                    println!("🚫 Cannot release: {}", reason);
+                    println!("ðŸš« Cannot release: {}", reason);
                 }
             }
         }
@@ -1719,7 +1721,7 @@ impl BrowserState {
         if let Some(file) = self.quarantine.get(file_id) {
             let path = file.release(downloads)?;
             self.quarantine.remove(file_id);
-            println!("✅ File released to: {}", path.display());
+            println!("âœ… File released to: {}", path.display());
             Ok(path)
         } else {
             Err("File not found in quarantine".to_string())
@@ -1761,7 +1763,7 @@ impl BrowserState {
         let config = SyncConfig::default();
         let mut server = SecureSyncServer::new(config);
         
-        println!("🔒 Secure sync status:");
+        println!("ðŸ”’ Secure sync status:");
         println!("   Tailscale: {}", if server.tailscale.available { "detected" } else { "not found" });
         if let Some(ref hostname) = server.tailscale.hostname {
             println!("   Hostname: {}", hostname);
@@ -1788,7 +1790,7 @@ impl BrowserState {
             name.to_string(),
             owner.to_string(),
         );
-        println!("📱 Device registered: {} ({})", device.name, device.trust_level.description());
+        println!("ðŸ“± Device registered: {} ({})", device.name, device.trust_level.description());
         
         if self.family_config.devices.len() == 1 {
             // First device becomes admin
@@ -1804,8 +1806,8 @@ impl BrowserState {
     /// Approve a pending device
     pub fn approve_device(&mut self, device_id: &str, approver_id: &str) {
         match self.family_config.approve_device(device_id, approver_id, crate::sync::TrustLevel::Trusted) {
-            Ok(()) => println!("✅ Device {} approved", device_id),
-            Err(e) => println!("❌ Approval failed: {}", e),
+            Ok(()) => println!("âœ… Device {} approved", device_id),
+            Err(e) => println!("âŒ Approval failed: {}", e),
         }
     }
     
@@ -1813,11 +1815,11 @@ impl BrowserState {
     pub fn login_user(&mut self, username: &str, device_id: &str) {
         match self.user_manager.login(username, device_id) {
             Ok(session) => {
-                println!("👤 User logged in: {} (session: {})", username, session.session_id);
+                println!("ðŸ‘¤ User logged in: {} (session: {})", username, session.session_id);
                 // Touch family device
                 self.family_config.touch_device(device_id);
             }
-            Err(e) => println!("❌ Login failed: {}", e),
+            Err(e) => println!("âŒ Login failed: {}", e),
         }
     }
     
@@ -1837,13 +1839,13 @@ impl BrowserState {
         
         match &decision {
             PopupDecision::Allow { reason } => {
-                println!("✅ Popup allowed: {}", reason);
+                println!("âœ… Popup allowed: {}", reason);
             }
             PopupDecision::Block { reason } => {
-                println!("🛡️ Popup blocked: {}", reason);
+                println!("ðŸ›¡ï¸ Popup blocked: {}", reason);
             }
             PopupDecision::Prompt { reason } => {
-                println!("❓ Popup pending: {}", reason);
+                println!("â“ Popup pending: {}", reason);
             }
         }
         
@@ -1869,18 +1871,18 @@ pub fn run_browser(initial_url: Option<String>) {
     use winit::event_loop::ControlFlow;
     
     println!();
-    println!("  ╔═══════════════════════════════════════╗");
-    println!("  ║       Sassy Browser v1.0.1            ║");
-    println!("  ║  Pure Rust | SassyScript | Sandboxed  ║");
-    println!("  ╚═══════════════════════════════════════╝");
+    println!("  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—");
+    println!("  â•‘       Sassy Browser v1.0.1            â•‘");
+    println!("  â•‘  Pure Rust | SassyScript | Sandboxed  â•‘");
+    println!("  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
     println!();
     println!("  Features:");
-    println!("    • Click address bar or Ctrl+L to type URL");
-    println!("    • Click links to navigate");
-    println!("    • Scroll with mouse wheel or arrow keys");
-    println!("    • Alt+Tab for tab tile view");
-    println!("    • Network activity indicator (top right)");
-    println!("    • Trust indicator (builds with 3 interactions)");
+    println!("    â€¢ Click address bar or Ctrl+L to type URL");
+    println!("    â€¢ Click links to navigate");
+    println!("    â€¢ Scroll with mouse wheel or arrow keys");
+    println!("    â€¢ Alt+Tab for tab tile view");
+    println!("    â€¢ Network activity indicator (top right)");
+    println!("    â€¢ Trust indicator (builds with 3 interactions)");
     println!();
     
     let event_loop = EventLoop::new().expect("Failed to create event loop");
@@ -2025,7 +2027,7 @@ pub fn run_browser(initial_url: Option<String>) {
                                 WinitKey::Named(NamedKey::PageDown) => crate::ui::input::Key::PageDown,
                                 WinitKey::Named(NamedKey::F5) => crate::ui::input::Key::F5,
                                 WinitKey::Character(ref s) => {
-                                    match s.to_lowercase().as_str() {
+                                    match crate::fontcase::ascii_lower(s).as_str() {
                                         "t" => crate::ui::input::Key::T,
                                         "w" => crate::ui::input::Key::W,
                                         "r" => crate::ui::input::Key::R,

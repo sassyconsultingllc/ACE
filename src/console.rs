@@ -1,4 +1,4 @@
-//! Developer Console
+﻿//! Developer Console
 //!
 //! Interactive JavaScript console, network inspector, and DOM explorer.
 //! The core feature that makes Sassy the developer's browser.
@@ -33,10 +33,10 @@ impl LogLevel {
     pub fn prefix(&self) -> &'static str {
         match self {
             LogLevel::Log => "",
-            LogLevel::Info => "ℹ ",
-            LogLevel::Warn => "⚠ ",
-            LogLevel::Error => "✗ ",
-            LogLevel::Debug => "🔍 ",
+            LogLevel::Info => "â„¹ ",
+            LogLevel::Warn => "âš  ",
+            LogLevel::Error => "âœ— ",
+            LogLevel::Debug => "ðŸ” ",
         }
     }
 }
@@ -589,7 +589,7 @@ impl DevConsole {
             if self.console_filter.is_empty() {
                 true
             } else {
-                e.message.to_lowercase().contains(&self.console_filter.to_lowercase())
+                crate::fontcase::ascii_lower(&e.message).contains(&crate::fontcase::ascii_lower(&self.console_filter))
             }
         }).collect()
     }
@@ -600,8 +600,8 @@ impl DevConsole {
             if self.network_filter.is_empty() {
                 true
             } else {
-                e.url.to_lowercase().contains(&self.network_filter.to_lowercase()) ||
-                e.method.to_lowercase().contains(&self.network_filter.to_lowercase())
+                crate::fontcase::ascii_lower(&e.url).contains(&crate::fontcase::ascii_lower(&self.network_filter)) ||
+                crate::fontcase::ascii_lower(&e.method).contains(&crate::fontcase::ascii_lower(&self.network_filter))
             }
         }).collect()
     }

@@ -1,4 +1,4 @@
-//! Model Context Protocol (MCP) - Multi-Agent AI Orchestration
+﻿//! Model Context Protocol (MCP) - Multi-Agent AI Orchestration
 //!
 //! Built-in conversational code editing through coordinated AI agents:
 //! - **Grok**: Voice and logic - understands intent, speaks to user
@@ -41,7 +41,8 @@ pub enum HostingMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Provider {
     /// xAI (Grok)
-    XAI,
+    #[serde(rename = "XAI")]
+    Xai,
     /// Anthropic (Claude)
     Anthropic,
     /// Google (Gemini)
@@ -61,7 +62,7 @@ pub enum Provider {
 impl Provider {
     pub fn name(&self) -> &'static str {
         match self {
-            Provider::XAI => "xAI",
+            Provider::Xai => "xAI",
             Provider::Anthropic => "Anthropic",
             Provider::Google => "Google",
             Provider::Together => "Together.ai",
@@ -77,7 +78,7 @@ impl Provider {
     }
     
     pub fn is_openai_compatible(&self) -> bool {
-        matches!(self, Provider::Together | Provider::OpenAI | Provider::XAI)
+        matches!(self, Provider::Together | Provider::OpenAI | Provider::Xai)
     }
 }
 
@@ -106,10 +107,10 @@ impl AgentRole {
     
     pub fn icon(&self) -> &'static str {
         match self {
-            AgentRole::Voice => "🗣️",
-            AgentRole::Orchestrator => "🎯",
-            AgentRole::Coder => "⚡",
-            AgentRole::Auditor => "🔍",
+            AgentRole::Voice => "ðŸ—£ï¸",
+            AgentRole::Orchestrator => "ðŸŽ¯",
+            AgentRole::Coder => "âš¡",
+            AgentRole::Auditor => "ðŸ”",
         }
     }
     
@@ -140,7 +141,7 @@ impl AgentConfig {
     pub fn grok_default() -> Self {
         AgentConfig {
             role: AgentRole::Voice,
-            provider: Provider::XAI,
+            provider: Provider::Xai,
             api_url: "https://api.x.ai/v1/chat/completions".to_string(),
             api_key: None,
             model: "grok-2".to_string(),
@@ -385,12 +386,12 @@ pub enum TaskStatus {
 impl TaskStatus {
     pub fn icon(&self) -> &'static str {
         match self {
-            TaskStatus::Pending => "⏳",
-            TaskStatus::InProgress => "🔄",
-            TaskStatus::Review => "👁️",
-            TaskStatus::Completed => "✅",
-            TaskStatus::Failed => "❌",
-            TaskStatus::Blocked => "🚫",
+            TaskStatus::Pending => "â³",
+            TaskStatus::InProgress => "ðŸ”„",
+            TaskStatus::Review => "ðŸ‘ï¸",
+            TaskStatus::Completed => "âœ…",
+            TaskStatus::Failed => "âŒ",
+            TaskStatus::Blocked => "ðŸš«",
         }
     }
 }
@@ -424,10 +425,10 @@ pub enum AuditVerdict {
 impl AuditVerdict {
     pub fn icon(&self) -> &'static str {
         match self {
-            AuditVerdict::Approved => "✅",
-            AuditVerdict::ApprovedWithWarnings => "⚠️",
-            AuditVerdict::NeedsRevision => "🔄",
-            AuditVerdict::Rejected => "❌",
+            AuditVerdict::Approved => "âœ…",
+            AuditVerdict::ApprovedWithWarnings => "âš ï¸",
+            AuditVerdict::NeedsRevision => "ðŸ”„",
+            AuditVerdict::Rejected => "âŒ",
         }
     }
     
@@ -457,10 +458,10 @@ pub enum IssueSeverity {
 impl IssueSeverity {
     pub fn icon(&self) -> &'static str {
         match self {
-            IssueSeverity::Info => "ℹ️",
-            IssueSeverity::Warning => "⚠️",
-            IssueSeverity::Error => "❌",
-            IssueSeverity::Critical => "🚨",
+            IssueSeverity::Info => "â„¹ï¸",
+            IssueSeverity::Warning => "âš ï¸",
+            IssueSeverity::Error => "âŒ",
+            IssueSeverity::Critical => "ðŸš¨",
         }
     }
 }
@@ -653,10 +654,10 @@ impl McpOrchestrator {
         // Add system message
         self.add_system_message(
             "MCP Session started. Agents online:\n\
-             🗣️ Grok (Voice) - Ready to understand your intent\n\
-             🎯 Manus (Orchestrator) - Ready to plan your workflow\n\
-             ⚡ Claude Opus 5 (Coder) - Ready to write code\n\
-             🔍 Gemini (Auditor) - Ready to review feasibility"
+             ðŸ—£ï¸ Grok (Voice) - Ready to understand your intent\n\
+             ðŸŽ¯ Manus (Orchestrator) - Ready to plan your workflow\n\
+             âš¡ Claude Opus 5 (Coder) - Ready to write code\n\
+             ðŸ” Gemini (Auditor) - Ready to review feasibility"
         );
     }
     
@@ -696,7 +697,7 @@ impl McpOrchestrator {
                         &format!("I've prepared {} code changes for task '{}':\n{}",
                             edits.len(),
                             task.title,
-                            edits.iter().map(|e| format!("  • {} ({})", e.file_path, format_operation(&e.operation))).collect::<Vec<_>>().join("\n")
+                            edits.iter().map(|e| format!("  â€¢ {} ({})", e.file_path, format_operation(&e.operation))).collect::<Vec<_>>().join("\n")
                         )
                     ));
                 }
@@ -745,7 +746,7 @@ impl McpOrchestrator {
         // In real implementation, this calls Grok API
         // For now, parse intent locally
         
-        let input_lower = input.to_lowercase();
+        let input_lower = crate::fontcase::ascii_lower(input);
         
         let intent_type = if input_lower.contains("create") || input_lower.contains("new") || input_lower.contains("add") {
             IntentType::Create
@@ -985,7 +986,7 @@ impl McpOrchestrator {
             // Check for hardcoded secrets/credentials patterns
             let secrets_patterns = ["password", "secret", "api_key", "token", "credential"];
             for pattern in secrets_patterns {
-                if content.to_lowercase().contains(pattern) && content.contains("\"") {
+                if crate::fontcase::ascii_lower(content).contains(pattern) && content.contains("\"") {
                     issues.push(AuditIssue {
                         severity: IssueSeverity::Critical,
                         category: IssueCategory::Security,

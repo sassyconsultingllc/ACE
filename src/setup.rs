@@ -1,4 +1,4 @@
-//! First-run setup wizard
+﻿//! First-run setup wizard
 //!
 //! WHAT HAPPENS ON FIRST RUN:
 //! ==========================
@@ -37,21 +37,21 @@ pub fn run_setup() -> Option<SetupResult> {
     let tailscale = TailscaleInfo::detect();
     
     println!("\n");
-    println!("  ╔═══════════════════════════════════════╗");
-    println!("  ║       Sassy Browser Setup             ║");
-    println!("  ║  Secure • Private • Yours             ║");
-    println!("  ╚═══════════════════════════════════════╝");
+    println!("  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—");
+    println!("  â•‘       Sassy Browser Setup             â•‘");
+    println!("  â•‘  Secure â€¢ Private â€¢ Yours             â•‘");
+    println!("  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
     println!();
     
     if tailscale.available {
         if let Some(ref hostname) = tailscale.hostname {
-            println!("  ✓ Tailscale detected: {}", hostname);
+            println!("  âœ“ Tailscale detected: {}", hostname);
         }
         if let Some(ref ip) = tailscale.ip {
-            println!("  ✓ Tailscale IP: {}", ip);
+            println!("  âœ“ Tailscale IP: {}", ip);
         }
     } else {
-        println!("  ○ Tailscale not detected");
+        println!("  â—‹ Tailscale not detected");
         println!("    Phone sync requires Tailscale.");
         println!("    Get it at: https://tailscale.com/download");
     }
@@ -60,7 +60,7 @@ pub fn run_setup() -> Option<SetupResult> {
     
     // Get user name
     println!("\n  Create Your Profile");
-    println!("  ───────────────────");
+    println!("  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
     print!("  Your name: ");
     io::stdout().flush().ok();
     
@@ -126,30 +126,30 @@ pub fn run_setup() -> Option<SetupResult> {
     
     // CRITICAL: Display recovery key
     println!();
-    println!("  ╔═══════════════════════════════════════════════════════════╗");
-    println!("  ║             🔑 RECOVERY KEY - SAVE THIS! 🔑               ║");
-    println!("  ╠═══════════════════════════════════════════════════════════╣");
-    println!("  ║                                                           ║");
-    println!("  ║  {}  ║", format_recovery_key(&recovery_key));
-    println!("  ║                                                           ║");
-    println!("  ║  This key can restore your profile if you forget your    ║");
-    println!("  ║  PIN. Write it down and store it somewhere safe.         ║");
-    println!("  ║                                                           ║");
-    println!("  ║  WITHOUT THIS KEY, A FORGOTTEN PIN = LOST DATA            ║");
-    println!("  ╚═══════════════════════════════════════════════════════════╝");
+    println!("  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—");
+    println!("  â•‘             ðŸ”‘ RECOVERY KEY - SAVE THIS! ðŸ”‘               â•‘");
+    println!("  â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£");
+    println!("  â•‘                                                           â•‘");
+    println!("  â•‘  {}  â•‘", format_recovery_key(&recovery_key));
+    println!("  â•‘                                                           â•‘");
+    println!("  â•‘  This key can restore your profile if you forget your    â•‘");
+    println!("  â•‘  PIN. Write it down and store it somewhere safe.         â•‘");
+    println!("  â•‘                                                           â•‘");
+    println!("  â•‘  WITHOUT THIS KEY, A FORGOTTEN PIN = LOST DATA            â•‘");
+    println!("  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
     println!();
     
     // Security summary
     println!("  Profile Created: {}", name);
-    println!("  ───────────────────────────────────────");
+    println!("  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
     if pin.is_some() {
-        println!("  ✓ PIN protection enabled");
+        println!("  âœ“ PIN protection enabled");
     } else {
-        println!("  ○ No PIN (anyone with computer access can use)");
+        println!("  â—‹ No PIN (anyone with computer access can use)");
     }
-    println!("  ✓ Ed25519 identity key generated");
-    println!("  ✓ Data encryption key derived");
-    println!("  ✓ You are the admin");
+    println!("  âœ“ Ed25519 identity key generated");
+    println!("  âœ“ Data encryption key derived");
+    println!("  âœ“ You are the admin");
     
     if tailscale.available {
         println!();

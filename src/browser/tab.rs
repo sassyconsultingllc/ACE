@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+﻿#![allow(dead_code, unused_variables, unused_imports)]
 //! Tab management - Represents browser tabs (web pages or file viewers)
 
 use crate::file_handler::{FileType, OpenFile};
@@ -33,8 +33,8 @@ pub enum TabContent {
         is_secure: bool,
         favicon: Option<Vec<u8>>,
     },
-    /// Local or downloaded file
-    File(OpenFile),
+    /// Local or downloaded file (boxed for enum size optimization)
+    File(Box<OpenFile>),
     /// New tab page (home/start page)
     NewTab,
     /// Settings page
@@ -107,7 +107,7 @@ impl Tab {
     }
     
     pub fn file(file: OpenFile) -> Self {
-        Self::new(TabContent::File(file))
+        Self::new(TabContent::File(Box::new(file)))
     }
     
     /// Get the tab's display title
@@ -141,28 +141,28 @@ impl Tab {
     pub fn icon(&self) -> &'static str {
         match &self.content {
             TabContent::Web { is_secure, .. } => {
-                if *is_secure { "🔒" } else { "🌐" }
+                if *is_secure { "ðŸ”’" } else { "ðŸŒ" }
             }
             TabContent::File(f) => match f.file_type {
-                FileType::Image | FileType::ImageRaw | FileType::ImagePsd => "🖼️",
-                FileType::Pdf => "📄",
-                FileType::Document => "📝",
-                FileType::Spreadsheet => "📊",
-                FileType::Chemical => "🧬",
-                FileType::Text | FileType::Markdown => "📃",
-                FileType::Archive => "📦",
-                FileType::Model3D => "🧊",
-                FileType::Font => "🔤",
-                FileType::Audio => "🎵",
-                FileType::Video => "🎬",
-                FileType::Ebook => "📚",
-                FileType::Unknown => "📁",
+                FileType::Image | FileType::ImageRaw | FileType::ImagePsd => "ðŸ–¼ï¸",
+                FileType::Pdf => "ðŸ“„",
+                FileType::Document => "ðŸ“",
+                FileType::Spreadsheet => "ðŸ“Š",
+                FileType::Chemical => "ðŸ§¬",
+                FileType::Text | FileType::Markdown => "ðŸ“ƒ",
+                FileType::Archive => "ðŸ“¦",
+                FileType::Model3D => "ðŸ§Š",
+                FileType::Font => "ðŸ”¤",
+                FileType::Audio => "ðŸŽµ",
+                FileType::Video => "ðŸŽ¬",
+                FileType::Ebook => "ðŸ“š",
+                FileType::Unknown => "ðŸ“",
             },
-            TabContent::NewTab => "➕",
-            TabContent::Settings => "⚙️",
-            TabContent::History => "🕐",
-            TabContent::Bookmarks => "⭐",
-            TabContent::Downloads => "⬇️",
+            TabContent::NewTab => "âž•",
+            TabContent::Settings => "âš™ï¸",
+            TabContent::History => "ðŸ•",
+                TabContent::Bookmarks => "🔖",
+            TabContent::Downloads => "â¬‡ï¸",
         }
     }
     

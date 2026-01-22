@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+﻿#![allow(dead_code, unused_variables, unused_imports)]
 //! Download management - Handle file downloads
 
 use anyhow::Result;
@@ -91,12 +91,17 @@ impl DownloadManager {
         }
     }
     
-    pub fn set_download_dir(&mut self, path: PathBuf) {
-        self.download_dir = path;
+    pub fn set_download_dir<P: Into<PathBuf>>(&mut self, path: P) {
+        self.download_dir = path.into();
     }
     
-    pub fn download_dir(&self) -> &PathBuf {
-        &self.download_dir
+    pub fn download_dir(&self) -> &std::path::Path {
+        self.download_dir.as_path()
+    }
+
+    /// Return an owned PathBuf copy of the download dir to avoid borrow issues.
+    pub fn download_dir_buf(&self) -> PathBuf {
+        self.download_dir.clone()
     }
     
     /// Start a new download
@@ -137,7 +142,7 @@ impl DownloadManager {
         downloads: Arc<Mutex<Vec<Download>>>,
         id: Uuid,
         url: &str,
-        save_path: &PathBuf,
+        save_path: &std::path::Path,
     ) {
         let result = (|| -> Result<()> {
             let response = ureq::get(url)

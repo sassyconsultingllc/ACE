@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+﻿#![allow(dead_code, unused_variables, unused_imports)]
 //! History management - Track browsing history
 
 use serde::{Deserialize, Serialize};
@@ -100,11 +100,11 @@ impl HistoryManager {
     
     /// Search history by URL or title
     pub fn search(&self, query: &str) -> Vec<&HistoryEntry> {
-        let query_lower = query.to_lowercase();
+        let query_lower = crate::fontcase::ascii_lower(query);
         self.entries.iter()
             .filter(|e| {
-                e.url.to_lowercase().contains(&query_lower) ||
-                e.title.to_lowercase().contains(&query_lower)
+                crate::fontcase::ascii_lower(&e.url).contains(&query_lower) ||
+                crate::fontcase::ascii_lower(&e.title).contains(&query_lower)
             })
             .collect()
     }

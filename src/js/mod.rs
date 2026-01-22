@@ -1,4 +1,4 @@
-//! JavaScript Interpreter Module
+﻿//! JavaScript Interpreter Module
 //! A pure-Rust JS interpreter for Sassy Browser
 //! 
 //! Features:

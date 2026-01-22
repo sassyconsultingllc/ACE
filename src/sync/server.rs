@@ -1,4 +1,4 @@
-//! WebSocket server for phone sync
+﻿//! WebSocket server for phone sync
 //! Handles connections from phone companion app
 
 use super::protocol::{
@@ -211,7 +211,7 @@ fn handle_websocket_handshake(mut stream: TcpStream, client_id: u64) -> Result<C
     
     // Parse WebSocket key
     let key = request.lines()
-        .find(|line| line.to_lowercase().starts_with("sec-websocket-key:"))
+        .find(|line| crate::fontcase::ascii_lower(line).starts_with("sec-websocket-key:"))
         .and_then(|line| line.split(':').nth(1))
         .map(|k| k.trim().to_string())
         .ok_or("Missing Sec-WebSocket-Key")?;
@@ -232,10 +232,10 @@ fn handle_websocket_handshake(mut stream: TcpStream, client_id: u64) -> Result<C
     
     // Send handshake response
     let response = format!(
-        "HTTP/1.1 101 Switching Protocols\r\n\
-         Upgrade: websocket\r\n\
-         Connection: Upgrade\r\n\
-         Sec-WebSocket-Accept: {}\r\n\r\n",
+        "HTTP/1.1 101 Switching Protocols`r`n\
+         Upgrade: websocket`r`n\
+         Connection: Upgrade`r`n\
+         Sec-WebSocket-Accept: {}`r`n`r`n",
         accept
     );
     

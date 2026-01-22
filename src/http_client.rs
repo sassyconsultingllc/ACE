@@ -1,4 +1,4 @@
-use std::env;
+﻿use std::env;
 
 /// Build a User-Agent string from environment variables:
 /// - SASSY_UA_PRESET: chrome|safari|edge|opera|firefox|sassy
@@ -7,8 +7,8 @@ pub fn build_user_agent() -> Option<String> {
     let preset = env::var("SASSY_UA_PRESET").ok();
     let device = env::var("SASSY_DEVICE").ok();
 
-    let preset = preset.unwrap_or_else(|| "sassy".into()).to_lowercase();
-    let device = device.unwrap_or_else(|| "desktop".into()).to_lowercase();
+    let preset = crate::fontcase::ascii_lower(&preset.unwrap_or_else(|| "sassy".into()));
+    let device = crate::fontcase::ascii_lower(&device.unwrap_or_else(|| "desktop".into()));
 
     let ua = match preset.as_str() {
         "chrome" => {
@@ -54,12 +54,13 @@ pub fn build_user_agent() -> Option<String> {
 }
 
 /// Perform a GET request using `ureq`, attaching the configured User-Agent if present.
-pub fn get(url: &str) -> Result<ureq::Response, ureq::Error> {
+/// Returns a boxed error to reduce enum size (ureq::Error is large).
+pub fn get(url: &str) -> Result<ureq::Response, Box<ureq::Error>> {
     let req = ureq::get(url);
     if let Some(ua) = build_user_agent() {
-        req.set("User-Agent", &ua).call()
+        req.set("User-Agent", &ua).call().map_err(Box::new)
     } else {
-        req.call()
+        req.call().map_err(Box::new)
     }
 }
 

@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Video Viewer - MP4, WebM, AVI, MKV playback with thumbnails
 //! 
 //! Features:
@@ -47,7 +47,7 @@ impl VideoViewer {
             ui.vertical(|ui| {
                 // Header
                 ui.horizontal(|ui| {
-                    ui.heading(RichText::new("🎬 Video Player").size(20.0));
+                    ui.heading(RichText::new("ðŸŽ¬ Video Player").size(20.0));
                     ui.add_space(10.0);
                     ui.label(RichText::new(&file.name).monospace());
                 });
@@ -72,7 +72,7 @@ impl VideoViewer {
                                 if let Some(ref thumb_data) = video.thumbnail {
                                     // TODO: Decode and display thumbnail
                                     ui.centered_and_justified(|ui| {
-                                        ui.label(RichText::new("🎬").size(80.0).color(Color32::WHITE));
+                                        ui.label(RichText::new("ðŸŽ¬").size(80.0).color(Color32::WHITE));
                                         ui.label(RichText::new("Thumbnail available").color(Color32::GRAY));
                                     });
                                 } else {
@@ -108,7 +108,7 @@ impl VideoViewer {
         ui.centered_and_justified(|ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(height / 3.0);
-                ui.label(RichText::new("🎬").size(64.0).color(Color32::from_gray(100)));
+                ui.label(RichText::new("ðŸŽ¬").size(64.0).color(Color32::from_gray(100)));
                 ui.add_space(10.0);
                 ui.label(RichText::new("Video Preview").size(16.0).color(Color32::from_gray(120)));
                 ui.add_space(5.0);
@@ -119,8 +119,6 @@ impl VideoViewer {
     
     fn render_info_panel(&mut self, ui: &mut egui::Ui, file: &OpenFile) {
         ui.heading(RichText::new("Video Information").size(16.0));
-        ui.add_space(12.0);
-        
         if let Some(ref video) = file.video {
             egui::Grid::new("video_info_grid")
                 .num_columns(2)
@@ -128,7 +126,7 @@ impl VideoViewer {
                 .show(ui, |ui| {
                     // Resolution
                     ui.label(RichText::new("Resolution:").color(Color32::GRAY));
-                    ui.label(format!("{}×{}", video.width, video.height));
+                    ui.label(format!("{}Ã—{}", video.width, video.height));
                     ui.end_row();
                     
                     // Frame rate
@@ -238,7 +236,7 @@ impl VideoViewer {
         
         // Open externally button
         ui.add_space(16.0);
-        if ui.button("🎬 Open in System Player").clicked() {
+        if ui.button("ðŸŽ¬ Open in System Player").clicked() {
             let _ = open::that(&file.path);
         }
     }
@@ -281,20 +279,20 @@ impl VideoViewer {
                     ui.add_space(ui.available_width() / 2.0 - 100.0);
                     
                     // Loop toggle
-                    let loop_icon = if self.loop_enabled { "🔁" } else { "➡️" };
+                    let loop_icon = if self.loop_enabled { "ðŸ”" } else { "âž¡ï¸" };
                     if ui.button(loop_icon).on_hover_text("Toggle Loop").clicked() {
                         self.loop_enabled = !self.loop_enabled;
                     }
                     
                     // Previous frame / rewind
-                    if ui.button("⏮️").on_hover_text("Previous").clicked() {
+                    if ui.button("â®ï¸").on_hover_text("Previous").clicked() {
                         self.current_time = (self.current_time - 10.0).max(0.0);
                     }
                     
                     // Play/Pause
                     let play_btn = match self.state {
-                        PlaybackState::Playing => "⏸️",
-                        _ => "▶️",
+                        PlaybackState::Playing => "â¸ï¸",
+                        _ => "â–¶ï¸",
                     };
                     
                     if ui.add(egui::Button::new(RichText::new(play_btn).size(24.0))
@@ -309,18 +307,18 @@ impl VideoViewer {
                     }
                     
                     // Stop
-                    if ui.button("⏹️").on_hover_text("Stop").clicked() {
+                    if ui.button("â¹ï¸").on_hover_text("Stop").clicked() {
                         self.state = PlaybackState::Stopped;
                         self.current_time = 0.0;
                     }
                     
-                    // Next frame / forward
-                    if ui.button("⏭️").on_hover_text("Next").clicked() {
+                        // Next frame / forward
+                        if ui.button("⏭").on_hover_text("Next").clicked() {
                         self.current_time = (self.current_time + 10.0).min(duration);
                     }
                     
                     // Fullscreen (placeholder)
-                    if ui.button("⛶").on_hover_text("Fullscreen").clicked() {
+                    if ui.button("â›¶").on_hover_text("Fullscreen").clicked() {
                         self.fullscreen = !self.fullscreen;
                     }
                     
@@ -328,7 +326,7 @@ impl VideoViewer {
                     ui.add_space(20.0);
                     
                     // Volume
-                    let vol_icon = if self.muted { "🔇" } else { "🔊" };
+                    let vol_icon = if self.muted { "ðŸ”‡" } else { "ðŸ”Š" };
                     if ui.button(vol_icon).on_hover_text("Mute/Unmute").clicked() {
                         self.muted = !self.muted;
                     }
@@ -349,7 +347,7 @@ impl VideoViewer {
                     ui.label(RichText::new(state_str).size(11.0).color(Color32::GRAY));
                     
                     if self.loop_enabled {
-                        ui.label(RichText::new("• Loop").size(11.0).color(Color32::from_rgb(100, 150, 200)));
+                        ui.label(RichText::new("â€¢ Loop").size(11.0).color(Color32::from_rgb(100, 150, 200)));
                     }
                 });
             });

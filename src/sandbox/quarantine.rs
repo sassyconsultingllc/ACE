@@ -1,4 +1,4 @@
-//! Download Quarantine System
+﻿//! Download Quarantine System
 //!
 //! Files don't touch your filesystem until you EARN their release.
 //!
@@ -101,7 +101,7 @@ impl QuarantinedFile {
     /// Analyze file for threats
     fn analyze(&mut self) {
         // Check file extension
-        let ext = self.filename.rsplit('.').next().unwrap_or("").to_lowercase();
+        let ext = crate::fontcase::ascii_lower(self.filename.rsplit('.').next().unwrap_or(""));
         
         // Executable extensions
         let dangerous_exts = [
@@ -125,8 +125,8 @@ impl QuarantinedFile {
         if self.filename.matches('.').count() > 1 {
             let parts: Vec<&str> = self.filename.split('.').collect();
             if parts.len() >= 3 {
-                let real_ext = parts.last().unwrap().to_lowercase();
-                let fake_ext = parts[parts.len() - 2].to_lowercase();
+                let real_ext = crate::fontcase::ascii_lower(parts.last().unwrap());
+                let fake_ext = crate::fontcase::ascii_lower(parts[parts.len() - 2]);
                 
                 if dangerous_exts.contains(&real_ext.as_str()) {
                     self.warnings.push(Warning {
@@ -143,7 +143,7 @@ impl QuarantinedFile {
         }
         
         // Check for suspicious patterns in filename
-        let lower_name = self.filename.to_lowercase();
+        let lower_name = crate::fontcase::ascii_lower(&self.filename);
         
         if lower_name.contains("free") && lower_name.contains("download") {
             self.warnings.push(Warning {
@@ -305,7 +305,7 @@ fn mark_as_downloaded(path: &std::path::Path, source_url: &str) -> Result<(), St
         .open(&stream_path)
         .map_err(|e| format!("Zone.Identifier open failed: {}", e))?;
 
-    let zone = format!("[ZoneTransfer]\r\nZoneId=3\r\nReferrerUrl={}\r\nHostUrl={}\r\n", source_url, source_url);
+    let zone = format!("[ZoneTransfer]`r`nZoneId=3`r`nReferrerUrl={}`r`nHostUrl={}`r`n", source_url, source_url);
     file.write_all(zone.as_bytes())
         .map_err(|e| format!("Zone.Identifier write failed: {}", e))?;
     Ok(())

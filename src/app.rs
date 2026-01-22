@@ -1,4 +1,4 @@
-//! Main application - Browser with egui chrome and wry webview
+﻿//! Main application - Browser with egui chrome and wry webview
 //! 
 //! Architecture:
 //! - tao provides the main window
@@ -59,7 +59,7 @@ pub struct BrowserApp {
     // DISRUPTOR FEATURES - Kills paid software & Chrome bloat
     // =========================================================================
     
-    // 📡 Network Activity Monitor - NO HIDDEN TRAFFIC
+    // ðŸ“¡ Network Activity Monitor - NO HIDDEN TRAFFIC
     network_monitor: NetworkMonitor,
     activity_indicator: ActivityIndicatorState,
     download_connections: HashMap<Uuid, TrackedDownload>,
@@ -71,7 +71,7 @@ pub struct BrowserApp {
     network_active_connection: Option<u64>,
     network_last_net_sample: Option<Instant>,
     
-    // 🔐 Password Vault - Replaces LastPass, 1Password, Chrome passwords
+    // ðŸ” Password Vault - Replaces LastPass, 1Password, Chrome passwords
     password_vault: PasswordVault,
     vault_search_query: String,
     vault_panel_visible: bool,
@@ -98,7 +98,7 @@ pub struct BrowserApp {
     password_generator_opts: PasswordGeneratorOptions,
     generated_password: String,
     
-    // ⏱️ Smart History - 14.7s delay, NSFW detection
+    // â±ï¸ Smart History - 14.7s delay, NSFW detection
     history_manager: HistoryManager,
     smart_history: SmartHistory,
     smart_history_active_url: Option<String>,
@@ -114,7 +114,7 @@ pub struct BrowserApp {
     history_last_url: Option<String>,
     history_last_title: Option<String>,
     
-    // 👨‍👩‍👧‍👦 Family Profiles - Parental controls that work
+    // ðŸ‘¨â€ðŸ‘©â€ðŸ‘§â€ðŸ‘¦ Family Profiles - Parental controls that work
     profile_manager: ProfileManager,
     profiles_panel_visible: bool,
     extensions_panel_visible: bool,
@@ -218,7 +218,7 @@ impl BrowserApp {
 
         let extensions_snapshot = self.extension_manager.list_extensions();
 
-        egui::Window::new("🧩 Extensions")
+        egui::Window::new("ðŸ§© Extensions")
             .open(&mut self.extensions_panel_visible)
             .resizable(true)
             .default_size(Vec2::new(640.0, 420.0))
@@ -524,7 +524,7 @@ impl BrowserApp {
                     .clicked() {
                     self.engine.go_back();
                 }
-            } else if ui.add_enabled(can_back, egui::Button::new("◀").min_size(Vec2::new(28.0, 24.0)))
+            } else if ui.add_enabled(can_back, egui::Button::new("â—€").min_size(Vec2::new(28.0, 24.0)))
                 .on_hover_text("Back (Alt+Left)")
                 .clicked() {
                 self.engine.go_back();
@@ -536,17 +536,17 @@ impl BrowserApp {
                     .clicked() {
                     self.engine.go_forward();
                 }
-            } else if ui.add_enabled(can_forward, egui::Button::new("▶").min_size(Vec2::new(28.0, 24.0)))
+            } else if ui.add_enabled(can_forward, egui::Button::new("â–¶").min_size(Vec2::new(28.0, 24.0)))
                 .on_hover_text("Forward (Alt+Right)")
                 .clicked() {
                 self.engine.go_forward();
             }
             
             if is_loading {
-                if ui.button("✕").on_hover_text("Stop").clicked() {
+                if ui.button("âœ•").on_hover_text("Stop").clicked() {
                     self.engine.stop();
                 }
-            } else if ui.button("↻").on_hover_text("Reload (F5)").clicked() {
+            } else if ui.button("â†»").on_hover_text("Reload (F5)").clicked() {
                 self.engine.reload();
             }
             
@@ -567,7 +567,7 @@ impl BrowserApp {
                 
                 // Security indicator
                 if is_secure {
-                    ui.colored_label(Color32::from_rgb(100, 200, 100), "🔒");
+                    ui.colored_label(Color32::from_rgb(100, 200, 100), "ðŸ”’");
                 }
 
                 let engine_text = self.engine.address_bar_text().to_string();
@@ -703,11 +703,11 @@ impl BrowserApp {
         let active = self.network_monitor.active_count();
 
         ui.horizontal(|ui| {
-            let label = format!("Net {} ↓{} ↑{}", active, format_speed(down), format_speed(up));
+            let label = format!("Net {} â†“{} â†‘{}", active, format_speed(down), format_speed(up));
             if ui.selectable_label(self.activity_indicator.expanded, label).clicked() {
                 self.activity_indicator.expanded = !self.activity_indicator.expanded;
             }
-            ui.label(format!("Total ↓{} ↑{}", format_bytes(total_down), format_bytes(total_up)));
+            ui.label(format!("Total â†“{} â†‘{}", format_bytes(total_down), format_bytes(total_up)));
             if blocked > 0 {
                 ui.label(RichText::new(format!("Blocked {}", blocked)).color(Color32::RED));
             }
@@ -887,7 +887,7 @@ impl BrowserApp {
         let paired = self.auth.paired_devices.clone();
         let tailscale_status = self.tailscale.get_status();
 
-        egui::Window::new("🔑 Account & Sync")
+        egui::Window::new("ðŸ”‘ Account & Sync")
             .open(&mut self.auth_panel_visible)
             .default_size(Vec2::new(720.0, 520.0))
             .show(ctx, |ui| {
@@ -1121,7 +1121,7 @@ impl BrowserApp {
                             
                             // Close button (not for pinned tabs)
                             if !*pinned
-                                && ui.small_button("×").clicked() {
+                                && ui.small_button("Ã—").clicked() {
                                     close_tab = Some(idx);
                                 }
                         });
@@ -1131,7 +1131,7 @@ impl BrowserApp {
             }
             
             // New tab button
-            if ui.button("＋").on_hover_text("New Tab (Ctrl+T)").clicked() {
+            if ui.button("ï¼‹").on_hover_text("New Tab (Ctrl+T)").clicked() {
                 self.engine.new_tab();
             }
             
@@ -1192,7 +1192,7 @@ impl BrowserApp {
                 // TODO: Implement find in webview
             }
             
-            if ui.button("×").clicked() {
+            if ui.button("Ã—").clicked() {
                 self.find_bar_visible = false;
             }
         });
@@ -1228,7 +1228,7 @@ impl BrowserApp {
                         .collect();
                     ui.vertical_centered(|ui| {
                         ui.add_space(60.0);
-                        ui.heading(RichText::new("🚫 Site Blocked").size(36.0).color(Color32::RED));
+                        ui.heading(RichText::new("ðŸš« Site Blocked").size(36.0).color(Color32::RED));
                         ui.add_space(10.0);
                         ui.label(RichText::new(reason).size(20.0).color(Color32::RED));
                         ui.add_space(10.0);
@@ -1319,7 +1319,7 @@ impl BrowserApp {
                 // Logo
                 ui.heading(RichText::new("Sassy Browser").size(48.0));
                 ui.add_space(10.0);
-                ui.label(RichText::new("Fast • Free • Handles Everything").size(16.0).color(Color32::GRAY));
+                ui.label(RichText::new("Fast â€¢ Free â€¢ Handles Everything").size(16.0).color(Color32::GRAY));
                 
                 ui.add_space(40.0);
                 
@@ -1383,7 +1383,7 @@ impl BrowserApp {
                 });
                 
                 ui.add_space(20.0);
-                ui.label(RichText::new("Drag & drop any file or use File → Open").italics().color(Color32::GRAY));
+                ui.label(RichText::new("Drag & drop any file or use File â†’ Open").italics().color(Color32::GRAY));
             });
         });
     }
@@ -1415,7 +1415,7 @@ impl BrowserApp {
                         return Some("NSFW");
                     }
                     // Ad/sponsored/spam/unsafe (simple heuristics)
-                    let href_lc = href.to_lowercase();
+                    let href_lc = crate::fontcase::ascii_lower(href);
                     if href_lc.contains("ad") || href_lc.contains("sponsored") {
                         return Some("Ad/Sponsored");
                     }
@@ -1454,7 +1454,7 @@ impl BrowserApp {
                 // Show console output if dev tools enabled
                 if self.show_dev_tools {
                     ui.separator();
-                    ui.collapsing("📝 Console", |ui| {
+                    ui.collapsing("ðŸ“ Console", |ui| {
                         for line in self.html_renderer.console_output() {
                             ui.label(RichText::new(line).monospace().size(12.0));
                         }
@@ -1463,7 +1463,7 @@ impl BrowserApp {
                 // Show option to open in system browser
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("💡 Tip:").small().color(Color32::GRAY));
+                    ui.label(RichText::new("ðŸ’¡ Tip:").small().color(Color32::GRAY));
                     if ui.small_button("Open in system browser").clicked() {
                         let _ = open::that(&url);
                     }
@@ -1495,7 +1495,7 @@ impl BrowserApp {
     
     fn render_settings_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading("⚙️ Settings");
+            ui.heading("âš™ï¸ Settings");
             ui.separator();
             
             ui.add_space(20.0);
@@ -1540,7 +1540,7 @@ impl BrowserApp {
                     // TODO: Folder picker
                 }
                 if ui.button("Reapply").clicked() {
-                    let current = self.engine.downloads.download_dir().clone();
+                    let current = self.engine.downloads.download_dir_buf();
                     self.engine.downloads.set_download_dir(current);
                 }
             });
@@ -1567,7 +1567,7 @@ impl BrowserApp {
     fn render_history_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.heading("🕐 History");
+                ui.heading("ðŸ• History");
                 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("Clear All History").clicked() {
@@ -1621,7 +1621,7 @@ impl BrowserApp {
     
     fn render_bookmarks_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading("⭐ Bookmarks");
+            ui.heading("â\u{AD} Bookmarks");
             ui.separator();
             
             let bookmarks: Vec<_> = self.engine.bookmarks.all()
@@ -1639,7 +1639,7 @@ impl BrowserApp {
                     }
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("×").clicked() {
+                        if ui.small_button("Ã—").clicked() {
                             remove_id = Some(*id);
                         }
                         ui.label(RichText::new(url).color(Color32::from_rgb(150,150,150)));
@@ -1813,7 +1813,7 @@ impl BrowserApp {
                     ui.heading("Downloads");
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("×").clicked() {
+                        if ui.button("Ã—").clicked() {
                             self.engine.set_show_downloads_panel(false);
                         }
                     });
@@ -1998,7 +1998,7 @@ impl BrowserApp {
             self.vault_status = "Vault locked - reauthenticate".into();
         }
 
-        egui::Window::new("🔐 Password Vault")
+        egui::Window::new("ðŸ” Password Vault")
             .open(&mut self.vault_panel_visible)
             .resizable(true)
             .default_size(Vec2::new(520.0, 520.0))
@@ -2411,7 +2411,7 @@ impl BrowserApp {
         let profiles_snapshot: Vec<Profile> = self.profile_manager.profiles().to_vec();
         let active_profile_id = self.profile_manager.active_profile().map(|p| p.id.clone());
 
-        egui::Window::new("👨‍👩‍👧 Family Profiles")
+        egui::Window::new("ðŸ‘¨â€ðŸ‘©â€ðŸ‘§ Family Profiles")
             .open(&mut self.profiles_panel_visible)
             .resizable(true)
             .default_size(Vec2::new(640.0, 520.0))
@@ -2466,7 +2466,7 @@ impl BrowserApp {
                         }
                         if let Some(r) = &profile.restrictions.bedtime_start {
                             if let Some(e) = &profile.restrictions.bedtime_end {
-                                ui.label(RichText::new(format!("Bedtime: {:02}:{:02}–{:02}:{:02}", r.0, r.1, e.0, e.1)).color(Color32::LIGHT_RED))
+                                ui.label(RichText::new(format!("Bedtime: {:02}:{:02}â€“{:02}:{:02}", r.0, r.1, e.0, e.1)).color(Color32::LIGHT_RED))
                                     .on_hover_text("No access allowed during bedtime hours. Ask a parent to adjust bedtime if needed.");
                             }
                         }
@@ -2798,7 +2798,7 @@ impl BrowserApp {
             Vec::new()
         };
 
-        egui::Window::new("🕐 History")
+        egui::Window::new("ðŸ• History")
             .open(&mut self.history_panel_visible)
             .resizable(true)
             .default_size(Vec2::new(760.0, 560.0))
@@ -3083,7 +3083,7 @@ impl BrowserApp {
             .ok()
             .flatten()
         {
-            if let Ok(_) = self.engine.open_file(path.clone()) {
+            if self.engine.open_file(path.clone()).is_ok() {
                 self.status_message = format!("Opened: {}", path.display());
             }
         }
@@ -3104,9 +3104,9 @@ impl BrowserApp {
                 ui.add_space(50.0);
                 
                 // Header
-                ui.heading(RichText::new("🦊 Sassy Browser").size(48.0).color(Color32::from_rgb(255, 140, 0)));
+                ui.heading(RichText::new("ðŸ¦Š Sassy Browser").size(48.0).color(Color32::from_rgb(255, 140, 0)));
                 ui.add_space(10.0);
-                ui.label(RichText::new("Pure Rust • No Chrome • No Google • No Tracking").size(16.0).color(Color32::GRAY));
+                ui.label(RichText::new("Pure Rust â€¢ No Chrome â€¢ No Google â€¢ No Tracking").size(16.0).color(Color32::GRAY));
                 ui.add_space(40.0);
                 
                 // Progress indicator
@@ -3132,7 +3132,7 @@ impl BrowserApp {
                         
                         ui.label(RichText::new(format!("{}. {}", i + 1, step)).color(color));
                         if i < steps.len() - 1 {
-                            ui.label(RichText::new(" → ").color(Color32::DARK_GRAY));
+                            ui.label(RichText::new(" â†’ ").color(Color32::DARK_GRAY));
                         }
                     }
                 });
@@ -3166,11 +3166,11 @@ impl BrowserApp {
             ui.vertical(|ui| {
                 ui.add_space(10.0);
                 let features = [
-                    ("🔒", "100% Pure Rust", "No Chrome, no WebKit, no Google telemetry"),
-                    ("📁", "200+ File Formats", "PDF, PDB, RAW photos, CAD files - all built-in"),
-                    ("💰", "Kills Paid Software", "Adobe Suite ($504/yr), AutoCAD ($2K/yr) - FREE"),
-                    ("🔗", "Tailscale Mesh", "Sync across all your devices securely"),
-                    ("📱", "Phone App", "Pair your phone for seamless sync"),
+                    ("ðŸ”’", "100% Pure Rust", "No Chrome, no WebKit, no Google telemetry"),
+                    ("ðŸ“", "200+ File Formats", "PDF, PDB, RAW photos, CAD files - all built-in"),
+                    ("ðŸ’°", "Kills Paid Software", "Adobe Suite ($504/yr), AutoCAD ($2K/yr) - FREE"),
+                    ("ðŸ”—", "Tailscale Mesh", "Sync across all your devices securely"),
+                    ("ðŸ“±", "Phone App", "Pair your phone for seamless sync"),
                 ];
                 
                 for (icon, title, desc) in features {
@@ -3190,7 +3190,7 @@ impl BrowserApp {
         
         ui.add_space(30.0);
         
-        if ui.button(RichText::new("Get Started →").size(18.0)).clicked() {
+        if ui.button(RichText::new("Get Started â†’").size(18.0)).clicked() {
             self.first_run.next_step();
         }
     }
@@ -3213,7 +3213,7 @@ impl BrowserApp {
             .saturating_sub(elapsed.as_secs());
         let timer_done = elapsed.as_secs_f32() >= self.first_run.entropy_min_seconds as f32;
 
-        ui.heading("🔐 Creating Your Security Key");
+        ui.heading("ðŸ” Creating Your Security Key");
         ui.add_space(20.0);
         
         ui.label("Move your mouse around to generate cryptographic entropy.");
@@ -3319,7 +3319,7 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("← Back").clicked() {
+            if ui.button("â† Back").clicked() {
                 self.first_run.prev_step();
             }
             
@@ -3327,7 +3327,7 @@ impl BrowserApp {
             
             let ready = self.auth.is_entropy_ready();
             let can_continue = ready && timer_done;
-            if ui.add_enabled(can_continue, egui::Button::new(RichText::new("Continue →").size(18.0))).clicked() {
+            if ui.add_enabled(can_continue, egui::Button::new(RichText::new("Continue â†’").size(18.0))).clicked() {
                 self.first_run.next_step();
             }
             
@@ -3340,7 +3340,7 @@ impl BrowserApp {
     }
     
     fn render_wizard_device(&mut self, ui: &mut egui::Ui) {
-        ui.heading("🖥️ Name This Device");
+        ui.heading("ðŸ–¥ï¸ Name This Device");
         ui.add_space(20.0);
         
         ui.label("Give this device a name so you can identify it in your network.");
@@ -3356,9 +3356,9 @@ impl BrowserApp {
         ui.label("Device Type:");
         ui.horizontal(|ui| {
             let types = [
-                (DeviceType::Desktop, "🖥️ Desktop"),
-                (DeviceType::Laptop, "💻 Laptop"),
-                (DeviceType::Server, "🖧 Server"),
+                (DeviceType::Desktop, "ðŸ–¥ï¸ Desktop"),
+                (DeviceType::Laptop, "ðŸ’» Laptop"),
+                (DeviceType::Server, "ðŸ–§ Server"),
             ];
             
             for (dtype, label) in types {
@@ -3381,13 +3381,13 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("← Back").clicked() {
+            if ui.button("â† Back").clicked() {
                 self.first_run.prev_step();
             }
             
             ui.add_space(20.0);
             
-            if ui.button(RichText::new("Create Device Key →").size(18.0)).clicked() {
+            if ui.button(RichText::new("Create Device Key â†’").size(18.0)).clicked() {
                 match self.auth.complete_first_run(
                     &self.first_run.device_name,
                     self.first_run.device_type.clone()
@@ -3406,7 +3406,7 @@ impl BrowserApp {
     }
     
     fn render_wizard_tailscale(&mut self, ui: &mut egui::Ui) {
-        ui.heading("🔗 Tailscale Setup");
+        ui.heading("ðŸ”— Tailscale Setup");
         ui.add_space(20.0);
         
         match self.tailscale.status {
@@ -3453,7 +3453,7 @@ impl BrowserApp {
                 }
             }
             crate::auth::TailscaleStatus::Running => {
-                ui.label(RichText::new("✅ Tailscale is connected!").color(Color32::from_rgb(0, 200, 100)));
+                ui.label(RichText::new("âœ… Tailscale is connected!").color(Color32::from_rgb(0, 200, 100)));
                 ui.add_space(10.0);
                 
                 if let Some(ref ip) = self.tailscale.ip_address {
@@ -3470,7 +3470,7 @@ impl BrowserApp {
                 if !peers.is_empty() {
                     ui.label(RichText::new("Devices on your network:").strong());
                     for peer in peers {
-                        let status = if peer.online { "🟢" } else { "⚪" };
+                        let status = if peer.online { "ðŸŸ¢" } else { "âšª" };
                         ui.label(format!("{} {} ({})", status, peer.hostname, peer.ip_address));
                     }
                 }
@@ -3492,16 +3492,16 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("← Back").clicked() {
+            if ui.button("â† Back").clicked() {
                 self.first_run.prev_step();
             }
             
             ui.add_space(20.0);
             
             let label = if self.first_run.enable_phone_sync {
-                "Continue to Phone Setup →"
+                "Continue to Phone Setup â†’"
             } else {
-                "Finish Setup →"
+                "Finish Setup â†’"
             };
             
             if ui.button(RichText::new(label).size(18.0)).clicked() {
@@ -3518,7 +3518,7 @@ impl BrowserApp {
     }
     
     fn render_wizard_phone(&mut self, ui: &mut egui::Ui) {
-        ui.heading("📱 Phone App Pairing");
+        ui.heading("ðŸ“± Phone App Pairing");
         ui.add_space(20.0);
         
         // Generate pairing code if not already done
@@ -3567,13 +3567,13 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("← Back").clicked() {
+            if ui.button("â† Back").clicked() {
                 self.first_run.prev_step();
             }
             
             ui.add_space(20.0);
             
-            if ui.button(RichText::new("Finish Setup →").size(18.0)).clicked() {
+            if ui.button(RichText::new("Finish Setup â†’").size(18.0)).clicked() {
                 self.first_run.next_step();
             }
             

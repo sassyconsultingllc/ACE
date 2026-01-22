@@ -1,4 +1,4 @@
-// Extensions - WebExtension-compatible extension support
+﻿// Extensions - WebExtension-compatible extension support
 #![allow(dead_code)]
 
 use std::collections::HashMap;
@@ -95,7 +95,7 @@ impl Extension {
         let manifest: ExtensionManifest = serde_json::from_str(&manifest_content)
             .map_err(|e| format!("Failed to parse manifest: {}", e))?;
         
-        let id = manifest.name.to_lowercase().replace(' ', "-");
+        let id = crate::fontcase::ascii_lower(&manifest.name).replace(' ', "-");
         
         // Load content scripts
         let mut content_scripts_code = HashMap::new();

@@ -1,4 +1,4 @@
-//! Smart Popup Handling
+﻿//! Smart Popup Handling
 //!
 //! Blocks spam popups while allowing legitimate ones like captchas.
 //! Uses heuristics to distinguish between user-initiated and spam popups.
@@ -332,7 +332,7 @@ impl Default for PopupManager {
 
 /// Check if URL looks like a captcha service
 fn is_probable_captcha(url: &str, opener_domain: &str) -> bool {
-    let url_lower = url.to_lowercase();
+    let url_lower = crate::fontcase::ascii_lower(url);
     
     // Known captcha providers
     let captcha_patterns = [
@@ -375,7 +375,7 @@ fn is_probable_captcha(url: &str, opener_domain: &str) -> bool {
 
 /// Check if URL looks like OAuth/authentication
 fn is_probable_auth(url: &str) -> bool {
-    let url_lower = url.to_lowercase();
+    let url_lower = crate::fontcase::ascii_lower(url);
     
     // OAuth providers
     let auth_patterns = [
@@ -407,7 +407,7 @@ fn is_probable_auth(url: &str) -> bool {
 
 /// Classify popup based on URL and context
 fn classify_popup(url: &str, opener_domain: &str, reason: PopupReason) -> PopupClassification {
-    let url_lower = url.to_lowercase();
+    let url_lower = crate::fontcase::ascii_lower(url);
     
     // User-initiated reasons get more trust
     if matches!(reason, PopupReason::UserClick | PopupReason::TargetBlank) {

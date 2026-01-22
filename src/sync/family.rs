@@ -1,4 +1,4 @@
-//! Family device management
+﻿//! Family device management
 //! 
 //! Philosophy: Approve devices, not monitor sessions.
 //! - Parent approves which devices can connect (one-time)
@@ -241,6 +241,7 @@ pub struct DevicePresence {
 
 /// Notification types (not surveillance)
 #[allow(dead_code)] // Variants for notification system
+#[allow(clippy::enum_variant_names)] // Device prefix is semantic - these ARE device notifications
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FamilyNotification {
     /// New device wants to join

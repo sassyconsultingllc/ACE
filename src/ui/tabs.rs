@@ -1,4 +1,4 @@
-//! Tab tile system - visual grid of tab previews
+﻿//! Tab tile system - visual grid of tab previews
 //! Like Windows alt+tab but for browser tabs
 
 #![allow(dead_code)]
@@ -131,8 +131,8 @@ impl TerminalState {
     /// Get the shell prompt
     pub fn prompt(&self) -> String {
         let exit_indicator = match self.last_exit_code {
-            Some(0) | None => "❯",
-            Some(_) => "✗",
+            Some(0) | None => "â¯",
+            Some(_) => "âœ—",
         };
         format!("{} {} ", self.short_cwd(), exit_indicator)
     }
@@ -1051,11 +1051,11 @@ impl TabManager {
         if self.search_query.is_empty() {
             self.tabs.iter().collect()
         } else {
-            let query = self.search_query.to_lowercase();
+            let query = crate::fontcase::ascii_lower(&self.search_query);
             self.tabs.iter()
                 .filter(|t| {
-                    t.title.to_lowercase().contains(&query) ||
-                    t.url.to_lowercase().contains(&query)
+                    crate::fontcase::ascii_lower(&t.title).contains(&query) ||
+                    crate::fontcase::ascii_lower(&t.url).contains(&query)
                 })
                 .collect()
         }

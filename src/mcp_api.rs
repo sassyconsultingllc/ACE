@@ -1,4 +1,4 @@
-//! MCP API Client - Communicates with AI Model Providers
+﻿//! MCP API Client - Communicates with AI Model Providers
 //!
 //! Handles HTTP requests to:
 //! - xAI (Grok) for voice/intent understanding
@@ -150,7 +150,7 @@ impl McpApiClient {
             .ok_or(ApiError::NotConfigured(role))?;
         
         match config.provider {
-            Provider::XAI => self.call_openai_compatible(config, messages, Some(system)),
+            Provider::Xai => self.call_openai_compatible(config, messages, Some(system)),
             Provider::Together => self.call_openai_compatible(config, messages, Some(system)),
             Provider::OpenAI => self.call_openai_compatible(config, messages, Some(system)),
             Provider::Anthropic => self.call_claude(messages, system),
@@ -533,9 +533,9 @@ impl McpApiClient {
                 } else {
                     // Create a basic response from unstructured text
                     Ok(AuditResponse {
-                        verdict: if content.to_lowercase().contains("approved") {
+                        verdict: if crate::fontcase::ascii_lower(&content).contains("approved") {
                             "approved".to_string()
-                        } else if content.to_lowercase().contains("reject") {
+                        } else if crate::fontcase::ascii_lower(&content).contains("reject") {
                             "rejected".to_string()
                         } else {
                             "needs_revision".to_string()

@@ -1,4 +1,4 @@
-//! Cookie Jar
+﻿//! Cookie Jar
 //!
 //! HTTP cookie storage and management with proper security handling.
 
@@ -72,7 +72,7 @@ impl Cookie {
         // Parse attributes
         for part in parts.iter().skip(1) {
             let attr: Vec<&str> = part.splitn(2, '=').collect();
-            let attr_name = attr[0].trim().to_lowercase();
+            let attr_name = crate::fontcase::ascii_lower(attr[0].trim());
             let attr_value = attr.get(1).map(|v| v.trim()).unwrap_or("");
             
             match attr_name.as_str() {
@@ -101,7 +101,7 @@ impl Cookie {
                     cookie.http_only = true;
                 }
                 "samesite" => {
-                    cookie.same_site = match attr_value.to_lowercase().as_str() {
+                    cookie.same_site = match crate::fontcase::ascii_lower(attr_value).as_str() {
                         "strict" => SameSite::Strict,
                         "lax" => SameSite::Lax,
                         "none" => SameSite::None,
@@ -286,7 +286,7 @@ impl CookieJar {
         let domain = parsed.host_str().unwrap_or("");
         
         for (name, value) in headers {
-            if name.to_lowercase() == "set-cookie" {
+            if crate::fontcase::ascii_lower(name) == "set-cookie" {
                 if let Some(cookie) = Cookie::parse(value, domain) {
                     self.set(cookie);
                 }

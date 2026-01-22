@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+﻿#![allow(dead_code, unused_variables, unused_imports)]
 //! HTML Renderer - Pure Rust HTML/CSS/JS rendering
 //! 
 //! Renders web pages using:
@@ -12,6 +12,7 @@
 use crate::js::{JsInterpreter, DomBridge};
 use eframe::egui::{self, Color32, RichText, Ui, Vec2};
 use std::collections::HashMap;
+use crate::fontcase;
 
 /// Parsed HTML document
 #[derive(Debug, Clone)]
@@ -190,10 +191,11 @@ impl HtmlRenderer {
     pub fn parse_html(&mut self, html: &str) {
         let html = html.to_string();
 
-        // Extract title
+        // Extract title (case-insensitive)
         let mut title = String::new();
-        if let Some(start) = html.to_lowercase().find("<title>") {
-            if let Some(end) = html.to_lowercase()[start..].find("</title>") {
+        let lhtml = crate::fontcase::ascii_lower(&html);
+        if let Some(start) = lhtml.find("<title>") {
+            if let Some(end) = lhtml[start..].find("</title>") {
                 let t = &html[start + 7..start + end];
                 title = decode_html_entities(t).trim().to_string();
             }
@@ -202,13 +204,12 @@ impl HtmlRenderer {
         // Collect style blocks
         let mut styles: Vec<CssRule> = Vec::new();
         let mut pos = 0;
-        let lhtml = html.to_lowercase();
         while let Some(s) = lhtml[pos..].find("<style") {
             let open = pos + s;
             if let Some(start_tag_end) = html[open..].find('>') {
                 let content_start = open + start_tag_end + 1;
-                if let Some(close) = lhtml[content_start..].find("</style>") {
-                    let content_end = content_start + close;
+                if let Some(close_rel) = lhtml[content_start..].find("</style>") {
+                    let content_end = content_start + close_rel;
                     let css = &html[content_start..content_end];
                     let mut parsed = self.parse_css(css);
                     styles.append(&mut parsed);
@@ -238,12 +239,7 @@ impl HtmlRenderer {
 
         let nodes = self.parse_nodes(&body_html);
 
-        let doc = HtmlDocument {
-            title,
-            nodes,
-            styles,
-        };
-
+        let doc = HtmlDocument { title, nodes, styles };
         self.cached_doc = Some(doc);
     }
 
@@ -282,7 +278,7 @@ impl HtmlRenderer {
 
                     let is_self_closing = tag_content.ends_with('/') ||
                         tag_content.split_whitespace().next()
-                            .map(|t| matches!(t.to_lowercase().as_str(), 
+                            .map(|t| matches!(crate::fontcase::ascii_lower(t).as_str(), 
                                 "br" | "hr" | "img" | "input" | "meta" | "link" | "area" | "base" | "col" | "embed" | "source" | "track" | "wbr"))
                             .unwrap_or(false);
 
@@ -294,7 +290,7 @@ impl HtmlRenderer {
                     } else {
                         // Find closing tag
                         let close_tag = format!("</{}", tag_name);
-                        if let Some(close_rel) = html[tag_end + 1..].to_lowercase().find(&close_tag.to_lowercase()) {
+                        if let Some(close_rel) = crate::fontcase::ascii_lower(&html[tag_end + 1..]).find(&crate::fontcase::ascii_lower(&close_tag)) {
                             let close_start = tag_end + 1 + close_rel;
                             let inner_html = &html[tag_end + 1..close_start];
 
@@ -354,7 +350,7 @@ impl HtmlRenderer {
         while i < len && !bytes[i].is_ascii_whitespace() && bytes[i] != b'/' && bytes[i] != b'>' {
             i += 1;
         }
-        let tag_name = if name_start < i { s[name_start..i].to_lowercase() } else { "div".into() };
+        let tag_name = if name_start < i { crate::fontcase::ascii_lower(&s[name_start..i]) } else { "div".into() };
 
         let mut attrs = HashMap::new();
 
@@ -369,7 +365,7 @@ impl HtmlRenderer {
                 i += 1;
             }
             let an_end = i;
-            let mut attr_name = s[an_start..an_end].trim().to_lowercase();
+            let mut attr_name = crate::fontcase::ascii_lower(s[an_start..an_end].trim());
 
             skip_ws(&mut i);
             if i < len && bytes[i] == b'=' {
@@ -423,7 +419,7 @@ impl HtmlRenderer {
             .unwrap_or_default();
         
         HtmlNode::Element {
-            tag: tag.to_lowercase(),
+            tag: crate::fontcase::ascii_lower(tag),
             id,
             class,
             style,
@@ -499,7 +495,7 @@ impl HtmlRenderer {
             <html>
             <head><title>Web Page</title></head>
             <body style="font-family: sans-serif; padding: 40px; text-align: center;">
-                <h1>🌐 {}</h1>
+                <h1>ðŸŒ {}</h1>
                 <p>This page would be rendered with the system webview in full mode.</p>
                 <p style="color: #666;">For full web browsing, run with --webview flag</p>
             </body>
@@ -516,8 +512,8 @@ impl HtmlRenderer {
                 <html>
                 <head><title>New Tab</title></head>
                 <body style="font-family: sans-serif; text-align: center; padding: 60px;">
-                    <h1>🌐 Sassy Browser</h1>
-                    <p>Fast • Free • Handles Everything</p>
+                    <h1>ðŸŒ Sassy Browser</h1>
+                    <p>Fast â€¢ Free â€¢ Handles Everything</p>
                 </body>
                 </html>
             "#.into(),
@@ -527,7 +523,7 @@ impl HtmlRenderer {
                 <html>
                 <head><title>Settings</title></head>
                 <body style="font-family: sans-serif; padding: 20px;">
-                    <h1>⚙️ Settings</h1>
+                    <h1>âš™ï¸ Settings</h1>
                     <p>Settings page content here</p>
                 </body>
                 </html>
@@ -652,7 +648,7 @@ impl HtmlRenderer {
                             if let HtmlNode::Element { tag, children: li_children, .. } = child {
                                 if tag == "li" {
                                     ui.horizontal(|ui| {
-                                        ui.label("•");
+                                        ui.label("â€¢");
                                         self.render_nodes(ui, li_children, styles);
                                     });
                                 }
@@ -752,6 +748,7 @@ impl HtmlRenderer {
     }
     
     /// Render table contents
+    #[allow(clippy::only_used_in_recursion)]
     fn render_table_contents(&mut self, ui: &mut Ui, nodes: &[HtmlNode], styles: &[CssRule]) {
         for node in nodes {
             if let HtmlNode::Element { tag, children, .. } = node {
@@ -781,6 +778,7 @@ impl HtmlRenderer {
     }
     
     /// Get text content from nodes
+    #[allow(clippy::only_used_in_recursion)]
     fn text_content(&self, nodes: &[HtmlNode]) -> String {
         let mut text = String::new();
         for node in nodes {
@@ -879,7 +877,7 @@ fn parse_size(s: &str) -> Option<f32> {
 
 /// Parse CSS color value
 fn parse_color(s: &str) -> Option<Color32> {
-    let s = s.trim().to_lowercase();
+    let s = crate::fontcase::ascii_lower(s.trim());
     
     // Named colors
     match s.as_str() {

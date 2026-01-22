@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+﻿#![allow(dead_code, unused_variables, unused_imports)]
 // ============================================================================
 // SASSY BROWSER - AUTHENTICATION & LICENSING SYSTEM
 // ============================================================================
@@ -12,6 +12,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use rand::rngs::OsRng;
 use rand::{Rng, RngCore};
 use sha2::{Sha256, Digest};
+use crate::fontcase;
 
 // ============================================================================
 // LICENSE TIERS
@@ -98,16 +99,16 @@ pub enum DeviceType {
 impl DeviceType {
     pub fn icon(&self) -> &'static str {
         match self {
-            DeviceType::Desktop => "🖥️",
-            DeviceType::Laptop => "💻",
-            DeviceType::Phone => "📱",
-            DeviceType::Tablet => "📲",
-            DeviceType::Server => "🖧",
+            DeviceType::Desktop => "ðŸ–¥ï¸",
+            DeviceType::Laptop => "ðŸ’»",
+            DeviceType::Phone => "ðŸ“±",
+            DeviceType::Tablet => "ðŸ“²",
+            DeviceType::Server => "ðŸ–§",
         }
     }
     
     pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
+        match crate::fontcase::normalize_key(s).as_str() {
             "desktop" => DeviceType::Desktop,
             "laptop" => DeviceType::Laptop,
             "phone" | "mobile" => DeviceType::Phone,
@@ -752,7 +753,7 @@ impl TailscaleManager {
                         .duration_since(UNIX_EPOCH)
                         .unwrap()
                         .as_secs(),
-                    is_sassy_device: parts[1].to_lowercase().contains("sassy"),
+                    is_sassy_device: crate::fontcase::ascii_lower(parts[1]).contains("sassy"),
                 };
                 self.peers.push(peer);
             }
@@ -841,8 +842,8 @@ impl PhoneSync {
     pub fn connect_via_tailscale(&mut self, tailscale: &TailscaleManager) -> Result<(), String> {
         // Find Sassy phone app in Tailscale peers
         for peer in &tailscale.peers {
-            if peer.is_sassy_device && peer.os.to_lowercase().contains("android")
-                || peer.os.to_lowercase().contains("ios") {
+            if peer.is_sassy_device && (crate::fontcase::ascii_lower(&peer.os).contains("android")
+                || crate::fontcase::ascii_lower(&peer.os).contains("ios")) {
                 self.phone_device = Some(DeviceIdentity {
                     device_id: peer.hostname.clone(),
                     device_name: peer.hostname.clone(),
@@ -1035,8 +1036,8 @@ mod tests {
     
     #[test]
     fn test_device_type_icons() {
-        assert_eq!(DeviceType::Desktop.icon(), "🖥️");
-        assert_eq!(DeviceType::Phone.icon(), "📱");
-        assert_eq!(DeviceType::Tablet.icon(), "📲");
+        assert_eq!(DeviceType::Desktop.icon(), "ðŸ–¥ï¸");
+        assert_eq!(DeviceType::Phone.icon(), "ðŸ“±");
+        assert_eq!(DeviceType::Tablet.icon(), "ðŸ“²");
     }
 }

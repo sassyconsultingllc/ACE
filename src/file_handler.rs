@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+﻿#![allow(dead_code, unused_variables, unused_imports)]
 //! Universal File Handler - Detection, loading, saving, printing, export
 //! 
 //! Supports virtually every file format without paid dependencies:
@@ -18,10 +18,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use crate::fontcase;
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // FILE TYPE ENUMERATION
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FileType {
@@ -46,20 +47,20 @@ pub enum FileType {
 impl FileType {
     pub fn icon(&self) -> &'static str {
         match self {
-            Self::Image | Self::ImageRaw | Self::ImagePsd => "🖼️",
-            Self::Pdf => "📕",
-            Self::Document => "📄",
-            Self::Spreadsheet => "📊",
-            Self::Chemical => "🧬",
-            Self::Archive => "📦",
-            Self::Model3D => "🎲",
-            Self::Font => "🔤",
-            Self::Audio => "🎵",
-            Self::Video => "🎬",
-            Self::Text => "📝",
-            Self::Markdown => "📑",
-            Self::Ebook => "📚",
-            Self::Unknown => "📁",
+            Self::Image | Self::ImageRaw | Self::ImagePsd => "ðŸ–¼ï¸",
+            Self::Pdf => "ðŸ“•",
+            Self::Document => "ðŸ“„",
+            Self::Spreadsheet => "ðŸ“Š",
+            Self::Chemical => "ðŸ§¬",
+            Self::Archive => "ðŸ“¦",
+            Self::Model3D => "ðŸŽ²",
+            Self::Font => "ðŸ”¤",
+            Self::Audio => "ðŸŽµ",
+            Self::Video => "ðŸŽ¬",
+            Self::Text => "ðŸ“",
+            Self::Markdown => "ðŸ“‘",
+            Self::Ebook => "ðŸ“š",
+            Self::Unknown => "ðŸ“",
         }
     }
     
@@ -85,9 +86,9 @@ impl FileType {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // OPEN FILE STRUCTURE
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone)]
 pub struct OpenFile {
@@ -118,41 +119,41 @@ impl OpenFile {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "Unknown".to_string());
         
-        // Extract typed content for convenience
+        // Extract typed content for convenience (boxed enum variants)
         let video = match &content {
-            FileContent::Video(v) => Some(v.clone()),
+            FileContent::Video(v) => Some((**v).clone()),
             _ => None,
         };
         let audio = match &content {
-            FileContent::Audio(a) => Some(a.clone()),
+            FileContent::Audio(a) => Some((**a).clone()),
             _ => None,
         };
         let ebook = match &content {
-            FileContent::Ebook(e) => Some(e.clone()),
+            FileContent::Ebook(e) => Some((**e).clone()),
             _ => None,
         };
         let archive = match &content {
-            FileContent::Archive(a) => Some(a.clone()),
+            FileContent::Archive(a) => Some((**a).clone()),
             _ => None,
         };
         let model3d = match &content {
-            FileContent::Model3D(m) => Some(m.clone()),
+            FileContent::Model3D(m) => Some((**m).clone()),
             _ => None,
         };
         let font = match &content {
-            FileContent::Font(f) => Some(f.clone()),
+            FileContent::Font(f) => Some((**f).clone()),
             _ => None,
         };
         let chemical = match &content {
-            FileContent::Chemical(c) => Some(c.clone()),
+            FileContent::Chemical(c) => Some((**c).clone()),
             _ => None,
         };
         let document = match &content {
-            FileContent::Document(d) => Some(d.clone()),
+            FileContent::Document(d) => Some((**d).clone()),
             _ => None,
         };
         let spreadsheet = match &content {
-            FileContent::Spreadsheet(s) => Some(s.clone()),
+            FileContent::Spreadsheet(s) => Some((**s).clone()),
             _ => None,
         };
         
@@ -182,20 +183,20 @@ impl OpenFile {
 pub enum FileContent {
     Binary(Vec<u8>),
     Text { content: String, syntax: Option<String>, encoding: String },
-    Document(DocumentContent),
-    Spreadsheet(SpreadsheetContent),
-    Chemical(ChemicalContent),
-    Archive(ArchiveContent),
-    Model3D(Model3DContent),
-    Font(FontContent),
-    Audio(AudioContent),
-    Video(VideoContent),
-    Ebook(EbookContent),
+    Document(Box<DocumentContent>),
+    Spreadsheet(Box<SpreadsheetContent>),
+    Chemical(Box<ChemicalContent>),
+    Archive(Box<ArchiveContent>),
+    Model3D(Box<Model3DContent>),
+    Font(Box<FontContent>),
+    Audio(Box<AudioContent>),
+    Video(Box<VideoContent>),
+    Ebook(Box<EbookContent>),
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // DOCUMENT CONTENT
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone, Default)]
 pub struct DocumentContent {
@@ -249,9 +250,9 @@ pub struct DocumentMetadata {
     pub word_count: Option<usize>,
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // SPREADSHEET CONTENT
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone, Default)]
 pub struct SpreadsheetContent {
@@ -293,9 +294,9 @@ pub enum CellValue {
 }
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CHEMICAL CONTENT
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone, Default)]
 pub struct ChemicalContent {
@@ -382,9 +383,9 @@ pub struct ChainInfo {
     pub residue_count: usize,
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ARCHIVE CONTENT
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone, Default)]
 pub struct ArchiveContent {
@@ -419,9 +420,9 @@ pub struct ArchiveEntry {
     pub is_encrypted: bool,
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // 3D MODEL CONTENT
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone, Default)]
 pub struct Model3DContent {
@@ -474,9 +475,9 @@ pub struct BoundingBox {
     pub max: [f32; 3],
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // FONT CONTENT
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone, Default)]
 pub struct FontContent {
@@ -493,9 +494,9 @@ pub struct FontContent {
     pub preview_data: Vec<u8>,
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // AUDIO CONTENT
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone, Default)]
 pub struct AudioContent {
@@ -515,9 +516,9 @@ pub struct AudioContent {
     pub waveform_data: Vec<f32>,
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // VIDEO CONTENT
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone, Default)]
 pub struct VideoContent {
@@ -533,9 +534,9 @@ pub struct VideoContent {
     pub thumbnail: Option<Vec<u8>>,
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // EBOOK CONTENT
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[derive(Debug, Clone, Default)]
 pub struct EbookContent {
@@ -573,9 +574,9 @@ pub struct EbookChapter {
     pub images: Vec<EmbeddedImage>,
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // FILE HANDLER
-// ═══════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 pub struct FileHandler {
     cache: HashMap<PathBuf, OpenFile>,
@@ -594,7 +595,7 @@ impl FileHandler {
     pub fn detect_file_type(path: &Path) -> FileType {
         let ext = path.extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
+            .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
         
         // Try magic byte detection first for accuracy
@@ -782,7 +783,7 @@ impl FileHandler {
     pub fn detect_syntax(path: &Path) -> Option<String> {
         let ext = path.extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())?;
+            .map(crate::fontcase::ascii_lower)?;
         
         let syntax = match ext.as_str() {
             "rs" => "Rust",
@@ -946,7 +947,7 @@ impl FileHandler {
     fn load_document(&self, path: &Path) -> Result<FileContent> {
         let ext = path.extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
+            .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
         
         match ext.as_str() {
@@ -1009,7 +1010,7 @@ impl FileHandler {
             });
         }
         
-        Ok(FileContent::Document(document))
+        Ok(FileContent::Document(Box::new(document)))
     }
     
     fn load_odt(&self, path: &Path) -> Result<FileContent> {
@@ -1057,7 +1058,7 @@ impl FileHandler {
             }
         }
         
-        Ok(FileContent::Document(document))
+        Ok(FileContent::Document(Box::new(document)))
     }
     
     fn load_rtf(&self, path: &Path) -> Result<FileContent> {
@@ -1092,13 +1093,13 @@ impl FileHandler {
             ..Default::default()
         };
         
-        Ok(FileContent::Document(document))
+        Ok(FileContent::Document(Box::new(document)))
     }
     
     fn load_spreadsheet(&self, path: &Path) -> Result<FileContent> {
         let ext = path.extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
+            .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
         
         match ext.as_str() {
@@ -1137,10 +1138,10 @@ impl FileHandler {
             sheet.cells.push(row);
         }
         
-        Ok(FileContent::Spreadsheet(SpreadsheetContent {
+        Ok(FileContent::Spreadsheet(Box::new(SpreadsheetContent {
             sheets: vec![sheet],
             active_sheet: 0,
-        }))
+        })))
     }
     
     fn load_excel(&self, path: &Path) -> Result<FileContent> {
@@ -1176,13 +1177,13 @@ impl FileHandler {
             }
         }
         
-        Ok(FileContent::Spreadsheet(spreadsheet))
+        Ok(FileContent::Spreadsheet(Box::new(spreadsheet)))
     }
     
     fn load_chemical(&self, path: &Path) -> Result<FileContent> {
         let ext = path.extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
+            .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
         
         match ext.as_str() {
@@ -1242,7 +1243,7 @@ impl FileHandler {
             }
         }
         
-        Ok(FileContent::Chemical(chemical))
+        Ok(FileContent::Chemical(Box::new(chemical)))
     }
     
     fn load_mol(&self, path: &Path) -> Result<FileContent> {
@@ -1300,7 +1301,7 @@ impl FileHandler {
             }
         }
         
-        Ok(FileContent::Chemical(chemical))
+        Ok(FileContent::Chemical(Box::new(chemical)))
     }
     
     fn load_xyz(&self, path: &Path) -> Result<FileContent> {
@@ -1330,7 +1331,7 @@ impl FileHandler {
             }
         }
         
-        Ok(FileContent::Chemical(chemical))
+        Ok(FileContent::Chemical(Box::new(chemical)))
     }
     
     fn load_cif(&self, path: &Path) -> Result<FileContent> {
@@ -1341,7 +1342,7 @@ impl FileHandler {
     fn load_archive(&self, path: &Path) -> Result<FileContent> {
         let ext = path.extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
+            .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
         
         match ext.as_str() {
@@ -1388,7 +1389,7 @@ impl FileHandler {
             }
         }
         
-        Ok(FileContent::Archive(content))
+        Ok(FileContent::Archive(Box::new(content)))
     }
     
     fn load_tar_archive(&self, path: &Path, compression: Option<&str>) -> Result<FileContent> {
@@ -1424,7 +1425,7 @@ impl FileHandler {
             }
         }
         
-        Ok(FileContent::Archive(content))
+        Ok(FileContent::Archive(Box::new(content)))
     }
     
     fn read_tar_entries<R: Read>(&self, archive: &mut tar::Archive<R>, content: &mut ArchiveContent) -> Result<()> {
@@ -1473,7 +1474,7 @@ impl FileHandler {
             is_encrypted: false,
         });
         
-        Ok(FileContent::Archive(content))
+        Ok(FileContent::Archive(Box::new(content)))
     }
     
     fn load_rar_archive(&self, path: &Path) -> Result<FileContent> {
@@ -1500,13 +1501,13 @@ impl FileHandler {
             content.compressed_size += entry.unpacked_size;
         }
         
-        Ok(FileContent::Archive(content))
+        Ok(FileContent::Archive(Box::new(content)))
     }
     
     fn load_3d_model(&self, path: &Path) -> Result<FileContent> {
         let ext = path.extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
+            .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
         
         match ext.as_str() {
@@ -1555,7 +1556,7 @@ impl FileHandler {
         // Calculate bounding box
         model.bounds = Self::calculate_bounds(&model.vertices);
         
-        Ok(FileContent::Model3D(model))
+        Ok(FileContent::Model3D(Box::new(model)))
     }
     
     fn load_stl(&self, path: &Path) -> Result<FileContent> {
@@ -1596,7 +1597,7 @@ impl FileHandler {
         
         model.bounds = Self::calculate_bounds(&model.vertices);
         
-        Ok(FileContent::Model3D(model))
+        Ok(FileContent::Model3D(Box::new(model)))
     }
     
     fn load_gltf(&self, path: &Path) -> Result<FileContent> {
@@ -1647,7 +1648,7 @@ impl FileHandler {
         
         model.bounds = Self::calculate_bounds(&model.vertices);
         
-        Ok(FileContent::Model3D(model))
+        Ok(FileContent::Model3D(Box::new(model)))
     }
     
     fn load_ply(&self, path: &Path) -> Result<FileContent> {
@@ -1699,7 +1700,7 @@ impl FileHandler {
         
         model.bounds = Self::calculate_bounds(&model.vertices);
         
-        Ok(FileContent::Model3D(model))
+        Ok(FileContent::Model3D(Box::new(model)))
     }
     
     fn calculate_bounds(vertices: &[Vertex3D]) -> BoundingBox {
@@ -1751,7 +1752,7 @@ impl FileHandler {
             preview_data: data,
         };
         
-        Ok(FileContent::Font(font))
+        Ok(FileContent::Font(Box::new(font)))
     }
     
     fn load_audio(&self, path: &Path) -> Result<FileContent> {
@@ -1816,7 +1817,7 @@ impl FileHandler {
             .map(|e| e.to_uppercase())
             .unwrap_or_else(|| "AUDIO".into());
         
-        Ok(FileContent::Audio(audio))
+        Ok(FileContent::Audio(Box::new(audio)))
     }
     
     fn load_video(&self, path: &Path) -> Result<FileContent> {
@@ -1846,13 +1847,13 @@ impl FileHandler {
             }
         }
         
-        Ok(FileContent::Video(video))
+        Ok(FileContent::Video(Box::new(video)))
     }
     
     fn load_ebook(&self, path: &Path) -> Result<FileContent> {
         let ext = path.extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
+            .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
         
         match ext.as_str() {
@@ -1910,7 +1911,7 @@ impl FileHandler {
             }
         }
         
-        Ok(FileContent::Ebook(ebook))
+        Ok(FileContent::Ebook(Box::new(ebook)))
     }
     
     /// Save a file
@@ -1981,7 +1982,7 @@ impl FileHandler {
     fn save_chemical(&self, path: &Path, chem: &ChemicalContent) -> Result<()> {
         let ext = path.extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
+            .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
         
         match ext.as_str() {

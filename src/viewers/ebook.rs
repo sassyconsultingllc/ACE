@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! eBook Viewer - EPUB, MOBI reader with chapter navigation
 //! 
 //! Features:
@@ -98,9 +98,9 @@ impl EbookViewer {
             
             // Header with toggle
             ui.horizontal(|ui| {
-                ui.heading(RichText::new("📚 Contents").size(16.0));
+                ui.heading(RichText::new("ðŸ“š Contents").size(16.0));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.small_button("◀").on_hover_text("Hide sidebar").clicked() {
+                    if ui.small_button("â—€").on_hover_text("Hide sidebar").clicked() {
                         self.show_toc = false;
                     }
                 });
@@ -120,7 +120,7 @@ impl EbookViewer {
                             .show(ui, |ui| {
                                 ui.set_min_size(Vec2::new(150.0, 200.0));
                                 ui.centered_and_justified(|ui| {
-                                    ui.label(RichText::new("📖").size(60.0));
+                                    ui.label(RichText::new("ðŸ“–").size(60.0));
                                 });
                             });
                     });
@@ -208,13 +208,13 @@ impl EbookViewer {
                 // Theme selector
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Theme:").size(11.0).color(Color32::GRAY));
-                    if ui.selectable_label(self.theme == ReadingTheme::Light, "☀️").clicked() {
+                    if ui.selectable_label(self.theme == ReadingTheme::Light, "â˜€ï¸").clicked() {
                         self.theme = ReadingTheme::Light;
                     }
-                    if ui.selectable_label(self.theme == ReadingTheme::Sepia, "📜").clicked() {
+                    if ui.selectable_label(self.theme == ReadingTheme::Sepia, "ðŸ“œ").clicked() {
                         self.theme = ReadingTheme::Sepia;
                     }
-                    if ui.selectable_label(self.theme == ReadingTheme::Dark, "🌙").clicked() {
+                    if ui.selectable_label(self.theme == ReadingTheme::Dark, "ðŸŒ™").clicked() {
                         self.theme = ReadingTheme::Dark;
                     }
                 });
@@ -242,7 +242,7 @@ impl EbookViewer {
         // Show TOC button if hidden
         if !self.show_toc {
             ui.horizontal(|ui| {
-                if ui.button("☰ Contents").clicked() {
+                if ui.button("â˜° Contents").clicked() {
                     self.show_toc = true;
                 }
                 ui.separator();
@@ -257,7 +257,7 @@ impl EbookViewer {
                 let can_prev = self.current_chapter > 0;
                 let can_next = self.current_chapter < ebook.chapters.len().saturating_sub(1);
                 
-                if ui.add_enabled(can_prev, egui::Button::new("◀ Previous")).clicked() {
+                if ui.add_enabled(can_prev, egui::Button::new("â—€ Previous")).clicked() {
                     self.current_chapter -= 1;
                     self.scroll_position = 0.0;
                 }
@@ -267,7 +267,7 @@ impl EbookViewer {
                     ebook.chapters.len()
                 ));
                 
-                if ui.add_enabled(can_next, egui::Button::new("Next ▶")).clicked() {
+                if ui.add_enabled(can_next, egui::Button::new("Next â–¶")).clicked() {
                     self.current_chapter += 1;
                     self.scroll_position = 0.0;
                 }
@@ -276,13 +276,13 @@ impl EbookViewer {
             ui.separator();
             
             // Bookmark
-            if ui.button("🔖 Bookmark").on_hover_text("Add bookmark").clicked() {
+            if ui.button("ðŸ”– Bookmark").on_hover_text("Add bookmark").clicked() {
                 self.bookmarks.push((self.current_chapter, String::new()));
             }
             
             // Search
             ui.separator();
-            ui.label("🔍");
+            ui.label("ðŸ”");
             let search_resp = ui.add(egui::TextEdit::singleline(&mut self.search_query)
                 .desired_width(150.0)
                 .hint_text("Search..."));
@@ -325,7 +325,7 @@ impl EbookViewer {
                         // End of chapter marker
                         ui.add_space(40.0);
                         ui.centered_and_justified(|ui| {
-                            ui.label(RichText::new("—  ✦  —")
+                            ui.label(RichText::new("â€”  âœ¦  â€”")
                                 .size(14.0)
                                 .color(Color32::GRAY));
                         });
@@ -334,7 +334,7 @@ impl EbookViewer {
                         if self.current_chapter < ebook.chapters.len() - 1 {
                             ui.add_space(20.0);
                             ui.centered_and_justified(|ui| {
-                                if ui.button(RichText::new("Continue to next chapter →")
+                                if ui.button(RichText::new("Continue to next chapter â†’")
                                     .color(accent))
                                     .clicked()
                                 {
@@ -355,7 +355,7 @@ impl EbookViewer {
                     ui.centered_and_justified(|ui| {
                         ui.vertical_centered(|ui| {
                             ui.add_space(60.0);
-                            ui.label(RichText::new("📚").size(64.0));
+                            ui.label(RichText::new("ðŸ“š").size(64.0));
                             ui.add_space(16.0);
                             ui.label(RichText::new("eBook")
                                 .size(24.0)
@@ -387,7 +387,7 @@ impl EbookViewer {
                 }
                 '>' => {
                     in_tag = false;
-                    let tag_lower = current_tag.to_lowercase();
+                    let tag_lower = crate::fontcase::ascii_lower(&current_tag);
                     
                     // Handle block-level tags with newlines
                     if tag_lower.starts_with("p") || tag_lower.starts_with("/p") ||
@@ -417,9 +417,9 @@ impl EbookViewer {
             .replace("&gt;", ">")
             .replace("&quot;", "\"")
             .replace("&#39;", "'")
-            .replace("&mdash;", "—")
-            .replace("&ndash;", "–")
-            .replace("&hellip;", "…")
+            .replace("&mdash;", "â€”")
+            .replace("&ndash;", "â€“")
+            .replace("&hellip;", "â€¦")
             .replace("&rsquo;", "'")
             .replace("&lsquo;", "'")
             .replace("&rdquo;", "\u{201D}")

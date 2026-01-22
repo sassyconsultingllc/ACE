@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+﻿#![allow(dead_code, unused_variables, unused_imports)]
 //! Bookmark management - Store and organize bookmarks
 
 use serde::{Deserialize, Serialize};
@@ -199,12 +199,12 @@ impl BookmarkManager {
     
     /// Search bookmarks
     pub fn search(&self, query: &str) -> Vec<&Bookmark> {
-        let query_lower = query.to_lowercase();
+        let query_lower = crate::fontcase::ascii_lower(query);
         self.bookmarks.iter()
             .filter(|b| {
-                b.url.to_lowercase().contains(&query_lower) ||
-                b.title.to_lowercase().contains(&query_lower) ||
-                b.tags.iter().any(|t| t.to_lowercase().contains(&query_lower))
+                crate::fontcase::ascii_lower(&b.url).contains(&query_lower) ||
+                crate::fontcase::ascii_lower(&b.title).contains(&query_lower) ||
+                b.tags.iter().any(|t| crate::fontcase::ascii_lower(t).contains(&query_lower))
             })
             .collect()
     }

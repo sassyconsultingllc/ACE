@@ -1,4 +1,4 @@
-//! Paint - Rendering web content to pixel buffer
+﻿//! Paint - Rendering web content to pixel buffer
 //!
 //! Production-ready painter with:
 //! - Hardware-accelerated alpha blending
@@ -6,6 +6,7 @@
 //! - Efficient clipping to viewport
 
 #![allow(dead_code)]
+#![allow(clippy::too_many_arguments)] // Drawing primitives naturally have many parameters
 //! - Full CSS box model support
 
 use crate::layout::LayoutBox;

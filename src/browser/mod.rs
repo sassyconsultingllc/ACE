@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+﻿#![allow(unused_imports)]
 //! Browser module - Pure Rust web browsing, NO CHROME/WEBKIT
 
 pub mod bookmarks;

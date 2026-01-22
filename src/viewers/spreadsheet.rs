@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Spreadsheet Viewer - XLSX, XLS, ODS, CSV viewer and editor
 
 use crate::file_handler::{CellValue, FileContent, OpenFile, Sheet, SpreadsheetContent};
@@ -63,22 +63,22 @@ impl SpreadsheetViewer {
     
     fn render_toolbar(&mut self, ui: &mut egui::Ui, _spreadsheet: &SpreadsheetContent, zoom: f32) {
         ui.horizontal(|ui| {
-            if ui.selectable_label(!self.edit_mode, "👁 View").clicked() {
+            if ui.selectable_label(!self.edit_mode, "ðŸ‘ View").clicked() {
                 self.edit_mode = false;
             }
-            if ui.selectable_label(self.edit_mode, "✏️ Edit").clicked() {
+            if ui.selectable_label(self.edit_mode, "âœï¸ Edit").clicked() {
                 self.edit_mode = true;
             }
             
             ui.separator();
             
-            ui.checkbox(&mut self.show_gridlines, "⊞ Grid");
+            ui.checkbox(&mut self.show_gridlines, "âŠž Grid");
             
             ui.separator();
             
             // Column width
             ui.label("Col Width:");
-            if ui.button("−").clicked() {
+            if ui.button("âˆ’").clicked() {
                 self.default_column_width = (self.default_column_width - 10.0).max(40.0);
             }
             ui.label(format!("{:.0}", self.default_column_width));

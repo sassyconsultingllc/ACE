@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // SASSY BROWSER - FAMILY PROFILES
 // ============================================================================
 // Adult, Teen, and Kid profiles with different permission levels.
@@ -26,10 +26,10 @@ pub enum ProfileType {
 impl ProfileType {
     pub fn icon(&self) -> &'static str {
         match self {
-            ProfileType::Admin => "👑",
-            ProfileType::Adult => "👤",
-            ProfileType::Teen => "🧑",
-            ProfileType::Kid => "👶",
+            ProfileType::Admin => "ðŸ‘‘",
+            ProfileType::Adult => "ðŸ‘¤",
+            ProfileType::Teen => "ðŸ§‘",
+            ProfileType::Kid => "ðŸ‘¶",
         }
     }
     
@@ -472,7 +472,7 @@ impl ProfileManager {
         };
         
         let restrictions = &profile.restrictions;
-        let domain = extract_domain(url).to_lowercase();
+        let domain = crate::fontcase::ascii_lower(&extract_domain(url));
         
         // Check time limits first
         if let Some(reason) = self.check_time_restrictions(restrictions) {
@@ -482,14 +482,14 @@ impl ProfileManager {
         
         // Check allowlist mode
         if restrictions.use_allowlist_only
-            && !restrictions.allowlist.iter().any(|a| domain.contains(&a.to_lowercase())) {
+            && !restrictions.allowlist.iter().any(|a| domain.contains(&crate::fontcase::ascii_lower(a))) {
                 let reason = BlockReason::NotOnAllowlist;
                 self.record_blocked_attempt(url, reason.clone());
                 return Err(reason);
             }
         
         // Check blocklist
-        if restrictions.blocklist.iter().any(|b| domain.contains(&b.to_lowercase())) {
+        if restrictions.blocklist.iter().any(|b| domain.contains(&crate::fontcase::ascii_lower(b))) {
             let reason = BlockReason::OnBlocklist;
             self.record_blocked_attempt(url, reason.clone());
             return Err(reason);
@@ -530,7 +530,7 @@ impl ProfileManager {
         }
         
         if restrictions.block_executable_downloads {
-            let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
+            let ext = crate::fontcase::ascii_lower(filename.rsplit('.').next().unwrap_or(""));
             let executables = ["exe", "msi", "bat", "cmd", "ps1", "sh", "app", "dmg", "deb", "rpm"];
             if executables.contains(&ext.as_str()) {
                 return Err("Executable downloads are blocked".to_string());

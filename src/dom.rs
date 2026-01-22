@@ -1,4 +1,4 @@
-// DOM - Document Object Model representation
+﻿// DOM - Document Object Model representation
 #![allow(dead_code)]
 
 use std::collections::HashMap;
@@ -45,7 +45,7 @@ impl Node {
     pub fn new_element(tag: &str) -> NodeRef {
         Rc::new(RefCell::new(Node {
             node_type: NodeType::Element,
-            tag_name: Some(tag.to_lowercase()),
+            tag_name: Some(crate::fontcase::ascii_lower(tag)),
             text_content: None,
             attributes: HashMap::new(),
             children: Vec::new(),
@@ -236,7 +236,8 @@ impl Document {
 
     pub fn get_elements_by_tag(&self, tag: &str) -> Vec<NodeRef> {
         let mut results = Vec::new();
-        Self::find_by_tag(&self.root, &tag.to_lowercase(), &mut results);
+        let tag_lower = crate::fontcase::ascii_lower(tag);
+        Self::find_by_tag(&self.root, &tag_lower, &mut results);
         results
     }
 
@@ -388,7 +389,7 @@ impl FormData {
                     if name.is_empty() { return; }
                     
                     let input_type = n.get_attribute("type")
-                        .map(|t| t.to_lowercase())
+                        .map(|t| crate::fontcase::ascii_lower(&t))
                         .unwrap_or_else(|| "text".to_string());
                     
                     match input_type.as_str() {

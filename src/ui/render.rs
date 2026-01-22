@@ -1,4 +1,4 @@
-//! UI Rendering - Production quality text, shapes, UI components
+﻿//! UI Rendering - Production quality text, shapes, UI components
 //! Uses fontdue for real text rendering
 #![allow(dead_code)]
 #![allow(unused_variables)]
@@ -58,6 +58,38 @@ pub struct UIRenderer {
     pub height: u32,
 }
 
+/// State/options for drawing the navigation bar.
+pub struct NavBarState {
+    pub can_back: bool,
+    pub can_forward: bool,
+    pub loading: bool,
+    pub show_help_button: bool,
+    pub help_enabled: bool,
+    pub help_open: bool,
+}
+
+/// Simple 2D point
+pub struct Point { pub x: i32, pub y: i32 }
+
+/// Parameters for blitting a preview image
+pub struct BlitParams {
+    pub src_w: u32,
+    pub src_h: u32,
+    pub dst_x: i32,
+    pub dst_y: i32,
+    pub dst_w: u32,
+    pub dst_h: u32,
+}
+
+/// Parameters for truncated text drawing
+pub struct TextParams {
+    pub x: i32,
+    pub y: i32,
+    pub max_width: u32,
+    pub size: f32,
+    pub color: u32,
+}
+
 impl UIRenderer {
     pub fn new(width: u32, height: u32) -> Self {
         // Ensure font is loaded
@@ -94,14 +126,23 @@ impl UIRenderer {
         }
     }
     
-    pub fn stroke_rect(&self, buffer: &mut [u32], x: i32, y: i32, w: u32, h: u32, color: u32, thickness: u32) {
+    pub fn stroke_rect(&self, buffer: &mut [u32], bounds: Rect, color: u32, thickness: u32) {
+        let x = bounds.x as i32;
+        let y = bounds.y as i32;
+        let w = bounds.width;
+        let h = bounds.height;
+
         self.fill_rect(buffer, x, y, w, thickness, color); // Top
         self.fill_rect(buffer, x, y + h as i32 - thickness as i32, w, thickness, color); // Bottom
         self.fill_rect(buffer, x, y, thickness, h, color); // Left
         self.fill_rect(buffer, x + w as i32 - thickness as i32, y, thickness, h, color); // Right
     }
     
-    pub fn fill_rounded_rect(&self, buffer: &mut [u32], x: i32, y: i32, w: u32, h: u32, color: u32, radius: u32) {
+    pub fn fill_rounded_rect(&self, buffer: &mut [u32], bounds: Rect, color: u32, radius: u32) {
+        let x = bounds.x as i32;
+        let y = bounds.y as i32;
+        let w = bounds.width;
+        let h = bounds.height;
         let r = radius.min(w / 2).min(h / 2);
         
         for dy in 0..h {
@@ -176,8 +217,12 @@ impl UIRenderer {
         (cursor_x - x) as u32
     }
     
-    pub fn draw_text_truncated(&self, buffer: &mut [u32], text: &str, x: i32, y: i32, 
-                                max_width: u32, size: f32, color: u32) -> u32 {
+    pub fn draw_text_truncated(&self, buffer: &mut [u32], text: &str, params: TextParams) -> u32 {
+        let x = params.x;
+        let y = params.y;
+        let max_width = params.max_width;
+        let size = params.size;
+        let color = params.color;
         let font = get_font();
         let mut chars: Vec<char> = text.chars().collect();
         
@@ -220,29 +265,34 @@ impl UIRenderer {
             .sum()
     }
     
-    pub fn blit_preview(&self, buffer: &mut [u32], preview: &[u32], 
-                         src_w: u32, src_h: u32,
-                         dst_x: i32, dst_y: i32, dst_w: u32, dst_h: u32) {
+    pub fn blit_preview(&self, buffer: &mut [u32], preview: &[u32], params: BlitParams) {
+        let src_w = params.src_w;
+        let src_h = params.src_h;
+        let dst_x = params.dst_x;
+        let dst_y = params.dst_y;
+        let dst_w = params.dst_w;
+        let dst_h = params.dst_h;
+
         let scale_x = src_w as f32 / dst_w as f32;
         let scale_y = src_h as f32 / dst_h as f32;
-        
+
         for dy in 0..dst_h {
             let py = dst_y + dy as i32;
             if py < 0 || py >= self.height as i32 { continue; }
-            
+
             let src_y = (dy as f32 * scale_y) as u32;
             if src_y >= src_h { continue; }
-            
+
             for dx in 0..dst_w {
                 let px = dst_x + dx as i32;
                 if px < 0 || px >= self.width as i32 { continue; }
-                
+
                 let src_x = (dx as f32 * scale_x) as u32;
                 if src_x >= src_w { continue; }
-                
+
                 let src_idx = (src_y * src_w + src_x) as usize;
                 let dst_idx = (py as u32 * self.width + px as u32) as usize;
-                
+
                 if src_idx < preview.len() && dst_idx < buffer.len() {
                     buffer[dst_idx] = preview[src_idx];
                 }
@@ -251,8 +301,7 @@ impl UIRenderer {
     }
     
     pub fn draw_nav_bar(&self, buffer: &mut [u32], bounds: Rect, theme: &Theme,
-                         url: &str, can_back: bool, can_forward: bool, loading: bool,
-                         show_help_button: bool, help_enabled: bool, help_open: bool) {
+                         url: &str, state: NavBarState) {
         let bg = hex_to_u32(&theme.colors.surface);
         let text_color = hex_to_u32(&theme.colors.text_primary);
         let text_dim = hex_to_u32(&theme.colors.text_secondary);
@@ -274,59 +323,58 @@ impl UIRenderer {
         let mut address_right = network_x - 8;
         
         // Back button
-        let back_color = if can_back { text_color } else { text_dim };
-        self.fill_rounded_rect(buffer, x as i32, btn_y as i32, btn_size, btn_size, 
-                                hex_to_u32(&theme.colors.surface_elevated), 4);
-        self.draw_text(buffer, "←", (x + 8) as i32, (btn_y + 22) as i32, 16.0, back_color);
+        let back_color = if state.can_back { text_color } else { text_dim };
+                        self.fill_rounded_rect(buffer, Rect { x, y: btn_y, width: btn_size, height: btn_size }, 
+                                                hex_to_u32(&theme.colors.surface_elevated), 4);
+        self.draw_text(buffer, "â†", (x + 8) as i32, (btn_y + 22) as i32, 16.0, back_color);
         x += btn_size + 4;
         
         // Forward button
-        let fwd_color = if can_forward { text_color } else { text_dim };
-        self.fill_rounded_rect(buffer, x as i32, btn_y as i32, btn_size, btn_size,
-                                hex_to_u32(&theme.colors.surface_elevated), 4);
-        self.draw_text(buffer, "→", (x + 8) as i32, (btn_y + 22) as i32, 16.0, fwd_color);
+        let fwd_color = if state.can_forward { text_color } else { text_dim };
+                        self.fill_rounded_rect(buffer, Rect { x, y: btn_y, width: btn_size, height: btn_size },
+                                                hex_to_u32(&theme.colors.surface_elevated), 4);
+        self.draw_text(buffer, "â†’", (x + 8) as i32, (btn_y + 22) as i32, 16.0, fwd_color);
         x += btn_size + 4;
         
         // Refresh button
-        self.fill_rounded_rect(buffer, x as i32, btn_y as i32, btn_size, btn_size,
-                                hex_to_u32(&theme.colors.surface_elevated), 4);
-        let refresh_char = if loading { "◌" } else { "↻" };
+        self.fill_rounded_rect(buffer, Rect { x, y: btn_y, width: btn_size, height: btn_size },
+                    hex_to_u32(&theme.colors.surface_elevated), 4);
+        let refresh_char = if state.loading { "â—Œ" } else { "â†»" };
         self.draw_text(buffer, refresh_char, (x + 8) as i32, (btn_y + 22) as i32, 16.0, text_color);
         x += btn_size + 12;
 
         // Help button near network indicator
-        if show_help_button {
+        if state.show_help_button {
             let help_x = network_x - btn_size as i32 - 8;
-            let help_bg = if help_open {
+            let help_bg = if state.help_open {
                 accent
             } else {
                 hex_to_u32(&theme.colors.surface_elevated)
             };
-            let help_fg = if help_open {
+            let help_fg = if state.help_open {
                 0xffffffff
-            } else if help_enabled {
+            } else if state.help_enabled {
                 text_color
             } else {
                 text_dim
             };
-            self.fill_rounded_rect(buffer, help_x, btn_y as i32, btn_size, btn_size, help_bg, 4);
+                            self.fill_rounded_rect(buffer, Rect { x: help_x as u32, y: btn_y, width: btn_size, height: btn_size }, help_bg, 4);
             self.draw_text(buffer, "?", help_x + 10, (btn_y + 22) as i32, 16.0, help_fg);
             address_right = help_x - 8;
         }
         
         // Address bar
         let addr_width = (address_right - x as i32).max(200) as u32;
-        self.fill_rounded_rect(buffer, x as i32, btn_y as i32, addr_width, btn_size,
-                                hex_to_u32(&theme.colors.surface_elevated), 4);
+        self.fill_rounded_rect(buffer, Rect { x, y: btn_y, width: addr_width, height: btn_size },
+                    hex_to_u32(&theme.colors.surface_elevated), 4);
         
         // URL text
         let url_display = if url.is_empty() { "Search or enter URL" } else { url };
         let url_color = if url.is_empty() { text_dim } else { text_color };
-        self.draw_text_truncated(buffer, url_display, (x + 8) as i32, (btn_y + 22) as i32, 
-                                  addr_width - 16, 14.0, url_color);
+        self.draw_text_truncated(buffer, url_display, TextParams { x: (x + 8) as i32, y: (btn_y + 22) as i32, max_width: addr_width - 16, size: 14.0, color: url_color });
         
         // Loading indicator
-        if loading {
+        if state.loading {
             let progress = (std::time::Instant::now().elapsed().as_millis() % 2000) as f32 / 2000.0;
             let bar_width = (addr_width as f32 * progress) as u32;
             self.fill_rect(buffer, x as i32, (btn_y + btn_size - 3) as i32, bar_width, 2, accent);
@@ -359,8 +407,7 @@ impl UIRenderer {
             
             // Tab background
             if is_active {
-                self.fill_rounded_rect(buffer, (bounds.x + 4) as i32, y as i32, 
-                                        bounds.width - 8, tab_height, accent, 4);
+                self.fill_rounded_rect(buffer, Rect { x: (bounds.x + 4), y, width: bounds.width - 8, height: tab_height }, accent, 4);
             }
             
             // Favicon placeholder
@@ -371,31 +418,29 @@ impl UIRenderer {
             if tab.loading {
                 // Loading spinner placeholder
                 let spinner_color = if is_active { 0xffffffff } else { accent };
-                self.fill_rounded_rect(buffer, favicon_x as i32, favicon_y as i32,
-                                        favicon_size, favicon_size, spinner_color, 8);
+                self.fill_rounded_rect(buffer, Rect { x: favicon_x, y: favicon_y, width: favicon_size, height: favicon_size }, spinner_color, 8);
                     let spinner_color = if is_active { 0xffffffff } else { accent };
                 // Globe icon placeholder
                 let icon_color = if is_active { 0xffffffff } else { text_dim };
-                self.draw_text(buffer, "○", favicon_x as i32, (favicon_y + 14) as i32, 14.0, icon_color);
+                self.draw_text(buffer, "â—‹", favicon_x as i32, (favicon_y + 14) as i32, 14.0, icon_color);
             }
                     let icon_color = if is_active { 0xffffffff } else { text_dim };
             // Title
             let title_x = favicon_x + favicon_size + 8;
             let title_width = bounds.width - (title_x - bounds.x) - 28;
             let title_color = if is_active { 0xffffffff } else { text_color };
-            self.draw_text_truncated(buffer, &tab.title, title_x as i32, (y + 26) as i32,
-                                      title_width, 13.0, title_color);
+            self.draw_text_truncated(buffer, &tab.title, TextParams { x: title_x as i32, y: (y + 26) as i32, max_width: title_width, size: 13.0, color: title_color });
                 let title_color = if is_active { 0xffffffff } else { text_color };
             // Trust indicator dot
             let trust_color = tab.trust_color();
             let dot_x = bounds.x + bounds.width - 20;
-            self.fill_rounded_rect(buffer, dot_x as i32, (y + 14) as i32, 10, 10, trust_color, 5);
+            self.fill_rounded_rect(buffer, Rect { x: dot_x, y: (y + 14), width: 10, height: 10 }, trust_color, 5);
             
             // Close button (X)
             if !tab.pinned {
                 let close_x = bounds.x + bounds.width - 24;
                 let close_color = if is_active { 0xccffffff } else { text_dim };
-                self.draw_text(buffer, "×", close_x as i32, (y + 24) as i32, 14.0, close_color);
+                self.draw_text(buffer, "Ã—", close_x as i32, (y + 24) as i32, 14.0, close_color);
             }
                     let close_color = if is_active { 0xccffffff } else { text_dim };
             y += tab_height + 4;
@@ -403,8 +448,7 @@ impl UIRenderer {
         
         // New tab button
         if y + 36 < bounds.y + bounds.height {
-            self.fill_rounded_rect(buffer, (bounds.x + 4) as i32, y as i32,
-                                    bounds.width - 8, 32, hex_to_u32(&theme.colors.surface_elevated), 4);
+            self.fill_rounded_rect(buffer, Rect { x: (bounds.x + 4), y, width: bounds.width - 8, height: 32 }, hex_to_u32(&theme.colors.surface_elevated), 4);
             self.draw_text(buffer, "+ New Tab", (bounds.x + 12) as i32, (y + 22) as i32, 13.0, text_dim);
         }
     }
@@ -443,13 +487,12 @@ impl UIRenderer {
             } else {
                 hex_to_u32(&theme.colors.surface_elevated)
             };
-            self.fill_rounded_rect(buffer, x as i32, y as i32, tile_w, tile_h, bg, 8);
+            self.fill_rounded_rect(buffer, Rect { x, y, width: tile_w, height: tile_h }, bg, 8);
             
             // Preview area
             let preview_h = tile_h - 50;
             if let Some(ref preview) = tab.preview {
-                self.blit_preview(buffer, &preview.data, preview.width, preview.height,
-                                  (x + 4) as i32, (y + 4) as i32, tile_w - 8, preview_h - 8);
+                self.blit_preview(buffer, &preview.data, BlitParams { src_w: preview.width, src_h: preview.height, dst_x: (x + 4) as i32, dst_y: (y + 4) as i32, dst_w: tile_w - 8, dst_h: preview_h - 8 });
             } else {
                 // Placeholder
                 let placeholder = hex_to_u32(&theme.colors.surface);
@@ -458,18 +501,16 @@ impl UIRenderer {
             
             // Title
             let title_color = if is_selected { 0xffffffff } else { hex_to_u32(&theme.colors.text_primary) };
-            self.draw_text_truncated(buffer, &tab.title, (x + 8) as i32, (y + preview_h + 20) as i32,
-                                      tile_w - 16, 13.0, title_color);
+            self.draw_text_truncated(buffer, &tab.title, TextParams { x: (x + 8) as i32, y: (y + preview_h + 20) as i32, max_width: tile_w - 16, size: 13.0, color: title_color });
             
             // Trust indicator
             let trust_color = tab.trust_color();
-            self.fill_rounded_rect(buffer, (x + tile_w - 18) as i32, (y + preview_h + 8) as i32, 
-                                    10, 10, trust_color, 5);
+            self.fill_rounded_rect(buffer, Rect { x: (x + tile_w - 18), y: (y + preview_h + 8), width: 10, height: 10 }, trust_color, 5);
             // Keyboard hint
             if i < 9 {
                 let hint = format!("{}", i + 1);
                 let hint_bg = 0x80000000;
-                self.fill_rounded_rect(buffer, (x + 8) as i32, (y + 8) as i32, 20, 20, hint_bg, 4);
+                self.fill_rounded_rect(buffer, Rect { x: (x + 8), y: (y + 8), width: 20, height: 20 }, hint_bg, 4);
                 self.draw_text(buffer, &hint, (x + 13) as i32, (y + 22) as i32, 12.0, 0xffffffff);
             }
         }
@@ -479,8 +520,8 @@ impl UIRenderer {
         let search_w = 400u32.min(content_rect.width - 40);
         let search_x = content_rect.x + (content_rect.width - search_w) / 2;
         
-        self.fill_rounded_rect(buffer, search_x as i32, search_y as i32, search_w, 40,
-                                hex_to_u32(&theme.colors.surface), 20);
+        self.fill_rounded_rect(buffer, Rect { x: search_x, y: search_y, width: search_w, height: 40 },
+                    hex_to_u32(&theme.colors.surface), 20);
         self.draw_text(buffer, "Type to search tabs...", (search_x + 16) as i32, (search_y + 26) as i32,
                         14.0, hex_to_u32(&theme.colors.text_secondary));
     }
@@ -503,22 +544,19 @@ impl UIRenderer {
         let colors = if is_dark { NetworkBarColors::dark() } else { NetworkBarColors::light() };
         
         // Background
-        self.fill_rounded_rect(buffer, bounds.x as i32, bounds.y as i32, 
-                               bounds.width, bounds.height, colors.background, 4);
+        self.fill_rounded_rect(buffer, Rect { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }, colors.background, 4);
         
         // Activity level bar
         let activity = network_bar.activity_level();
         if activity > 0.0 {
             let bar_width = ((bounds.width - 8) as f32 * activity) as u32;
             let bar_color = if network_bar.is_active { colors.active } else { colors.receiving };
-            self.fill_rounded_rect(buffer, (bounds.x + 4) as i32, (bounds.y + bounds.height - 6) as i32,
-                                   bar_width, 4, bar_color, 2);
+            self.fill_rounded_rect(buffer, Rect { x: (bounds.x + 4), y: (bounds.y + bounds.height - 6), width: bar_width, height: 4 }, bar_color, 2);
         }
         
         // Status text
         let status = network_bar.status_text();
-        self.draw_text_truncated(buffer, &status, (bounds.x + 8) as i32, (bounds.y + 14) as i32,
-                                 bounds.width - 16, 11.0, colors.text);
+        self.draw_text_truncated(buffer, &status, TextParams { x: (bounds.x + 8) as i32, y: (bounds.y + 14) as i32, max_width: bounds.width - 16, size: 11.0, color: colors.text });
         
         // If expanded, show individual requests
         if network_bar.expanded && bounds.height > 30 {
@@ -527,11 +565,11 @@ impl UIRenderer {
                 if y as u32 > bounds.y + bounds.height - 16 { break; }
                 
                 let state_icon = match req.state {
-                    RequestState::Connecting => "🔄",
-                    RequestState::Sending => "📤",
-                    RequestState::Waiting => "⏳",
-                    RequestState::Receiving => "📥",
-                    _ => "✓",
+                    RequestState::Connecting => "ðŸ”„",
+                    RequestState::Sending => "ðŸ“¤",
+                    RequestState::Waiting => "â³",
+                    RequestState::Receiving => "ðŸ“¥",
+                    _ => "âœ“",
                 };
                 let line = format!("{} {}", state_icon, truncate_host(&req.host, 20));
                 self.draw_text(buffer, &line, (bounds.x + 8) as i32, y, 10.0, colors.text_dim);
@@ -546,15 +584,15 @@ impl UIRenderer {
         let text_color = hex_to_u32(&theme.colors.text_secondary);
         
         let label = if client_count == 0 {
-            "📱 No phones".to_string()
+            "ðŸ“± No phones".to_string()
         } else if client_count == 1 {
-            "📱 1 phone".to_string()
+            "ðŸ“± 1 phone".to_string()
         } else {
-            format!("📱 {} phones", client_count)
+            format!("ðŸ“± {} phones", client_count)
         };
         
         let width = self.measure_text(&label, 12.0) + 16;
-        self.fill_rounded_rect(buffer, x, y, width, 24, bg, 12);
+        self.fill_rounded_rect(buffer, Rect { x: x as u32, y: y as u32, width, height: 24 }, bg, 12);
         self.draw_text(buffer, &label, x + 8, y + 16, 12.0, text_color);
     }
 
@@ -567,7 +605,7 @@ impl UIRenderer {
         let accent = hex_to_u32(&theme.colors.accent);
 
         self.fill_rect(buffer, bounds.x as i32, bounds.y as i32, bounds.width, bounds.height, bg);
-        self.stroke_rect(buffer, bounds.x as i32, bounds.y as i32, bounds.width, bounds.height, border, 1);
+        self.stroke_rect(buffer, bounds, border, 1);
 
         let mut y = bounds.y as i32 + 24;
         let x = bounds.x as i32 + 14;
@@ -591,11 +629,11 @@ impl UIRenderer {
         let hint_title = "What can I ask?";
         self.draw_text(buffer, hint_title, x, y, 13.0, text);
         y += 18;
-        self.draw_text(buffer, "• Explain the current page", x, y, 12.0, dim);
+        self.draw_text(buffer, "â€¢ Explain the current page", x, y, 12.0, dim);
         y += 16;
-        self.draw_text(buffer, "• Is this site safe?", x, y, 12.0, dim);
+        self.draw_text(buffer, "â€¢ Is this site safe?", x, y, 12.0, dim);
         y += 16;
-        self.draw_text(buffer, "• How do I do ...?", x, y, 12.0, dim);
+        self.draw_text(buffer, "â€¢ How do I do ...?", x, y, 12.0, dim);
         y += 24;
 
         let footer = "Configured in config/ai.toml";

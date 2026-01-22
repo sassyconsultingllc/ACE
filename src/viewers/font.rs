@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Font Viewer - TTF, OTF, WOFF preview with character map
 
 use crate::file_handler::{FileContent, FontContent, OpenFile};
@@ -52,10 +52,10 @@ impl FontViewer {
     fn render_toolbar(&mut self, ui: &mut egui::Ui, font: &FontContent) {
         ui.horizontal(|ui| {
             // View mode
-            if ui.selectable_label(!self.show_charset, "📝 Preview").clicked() {
+            if ui.selectable_label(!self.show_charset, "ðŸ“ Preview").clicked() {
                 self.show_charset = false;
             }
-            if ui.selectable_label(self.show_charset, "🔤 Character Map").clicked() {
+            if ui.selectable_label(self.show_charset, "ðŸ”¤ Character Map").clicked() {
                 self.show_charset = true;
             }
             
@@ -80,13 +80,13 @@ impl FontViewer {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // Weight and style badges
                 if font.is_italic {
-                    ui.label(RichText::new("𝐼").color(Color32::from_rgb(100, 200, 255)));
+                    ui.label(RichText::new("ð¼").color(Color32::from_rgb(100, 200, 255)));
                 }
                 if font.weight >= 700 {
                     ui.label(RichText::new("B").strong().color(Color32::from_rgb(255, 200, 100)));
                 }
                 if font.is_monospace {
-                    ui.label(RichText::new("⌨").color(Color32::from_rgb(150, 255, 150)));
+                    ui.label(RichText::new("âŒ¨").color(Color32::from_rgb(150, 255, 150)));
                 }
                 if font.is_variable {
                     ui.label(RichText::new("VAR").small().color(Color32::from_rgb(255, 150, 255)));
@@ -211,10 +211,10 @@ impl FontViewer {
                 self.charset_start = 0x1F300;
             }
             
-            if ui.button("◀").clicked() {
+            if ui.button("â—€").clicked() {
                 self.charset_start = self.charset_start.saturating_sub(256);
             }
-            if ui.button("▶").clicked() {
+            if ui.button("â–¶").clicked() {
                 self.charset_start = self.charset_start.saturating_add(256);
             }
             
@@ -238,7 +238,7 @@ impl FontViewer {
                         let display = char_opt
                             .filter(|c| !c.is_control())
                             .map(|c| c.to_string())
-                            .unwrap_or_else(|| "·".into());
+                            .unwrap_or_else(|| "Â·".into());
                         
                         let response = ui.add_sized(
                             [cell_size, cell_size],

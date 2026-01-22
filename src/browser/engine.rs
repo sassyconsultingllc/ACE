@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+﻿#![allow(dead_code, unused_variables, unused_imports)]
 //! Browser Engine - WebView management and coordination
 
 use crate::browser::{
@@ -324,7 +324,7 @@ impl BrowserEngine {
         
         if let Ok(file) = self.file_handler.load_file(&path) {
             if let Some(tab) = self.active_tab_mut() {
-                tab.content = TabContent::File(file);
+                tab.content = TabContent::File(Box::new(file));
             }
         }
         
@@ -530,7 +530,7 @@ impl BrowserEngine {
     }
     
     pub fn start_download(&mut self, url: &str, filename: Option<&str>) {
-        if let Ok(_id) = self.downloads.start_download(url, filename) {
+        if self.downloads.start_download(url, filename).is_ok() {
             self.show_downloads_panel = true;
         }
     }
@@ -660,7 +660,7 @@ impl BrowserEngine {
     
     /// Check if a URL should be opened in native viewer
     pub fn should_open_natively(url: &str) -> bool {
-        let lower = url.to_lowercase();
+        let lower = crate::fontcase::ascii_lower(url);
         
         // Check file extension
         let extensions = [

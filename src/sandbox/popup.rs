@@ -1,4 +1,4 @@
-//! Smart Popup Handling
+﻿//! Smart Popup Handling
 //!
 //! NOT a dumb popup blocker. Smart detection of legitimate vs spam popups.
 //!

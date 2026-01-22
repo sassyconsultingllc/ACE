@@ -1,4 +1,4 @@
-// Layout - Box layout engine with Flexbox support
+﻿// Layout - Box layout engine with Flexbox support
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
@@ -88,6 +88,7 @@ impl LayoutEngine {
         root_box
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn build_layout_tree(&self, node: &NodeRef, styles: &std::collections::HashMap<*const std::cell::RefCell<crate::dom::Node>, ComputedStyle>) -> LayoutBox {
         let n = node.borrow();
         let style = styles.get(&(node.as_ref() as *const _)).cloned().unwrap_or_default();
@@ -437,6 +438,7 @@ impl LayoutEngine {
         layout_box.bounds.height = layout_box.content.height;
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     pub fn hit_test(&self, layout: &LayoutBox, x: f32, y: f32) -> Option<NodeRef> {
         for child in layout.children.iter().rev() {
             if let Some(node) = self.hit_test(child, x, y) { return Some(node); }
@@ -450,6 +452,7 @@ impl LayoutEngine {
         None
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     pub fn find_layout_for_node<'a>(&self, layout: &'a LayoutBox, target: &NodeRef) -> Option<&'a LayoutBox> {
         if let Some(ref node) = layout.node {
             if std::rc::Rc::ptr_eq(node, target) { return Some(layout); }

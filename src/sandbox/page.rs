@@ -1,4 +1,4 @@
-//! Page Sandbox - Every page starts untrusted
+﻿//! Page Sandbox - Every page starts untrusted
 //!
 //! SECURITY MODEL:
 //! ================
@@ -126,7 +126,7 @@ impl Interaction {
                 }
                 // Don't count clicks on known ad containers
                 let suspicious = ["ad", "banner", "sponsor", "promo", "track"];
-                if suspicious.iter().any(|s| element_type.to_lowercase().contains(s)) {
+                if suspicious.iter().any(|s| crate::fontcase::ascii_lower(element_type).contains(s)) {
                     return false;
                 }
                 true

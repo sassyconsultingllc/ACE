@@ -1,4 +1,4 @@
-//! AI Assistant Integration
+﻿//! AI Assistant Integration
 //! 
 //! Off by default. When enabled, provides contextual help like Windows XP's "?" button.
 //! Easter eggs throughout encourage exploration and learning.
@@ -66,7 +66,7 @@ pub enum HelpQuery {
 /// Easter eggs - local food discounts + Foodie Finder promo
 pub const EASTER_EGGS: &[(&str, &str, &str)] = &[
     // (trigger, message, reward_code)
-    ("konami", "↑↑↓↓←→←→BA - Classic gamer! Here's 15% off at participating local restaurants.", "SASSY-KONAMI-15"),
+    ("konami", "â†‘â†‘â†“â†“â†â†’â†â†’BA - Classic gamer! Here's 15% off at participating local restaurants.", "SASSY-KONAMI-15"),
     ("night_owl", "Browsing at 3am? Night owls get 10% off late-night eats.", "SASSY-NIGHTOWL-10"),
     ("first_block", "First popup blocked! Celebrate with $5 off your next local meal.", "SASSY-BLOCKED-5"),
     ("speed_reader", "500 pages today! Fuel up with 20% off local coffee shops.", "SASSY-READER-20"),
@@ -130,7 +130,7 @@ pub fn load_runtime() -> AiRuntime {
         .unwrap_or_default();
 
     let parsed: AiFile = toml::from_str(&content).unwrap_or_default();
-    let provider = match parsed.ai.provider.to_lowercase().as_str() {
+    let provider = match crate::fontcase::ascii_lower(&parsed.ai.provider).as_str() {
         "anthropic" => AiProvider::Anthropic,
         "openai" => AiProvider::OpenAI,
         "local" => AiProvider::Local,
@@ -432,7 +432,7 @@ pub fn load_whisper_config() -> crate::voice::VoiceConfig {
     let parsed: AiFile = toml::from_str(&content).unwrap_or_default();
     let ws = parsed.whisper;
     
-    let model = match ws.model.to_lowercase().as_str() {
+    let model = match crate::fontcase::ascii_lower(&ws.model).as_str() {
         "tiny" => crate::voice::WhisperModel::Tiny,
         "base" => crate::voice::WhisperModel::Base,
         "small" => crate::voice::WhisperModel::Small,

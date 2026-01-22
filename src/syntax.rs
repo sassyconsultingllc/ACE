@@ -1,4 +1,4 @@
-//! Syntax Highlighting Engine
+﻿//! Syntax Highlighting Engine
 //!
 //! Renders code blocks with beautiful syntax highlighting.
 //! Supports: JavaScript, TypeScript, Rust, Python, HTML, CSS, JSON, Markdown
@@ -143,7 +143,7 @@ pub enum Language {
 impl Language {
     /// Detect language from file extension or code block annotation
     pub fn from_annotation(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(s).as_str() {
             "js" | "javascript" | "jsx" => Language::JavaScript,
             "ts" | "typescript" | "tsx" => Language::TypeScript,
             "rs" | "rust" => Language::Rust,

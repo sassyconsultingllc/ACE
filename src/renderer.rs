@@ -1,4 +1,4 @@
-// Renderer - Main renderer coordination
+﻿// Renderer - Main renderer coordination
 #![allow(dead_code)]
 
 use crate::dom::{Document, NodeRef, Node};

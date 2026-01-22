@@ -1,4 +1,4 @@
-//! MCP Panel - The AI Coding Interface
+﻿//! MCP Panel - The AI Coding Interface
 //!
 //! A beautiful, integrated panel for conversational code editing.
 //! Shows the multi-agent conversation, task progress, and pending edits.
@@ -121,7 +121,7 @@ impl McpPanel {
         
         // Header
         elements.push(RenderElement::Header {
-            title: "🤖 AI Coding Assistant".to_string(),
+            title: "ðŸ¤– AI Coding Assistant".to_string(),
             subtitle: Some(format!("Session: {}", &self.orchestrator.session_id[..8])),
         });
         
@@ -149,7 +149,7 @@ impl McpPanel {
         let pending_count = self.orchestrator.pending_edits.len();
         if pending_count > 0 {
             elements.push(RenderElement::Notification {
-                message: format!("⚡ {} pending code changes - switch to Edits tab to review", pending_count),
+                message: format!("âš¡ {} pending code changes - switch to Edits tab to review", pending_count),
                 style: NotificationStyle::Info,
             });
         }
@@ -173,7 +173,7 @@ impl McpPanel {
         let mut elements = Vec::new();
         
         elements.push(RenderElement::Header {
-            title: "🎯 Task Pipeline".to_string(),
+            title: "ðŸŽ¯ Task Pipeline".to_string(),
             subtitle: Some(format!("{} tasks total", self.orchestrator.tasks.len())),
         });
         
@@ -190,7 +190,7 @@ impl McpPanel {
         
         if !in_progress.is_empty() {
             elements.push(RenderElement::SectionHeader {
-                title: "🔄 In Progress".to_string(),
+                title: "ðŸ”„ In Progress".to_string(),
             });
             for task in in_progress {
                 elements.push(self.render_task(task));
@@ -199,7 +199,7 @@ impl McpPanel {
         
         if !pending.is_empty() {
             elements.push(RenderElement::SectionHeader {
-                title: "⏳ Pending".to_string(),
+                title: "â³ Pending".to_string(),
             });
             for task in pending {
                 elements.push(self.render_task(task));
@@ -208,7 +208,7 @@ impl McpPanel {
         
         if !completed.is_empty() {
             elements.push(RenderElement::SectionHeader {
-                title: "✅ Completed".to_string(),
+                title: "âœ… Completed".to_string(),
             });
             for task in completed {
                 elements.push(self.render_task(task));
@@ -240,7 +240,7 @@ impl McpPanel {
         let pending_count = self.orchestrator.pending_edits.len();
         
         elements.push(RenderElement::Header {
-            title: "⚡ Code Changes".to_string(),
+            title: "âš¡ Code Changes".to_string(),
             subtitle: Some(format!("{} pending", pending_count)),
         });
         
@@ -248,8 +248,8 @@ impl McpPanel {
             // Bulk action buttons
             elements.push(RenderElement::ActionBar {
                 actions: vec![
-                    Action { label: "✓ Approve All".to_string(), id: "approve_all".to_string(), style: ActionStyle::Primary },
-                    Action { label: "✗ Reject All".to_string(), id: "reject_all".to_string(), style: ActionStyle::Danger },
+                    Action { label: "âœ“ Approve All".to_string(), id: "approve_all".to_string(), style: ActionStyle::Primary },
+                    Action { label: "âœ— Reject All".to_string(), id: "reject_all".to_string(), style: ActionStyle::Danger },
                 ],
             });
             
@@ -260,7 +260,7 @@ impl McpPanel {
             }
         } else {
             elements.push(RenderElement::EmptyState {
-                icon: "📝".to_string(),
+                icon: "ðŸ“".to_string(),
                 message: "No pending code changes".to_string(),
                 hint: "Ask the AI to create or modify code".to_string(),
             });
@@ -299,7 +299,7 @@ impl McpPanel {
         let mut elements = Vec::new();
         
         elements.push(RenderElement::Header {
-            title: "⚙️ MCP Settings".to_string(),
+            title: "âš™ï¸ MCP Settings".to_string(),
             subtitle: None,
         });
         
@@ -547,7 +547,7 @@ impl McpTheme {
 /// Detect language from file extension
 fn detect_language(path: &str) -> Language {
     if let Some(ext) = path.split('.').next_back() {
-        match ext.to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(ext).as_str() {
             "rs" => Language::Rust,
             "js" | "jsx" | "mjs" => Language::JavaScript,
             "ts" | "tsx" => Language::TypeScript,

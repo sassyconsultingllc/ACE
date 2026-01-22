@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! PDF Viewer - Pure Rust PDF viewing with text extraction
 //!
 //! REPLACES: Adobe Acrobat ($240/yr), Foxit PDF ($140/yr)
@@ -13,6 +13,7 @@ use crate::file_handler::{FileContent, OpenFile};
 use eframe::egui::{self, Color32, FontId, Pos2, Rect, RichText, Sense, Stroke, Vec2};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use crate::fontcase;
 
 // ============================================================================
 // PAGE CONTENT
@@ -219,10 +220,10 @@ impl PdfViewer {
             return;
         }
         
-        let query_lower = query.to_lowercase();
+        let query_lower = crate::fontcase::ascii_lower(query);
         
         for page in &self.pages {
-            let text_lower = page.text.to_lowercase();
+            let text_lower = crate::fontcase::ascii_lower(&page.text);
             let mut start = 0;
             
             while let Some(pos) = text_lower[start..].find(&query_lower) {
@@ -278,7 +279,7 @@ impl PdfViewer {
         
         // Error message
         if let Some(ref err) = self.error_message {
-            ui.colored_label(Color32::YELLOW, format!("⚠ {}", err));
+            ui.colored_label(Color32::YELLOW, format!("âš  {}", err));
             ui.separator();
         }
         
@@ -303,15 +304,15 @@ impl PdfViewer {
     fn render_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             // Thumbnail toggle
-            ui.toggle_value(&mut self.show_thumbnails, "🖼 Thumbnails");
+            ui.toggle_value(&mut self.show_thumbnails, "ðŸ–¼ Thumbnails");
             
             ui.separator();
             
             // Navigation
-            if ui.button("⏮").on_hover_text("First page").clicked() {
+            if ui.button("â®").on_hover_text("First page").clicked() {
                 self.current_page = 0;
             }
-            if ui.button("◀").on_hover_text("Previous page").clicked() {
+            if ui.button("â—€").on_hover_text("Previous page").clicked() {
                 self.current_page = self.current_page.saturating_sub(1);
             }
             
@@ -325,35 +326,35 @@ impl PdfViewer {
             }
             ui.label(format!("/ {}", self.total_pages));
             
-            if ui.button("▶").on_hover_text("Next page").clicked()
+            if ui.button("⏭").on_hover_text("Next page").clicked()
                 && self.current_page + 1 < self.total_pages {
                     self.current_page += 1;
                 }
-            if ui.button("⏭").on_hover_text("Last page").clicked() {
+            if ui.button("⏮").on_hover_text("Last page").clicked() {
                 self.current_page = self.total_pages.saturating_sub(1);
             }
             
             ui.separator();
             
             // Zoom
-            if ui.button("➖").clicked() {
+            if ui.button("âž–").clicked() {
                 self.zoom = (self.zoom - 0.1).max(0.5);
             }
             ui.label(format!("{:.0}%", self.zoom * 100.0));
-            if ui.button("➕").clicked() {
+            if ui.button("âž•").clicked() {
                 self.zoom = (self.zoom + 0.1).min(3.0);
             }
             
             ui.separator();
             
             // Tools
-            ui.selectable_value(&mut self.current_tool, PdfTool::Select, "☝ Select");
-            ui.selectable_value(&mut self.current_tool, PdfTool::Highlight, "🖌 Highlight");
-            ui.selectable_value(&mut self.current_tool, PdfTool::Note, "📝 Note");
+            ui.selectable_value(&mut self.current_tool, PdfTool::Select, "â˜ Select");
+            ui.selectable_value(&mut self.current_tool, PdfTool::Highlight, "ðŸ–Œ Highlight");
+            ui.selectable_value(&mut self.current_tool, PdfTool::Note, "ðŸ“ Note");
             
             // Search (right aligned)
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("🔍").clicked() {
+                if ui.button("ðŸ”").clicked() {
                     let q = self.search_query.clone();
                     self.search(&q);
                 }
@@ -369,8 +370,8 @@ impl PdfViewer {
                 }
                 
                 if !self.search_results.is_empty() {
-                    if ui.button("▼").clicked() { self.next_search_result(); }
-                    if ui.button("▲").clicked() { self.prev_search_result(); }
+                    if ui.button("â–¼").clicked() { self.next_search_result(); }
+                    if ui.button("â–²").clicked() { self.prev_search_result(); }
                     ui.label(format!("{}/{}", self.current_search_index + 1, self.search_results.len()));
                 }
             });

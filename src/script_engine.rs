@@ -1,4 +1,4 @@
-// Script Engine - JavaScript-DOM bridge
+﻿// Script Engine - JavaScript-DOM bridge
 #![allow(dead_code)]
 
 #[allow(unused_imports)]

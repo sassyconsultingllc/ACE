@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // SASSY BROWSER - SMART HISTORY
 // ============================================================================
 // History doesn't save for 14.7 seconds. Click a bad link? Hit back. Gone.
@@ -10,6 +10,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use crate::fontcase;
 
 // The magic number: how long before a page visit becomes "intentional"
 pub const INTENT_DELAY_SECS: f64 = 14.7;
@@ -107,9 +108,9 @@ impl NsfwDetector {
     }
     
     pub fn analyze(&self, url: &str, title: &str) -> (bool, f32) {
-        let url_lower = url.to_lowercase();
-        let title_lower = title.to_lowercase();
-        let domain = extract_domain(url).to_lowercase();
+        let url_lower = crate::fontcase::ascii_lower(url);
+        let title_lower = crate::fontcase::ascii_lower(title);
+        let domain = crate::fontcase::ascii_lower(&extract_domain(url));
         
         // Check user exclusions first
         if self.user_excluded_domains.iter().any(|d| domain.contains(d)) {
@@ -337,13 +338,13 @@ impl SmartHistory {
     // ========================================================================
     
     pub fn search(&self, query: &str) -> Vec<&HistoryEntry> {
-        let query_lower = query.to_lowercase();
-        
+        let query_lower = crate::fontcase::ascii_lower(query);
+
         self.entries.iter()
             .filter(|e| {
-                e.url.to_lowercase().contains(&query_lower) ||
-                e.title.to_lowercase().contains(&query_lower) ||
-                e.domain.to_lowercase().contains(&query_lower)
+                crate::fontcase::ascii_lower(&e.url).contains(&query_lower) ||
+                crate::fontcase::ascii_lower(&e.title).contains(&query_lower) ||
+                crate::fontcase::ascii_lower(&e.domain).contains(&query_lower)
             })
             .collect()
     }
@@ -356,9 +357,9 @@ impl SmartHistory {
     }
     
     pub fn for_domain(&self, domain: &str) -> Vec<&HistoryEntry> {
-        let domain_lower = domain.to_lowercase();
+        let domain_lower = crate::fontcase::ascii_lower(domain);
         self.entries.iter()
-            .filter(|e| e.domain.to_lowercase() == domain_lower)
+            .filter(|e| crate::fontcase::ascii_lower(&e.domain) == domain_lower)
             .collect()
     }
     
@@ -418,8 +419,8 @@ impl SmartHistory {
     }
     
     pub fn delete_for_domain(&mut self, domain: &str) {
-        let domain_lower = domain.to_lowercase();
-        self.entries.retain(|e| e.domain.to_lowercase() != domain_lower);
+        let domain_lower = crate::fontcase::ascii_lower(domain);
+        self.entries.retain(|e| crate::fontcase::ascii_lower(&e.domain) != domain_lower);
     }
     
     pub fn delete_range(&mut self, start: u64, end: u64) {

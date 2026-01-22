@@ -1,4 +1,4 @@
-//! Voice Input System - Microphone → Whisper → AI
+﻿//! Voice Input System - Microphone â†’ Whisper â†’ AI
 //!
 //! Provides speech-to-text transcription using OpenAI's Whisper model.
 //! Supports multiple input sources:
@@ -13,9 +13,9 @@
 //!
 //! # Architecture
 //! ```text
-//! Microphone → cpal capture → 16kHz f32 samples → Whisper → Text → MCP Voice Agent
-//!              ↓
-//!           VAD (Voice Activity Detection) → Auto-stop on silence
+//! Microphone â†’ cpal capture â†’ 16kHz f32 samples â†’ Whisper â†’ Text â†’ MCP Voice Agent
+//!              â†“
+//!           VAD (Voice Activity Detection) â†’ Auto-stop on silence
 //! ```
 //!
 //! # GPU Acceleration
@@ -410,19 +410,20 @@ impl WhisperEngine {
             let end_ms = start_ms + (chunk.len() as u64 * 1000 / 16000);
             
             // In real impl, transcribe chunk here
-            let chunk_text = ""; // placeholder
-            
+            // TODO: Replace with actual transcription
+            let chunk_text = String::new(); // placeholder for streaming result
+
             if !chunk_text.is_empty() {
-                full_text.push_str(chunk_text);
+                full_text.push_str(&chunk_text);
                 full_text.push(' ');
-                
+
                 segments.push(TranscriptSegment {
                     start_ms,
                     end_ms,
-                    text: chunk_text.to_string(),
+                    text: chunk_text.clone(),
                     confidence: 0.9,
                 });
-                
+
                 // Call back with partial result
                 callback(&full_text, false);
             }
@@ -478,7 +479,7 @@ pub enum AudioFormat {
 
 impl AudioFormat {
     pub fn from_extension(ext: &str) -> Option<Self> {
-        match ext.to_lowercase().as_str() {
+        match crate::fontcase::ascii_lower(ext).as_str() {
             "wav" => Some(AudioFormat::Wav),
             "mp3" => Some(AudioFormat::Mp3),
             "flac" => Some(AudioFormat::Flac),
@@ -1466,7 +1467,7 @@ pub enum VoiceCommand {
 impl VoiceCommand {
     /// Parse voice input into a command type
     pub fn parse(text: &str) -> Self {
-        let lower = text.to_lowercase();
+        let lower = crate::fontcase::ascii_lower(text);
         
         if lower.starts_with("cancel") || lower == "stop" || lower == "abort" {
             return VoiceCommand::Cancel;
@@ -1624,26 +1625,26 @@ impl CloudTranscriber {
         
         // Add file part
         body.extend_from_slice(format!(
-            "--{}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.{}\"\r\nContent-Type: audio/{}\r\n\r\n",
+            "--{}`r`nContent-Disposition: form-data; name=\"file\"; filename=\"audio.{}\"`r`nContent-Type: audio/{}`r`n`r`n",
             boundary, extension, extension
         ).as_bytes());
         body.extend_from_slice(audio_data);
-        body.extend_from_slice(b"\r\n");
+        body.extend_from_slice(b"`r`n");
         
         // Add model part
         body.extend_from_slice(format!(
-            "--{}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-1\r\n",
+            "--{}`r`nContent-Disposition: form-data; name=\"model\"`r`n`r`nwhisper-1`r`n",
             boundary
         ).as_bytes());
         
         // Add language part
         body.extend_from_slice(format!(
-            "--{}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\n{}\r\n",
+            "--{}`r`nContent-Disposition: form-data; name=\"language\"`r`n`r`n{}`r`n",
             boundary, self.language
         ).as_bytes());
         
         // End boundary
-        body.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
+        body.extend_from_slice(format!("--{}--`r`n", boundary).as_bytes());
         
         // Make request
         let response = ureq::post(CloudProvider::OpenAI.endpoint())

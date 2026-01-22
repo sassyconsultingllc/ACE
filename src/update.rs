@@ -1,4 +1,4 @@
-//! Auto-Update System
+﻿//! Auto-Update System
 //!
 //! Checks for updates, downloads securely, applies with user consent.
 //! Uses the same quarantine system as downloads - no silent installs.

@@ -1,4 +1,4 @@
-//! Data persistence - stores user data, config, and state
+﻿//! Data persistence - stores user data, config, and state
 
 #![allow(dead_code)]
 

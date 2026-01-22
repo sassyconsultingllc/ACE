@@ -1,4 +1,4 @@
-//! Hit testing - find which layout box is at a given (x, y) coordinate
+﻿//! Hit testing - find which layout box is at a given (x, y) coordinate
 //!
 //! Essential for:
 //! - Link clicking

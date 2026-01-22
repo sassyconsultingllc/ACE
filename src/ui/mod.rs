@@ -1,4 +1,4 @@
-//! UI system for Sassy Browser
+﻿//! UI system for Sassy Browser
 //! Modular, themeable, four-edge sidebar layout
 
 pub mod theme;
@@ -195,15 +195,13 @@ impl UI {
         self.mouse_y = y;
         
         // Handle dragging
-        if let Some(ref drag) = self.dragging {
-            if let DragState::SidebarResize { edge, .. } = drag {
-                let delta = match edge {
-                    Edge::Top | Edge::Bottom => dy,
-                    Edge::Left | Edge::Right => dx,
-                };
-                if let Some(sidebar) = self.sidebar_layout.get_mut(*edge) {
-                    sidebar.handle_resize(delta);
-                }
+        if let Some(DragState::SidebarResize { edge, .. }) = &self.dragging {
+            let delta = match edge {
+                Edge::Top | Edge::Bottom => dy,
+                Edge::Left | Edge::Right => dx,
+            };
+            if let Some(sidebar) = self.sidebar_layout.get_mut(*edge) {
+                sidebar.handle_resize(delta);
             }
         }
         

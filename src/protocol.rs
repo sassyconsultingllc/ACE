@@ -1,4 +1,4 @@
-// Protocol - HTTP/HTTPS handling
+﻿// Protocol - HTTP/HTTPS handling
 #![allow(dead_code)]
 
 use url::Url;
@@ -97,10 +97,10 @@ impl HttpClient {
                 
                 for name in resp.headers_names() {
                     if let Some(value) = resp.header(&name) {
-                        if name.to_lowercase() == "set-cookie" {
+                        if crate::fontcase::ascii_lower(&name) == "set-cookie" {
                             cookies.push(value.to_string());
                         }
-                        headers.insert(name.to_lowercase(), value.to_string());
+                        headers.insert(crate::fontcase::ascii_lower(&name), value.to_string());
                     }
                 }
                 
@@ -113,7 +113,7 @@ impl HttpClient {
                 let mut headers = HashMap::new();
                 for name in resp.headers_names() {
                     if let Some(value) = resp.header(&name) {
-                        headers.insert(name.to_lowercase(), value.to_string());
+                        headers.insert(crate::fontcase::ascii_lower(&name), value.to_string());
                     }
                 }
                 let body = resp.into_string().unwrap_or_default();
@@ -382,26 +382,26 @@ impl MultipartFormData {
         let mut result = Vec::new();
         
         for part in &self.parts {
-            result.extend_from_slice(format!("--{}\r\n", self.boundary).as_bytes());
+            result.extend_from_slice(format!("--{}`r`n", self.boundary).as_bytes());
             
             if let Some(ref filename) = part.filename {
                 result.extend_from_slice(format!(
-                    "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
+                    "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"`r`n",
                     part.name, filename
                 ).as_bytes());
             } else {
                 result.extend_from_slice(format!(
-                    "Content-Disposition: form-data; name=\"{}\"\r\n",
+                    "Content-Disposition: form-data; name=\"{}\"`r`n",
                     part.name
                 ).as_bytes());
             }
             
-            result.extend_from_slice(format!("Content-Type: {}\r\n\r\n", part.content_type).as_bytes());
+            result.extend_from_slice(format!("Content-Type: {}`r`n`r`n", part.content_type).as_bytes());
             result.extend_from_slice(&part.data);
-            result.extend_from_slice(b"\r\n");
+            result.extend_from_slice(b"`r`n");
         }
         
-        result.extend_from_slice(format!("--{}--\r\n", self.boundary).as_bytes());
+        result.extend_from_slice(format!("--{}--`r`n", self.boundary).as_bytes());
         result
     }
 }

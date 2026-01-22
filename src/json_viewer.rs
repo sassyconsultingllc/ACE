@@ -1,4 +1,4 @@
-//! JSON Viewer
+﻿//! JSON Viewer
 //!
 //! Pretty-print and navigate JSON responses.
 //! Collapsible tree view with syntax highlighting.
@@ -430,13 +430,14 @@ impl JsonViewer {
         }
         
         if let Some(root) = self.root.clone() {
-            self.search_recursive(&root, "$".to_string(), &query.to_lowercase());
+            let query_lower = crate::fontcase::ascii_lower(query);
+            self.search_recursive(&root, "$".to_string(), &query_lower);
         }
     }
     
     fn search_recursive(&mut self, value: &JsonValue, path: String, query: &str) {
         match value {
-            JsonValue::String(s) if s.to_lowercase().contains(query) => {
+            JsonValue::String(s) if crate::fontcase::ascii_lower(s).contains(query) => {
                 self.search_results.push(path.clone());
             }
             JsonValue::Number(n) if n.to_string().contains(query) => {
@@ -449,7 +450,7 @@ impl JsonViewer {
             }
             JsonValue::Object(pairs) => {
                 for (key, val) in pairs {
-                    if key.to_lowercase().contains(query) {
+                    if crate::fontcase::ascii_lower(key).contains(query) {
                         self.search_results.push(format!("{}.{}", path, key));
                     }
                     self.search_recursive(val, format!("{}.{}", path, key), query);

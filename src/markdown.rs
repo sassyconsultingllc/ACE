@@ -1,4 +1,4 @@
-//! Markdown Renderer
+﻿//! Markdown Renderer
 //!
 //! Renders Markdown to styled DOM elements.
 //! Supports: headings, lists, code blocks, links, emphasis, tables.

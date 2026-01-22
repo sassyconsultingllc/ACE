@@ -1,4 +1,4 @@
-//! DOM Bridge - Connects JS interpreter to HTML rendering
+﻿//! DOM Bridge - Connects JS interpreter to HTML rendering
 #![allow(dead_code, unused_variables, unused_imports)]
 
 use std::cell::RefCell;
@@ -6,13 +6,16 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use super::value::{Value, DomElement};
 
+/// Type alias for event listener map to reduce complexity
+type EventListenerMap = Rc<RefCell<HashMap<(u64, String), Vec<Value>>>>;
+
 /// Bridge between JavaScript and the DOM
 pub struct DomBridge {
     elements: Rc<RefCell<HashMap<u64, Rc<RefCell<DomElement>>>>>,
     next_id: Rc<RefCell<u64>>,
     document_title: Rc<RefCell<String>>,
     document_body: Rc<RefCell<Option<Rc<RefCell<DomElement>>>>>,
-    event_listeners: Rc<RefCell<HashMap<(u64, String), Vec<Value>>>>,
+    event_listeners: EventListenerMap,
 }
 
 impl DomBridge {
