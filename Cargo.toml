@@ -238,3 +238,7 @@ opt-level = 2
 [[bin]]
 name = "sassy-browser"
 path = "src/main.rs"
+
+[[bin]]
+name = "sassy-ui"
+path = "src/bin/sassy-ui.rs"
