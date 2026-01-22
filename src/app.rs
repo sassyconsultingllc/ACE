@@ -3779,9 +3779,16 @@ fn configure_fonts(ctx: &egui::Context) {
     // Register an embedded fallback font under a unique key so we can
     // reliably reference it in the family list without depending on
     // system-installed font names.
+    let fallback_bytes = include_bytes!("../assets/fonts/Metamorphous-7wZ4.ttf");
     fonts.font_data.insert(
         "SassyFallback".into(),
-        egui::FontData::from_static(include_bytes!("../assets/fonts/Metamorphous-7wZ4.ttf")),
+        egui::FontData::from_static(fallback_bytes),
+    );
+    // Also register under the commonly-referenced name so any code that
+    // still asks for "Space Grotesk" will find the embedded bytes.
+    fonts.font_data.insert(
+        "Space Grotesk".into(),
+        egui::FontData::from_static(fallback_bytes),
     );
     // Prefer open-source system fonts if available; fall back to egui defaults.
     // Space Grotesk (OFL) for headings if installed, otherwise default proportional.
