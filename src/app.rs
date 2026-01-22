@@ -3771,6 +3771,15 @@ fn parse_ymd(input: &str) -> Option<(i32, u32, u32)> {
 
 fn configure_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
+    // Ensure a safe fallback font is available when named system fonts
+    // (e.g. "Space Grotesk") are not installed. Embed a bundled font
+    // from `assets/fonts/` and register it under the Space Grotesk name.
+    // This prevents a panic when epaint can't find a named font.
+    // NOTE: using `include_bytes!` embeds the font into the binary.
+    fonts.font_data.insert(
+        "Space Grotesk".into(),
+        egui::FontData::from_static(include_bytes!("../assets/fonts/Metamorphous-7wZ4.ttf")),
+    );
     // Prefer open-source system fonts if available; fall back to egui defaults.
     // Space Grotesk (OFL) for headings if installed, otherwise default proportional.
     fonts
