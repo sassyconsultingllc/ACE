@@ -3784,6 +3784,12 @@ fn configure_fonts(ctx: &egui::Context) {
         .or_default()
         .insert(0, "Space Grotesk".into());
 
+    // Debug: list registered font keys and proportional family order.
+    tracing::info!("Registered font keys: {:?}", fonts.font_data.keys().cloned().collect::<Vec<_>>());
+    if let Some(fam) = fonts.families.get(&egui::FontFamily::Proportional) {
+        tracing::info!("Proportional family: {:?}", fam);
+    }
+
     ctx.set_fonts(fonts);
 }
 
