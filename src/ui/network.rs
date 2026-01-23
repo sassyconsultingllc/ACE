@@ -369,3 +369,36 @@ pub fn format_bytes(bytes: u64) -> String {
         format!("{:.2} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_network_monitor_basic_flow() {
+        let mut nm = NetworkMonitor::new();
+        assert_eq!(nm.state(), NetworkState::Idle);
+
+        let id = nm.start_request("https://example.com/data", "GET");
+        assert_eq!(nm.active_count(), 1);
+
+        nm.update_request(id, RequestState::Connecting);
+        assert!(matches!(nm.state(), NetworkState::Connecting));
+
+        nm.update_request(id, RequestState::Receiving);
+        assert!(matches!(nm.state(), NetworkState::Downloading));
+
+        nm.bytes_received(id, 1024);
+        assert!(nm.stats().total_bytes_down >= 1024);
+
+        nm.complete_request(id, true);
+        assert_eq!(nm.requests_completed, 1);
+        assert_eq!(nm.active_count(), 0);
+    }
+
+    #[test]
+    fn test_format_helpers() {
+        assert_eq!(format_bytes(500), "500 B");
+        assert!(format_speed(2048, "Downloading").contains("KB/s"));
+    }
+}

@@ -1,6 +1,5 @@
 ﻿//! UI Rendering - Production quality text, shapes, UI components
 //! Uses fontdue for real text rendering
-#![allow(dead_code)]
 #![allow(unused_variables)]
 
 use crate::ui::{Theme, Edge, SidebarLayout, Rect, TabManager};
@@ -685,4 +684,76 @@ fn wrap_lines(input: &str, max_width: usize) -> Vec<String> {
         lines.push(input.to_string());
     }
     lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ui_renderer_basic() {
+        let mut renderer = UIRenderer::new(80, 60);
+        assert_eq!(renderer.width, 80);
+        assert_eq!(renderer.height, 60);
+
+        renderer.resize(100, 90);
+        assert_eq!(renderer.width, 100);
+        assert_eq!(renderer.height, 90);
+
+        let mut buffer = vec![0u32; (renderer.width * renderer.height) as usize];
+
+        // Fill a small rect and ensure buffer changed
+        renderer.fill_rect(&mut buffer, 2, 2, 10, 6, 0xFF112233);
+        let idx = (3 * renderer.width + 3) as usize;
+        assert!(buffer[idx] != 0);
+
+        // Draw simple text
+        let w = renderer.draw_text(&mut buffer, "Hi", 10, 10, 12.0, 0xFFFFFFFF);
+        assert!(w > 0);
+
+        // Measure text
+        let m = renderer.measure_text("Hello", 12.0);
+        assert!(m > 0);
+
+        // Truncated text
+        let params = TextParams { x: 5, y: 20, max_width: 30, size: 12.0, color: 0xFF000000 };
+        let tw = renderer.draw_text_truncated(&mut buffer, "This is a long piece of text", params);
+        assert!(tw > 0);
+
+        // Blit preview
+        let preview = vec![0xFFAA0000u32; 4];
+        renderer.blit_preview(&mut buffer, &preview, BlitParams { src_w: 2, src_h: 2, dst_x: 0, dst_y: 0, dst_w: 4, dst_h: 4 });
+    }
+
+    #[test]
+    fn test_ui_renderer_full_draws() {
+        let mut renderer = UIRenderer::new(800, 600);
+        let mut buffer = vec![0u32; (renderer.width * renderer.height) as usize];
+
+        let theme = crate::ui::theme::Theme::dark();
+        let nav_state = NavBarState { can_back: true, can_forward: false, loading: true, show_help_button: true, help_enabled: true, help_open: false };
+        renderer.draw_nav_bar(&mut buffer, Rect { x: 0, y: 0, width: 800, height: 48 }, &theme, "https://example.com", nav_state);
+
+        // Tab list / tiles
+        let mut tabs = crate::ui::tabs::TabManager::new();
+        tabs.create_tab("https://a.example".into());
+        tabs.create_tab("https://b.example".into());
+        renderer.draw_tab_list(&mut buffer, Rect { x: 0, y: 60, width: 200, height: 400 }, &tabs, &theme);
+
+        // Activate tile view and draw tiles
+        let mut tabs2 = tabs;
+        tabs2.toggle_tile_view();
+        renderer.draw_tab_tiles(&mut buffer, &tabs2, &theme, Rect { x: 220, y: 60, width: 560, height: 400 });
+
+        // Sidebar and network bar
+        let layout = crate::ui::sidebar::SidebarLayout::from_theme(&theme);
+        renderer.draw_sidebar(&mut buffer, crate::ui::Edge::Left, &layout, &theme);
+
+        let net = crate::ui::network_bar::NetworkBar::new();
+        renderer.draw_network_bar_detailed(&mut buffer, Rect { x: 0, y: 480, width: 800, height: 60 }, &net, true);
+
+        // Sync status and help pane
+        renderer.draw_sync_status(&mut buffer, 10, 10, 1, &theme);
+        renderer.draw_help_pane(&mut buffer, Rect { x: 400, y: 200, width: 300, height: 200 }, &theme, &crate::ai::AiConfig::default(), Some("Hi"), None);
+    }
 }

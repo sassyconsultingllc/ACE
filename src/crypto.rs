@@ -7,7 +7,6 @@
 //! 3. Symmetric encryption uses ChaCha20-Poly1305 (AEAD)
 //! 4. Key derivation uses HKDF-SHA256 for sub-keys
 
-#![allow(dead_code)]
 //!
 //! WHY THIS MATTERS:
 //! - User data encrypted at rest

@@ -15,7 +15,6 @@ use std::time::{Duration, Instant};
 const WS_MAGIC: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 /// Client connection state
-#[allow(dead_code)] // Fields for connection tracking
 #[derive(Debug)]
 pub struct Client {
     pub id: u64,
@@ -138,7 +137,6 @@ impl SyncServer {
     }
     
     /// Stop the server
-    #[allow(dead_code)]
     pub fn stop(&mut self) {
         *self.running.lock().unwrap() = false;
     }
@@ -185,7 +183,6 @@ impl SyncServer {
     }
     
     /// Disconnect a client
-    #[allow(dead_code)]
     pub fn disconnect_client(&self, client_id: u64) {
         self.clients.lock().unwrap().remove(&client_id);
     }

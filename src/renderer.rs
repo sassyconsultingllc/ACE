@@ -1,5 +1,4 @@
 ﻿// Renderer - Main renderer coordination
-#![allow(dead_code)]
 
 use crate::dom::{Document, NodeRef, Node};
 use crate::style::{StyleEngine, ComputedStyle};

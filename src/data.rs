@@ -1,7 +1,6 @@
 ﻿//! Data persistence - stores user data, config, and state
 
-#![allow(dead_code)]
-
+ 
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -150,6 +149,22 @@ pub struct SessionRestore {
     pub user_id: String,
     pub tabs: Vec<TabState>,
     pub active_tab: Option<usize>,
+    /// Persisted quarantined files (encrypted bytes may be stored)
+    pub quarantine: Vec<QuarantinedFileState>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuarantinedFileState {
+    pub id: String,
+    pub filename: String,
+    pub source_url: String,
+    pub content_type: String,
+    pub size_bytes: usize,
+    pub sha256: String,
+    /// Milliseconds since UNIX_EPOCH when file was quarantined
+    pub quarantined_at_ms: u128,
+    /// Optional encrypted bytes for at-rest storage
+    pub encrypted_data: Option<Vec<u8>>,
 }
 
 impl SessionRestore {

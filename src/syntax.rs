@@ -3,8 +3,7 @@
 //! Renders code blocks with beautiful syntax highlighting.
 //! Supports: JavaScript, TypeScript, Rust, Python, HTML, CSS, JSON, Markdown
 
-#![allow(dead_code)]
-
+ 
 use crate::style::Color;
 use std::collections::HashMap;
 

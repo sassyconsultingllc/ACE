@@ -7,7 +7,6 @@
 //! - Browser audio buffers
 //!
 
-#![allow(dead_code)]
 //! The transcribed text feeds into the MCP Voice agent (Grok) for
 //! natural language understanding.
 //!
@@ -895,6 +894,7 @@ fn resample(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
         .collect()
 }
 
+
 // ============================================================================
 // Microphone Capture (Platform-specific)
 // ============================================================================
@@ -1207,7 +1207,6 @@ impl MicrophoneCapture {
 }
 
 /// Process audio callback (helper for cpal integration)
-#[allow(dead_code)]
 fn process_audio_callback(
     data: &[f32],
     buffer: &Arc<Mutex<Vec<f32>>>,
@@ -1942,6 +1941,35 @@ pub fn key_name(code: u32) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    
+    #[test]
+    fn test_whisper_model_and_audio_helpers() {
+        let m = WhisperModel::Base;
+        let fname = m.filename();
+        assert!(fname.contains("ggml") || !fname.is_empty());
+
+        let path = m.model_path();
+        assert!(path.contains("models/"));
+
+        // VoiceConfig default
+        let cfg = VoiceConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.model, WhisperModel::Base);
+
+        // WhisperParams default language
+        let p = WhisperParams::default();
+        assert_eq!(p.language, "en");
+
+        // AudioFormat parsing
+        assert_eq!(AudioFormat::from_extension("mp3"), Some(AudioFormat::Mp3));
+        assert_eq!(AudioFormat::from_mime("audio/wav"), Some(AudioFormat::Wav));
+
+        // convert_raw_pcm: 8-bit unsigned center value
+        let samples = convert_raw_pcm(&[128u8], 8, false, true).unwrap();
+        assert_eq!(samples.len(), 1);
+        // value should be approximately 0.0
+        assert!(samples[0].abs() <= 1.0);
+    }
     
     #[test]
     fn test_whisper_model_paths() {

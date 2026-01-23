@@ -3,8 +3,7 @@
 //! Test APIs directly in the browser - like Postman built-in.
 //! The killer feature for developers.
 
-#![allow(dead_code)]
-
+ 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

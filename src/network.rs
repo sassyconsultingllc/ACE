@@ -7,7 +7,7 @@
 //! - Idle: No network activity
 //! - Connecting: Establishing connection
 
-#![allow(dead_code)]
+ 
 //! - Downloading: Receiving data
 //! - Uploading: Sending data (form submit, etc)
 //! - Stalled: Connection open but no data

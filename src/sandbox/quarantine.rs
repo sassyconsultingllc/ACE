@@ -38,7 +38,6 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// A file held in quarantine
-#[allow(dead_code)] // Fields for security tracking and file management
 #[derive(Debug, Clone)]
 pub struct QuarantinedFile {
     pub id: String,
@@ -49,7 +48,9 @@ pub struct QuarantinedFile {
     pub sha256: String,
     pub security: SecurityContext,
     pub warnings: Vec<Warning>,
-    pub data: Vec<u8>,  // File contents in memory
+    pub data: Vec<u8>,  // File contents in memory (plaintext)
+    /// Optional encrypted bytes for at-rest storage when provided with a key
+    pub encrypted_data: Option<Vec<u8>>,
     pub quarantined_at: Instant,
 }
 
@@ -89,6 +90,7 @@ impl QuarantinedFile {
             security: SecurityContext::new(source_url, ContentType::Download),
             warnings: Vec::new(),
             data,
+            encrypted_data: None,
             quarantined_at: Instant::now(),
         };
         
@@ -256,7 +258,7 @@ impl QuarantinedFile {
     
     /// Release file to filesystem
     #[allow(dead_code)]
-    pub fn release(&self, destination: PathBuf) -> Result<PathBuf, String> {
+    pub fn release(&mut self, destination: PathBuf, key: Option<&crate::crypto::EncryptionKey>) -> Result<PathBuf, String> {
         match self.can_release() {
             ReleaseStatus::Ready => {}
             ReleaseStatus::NeedsInteraction { current, required } => {
@@ -275,10 +277,20 @@ impl QuarantinedFile {
                 return Err(format!("Blocked: {}", reason));
             }
         }
-        
+        // Resolve plaintext to write: prefer decrypted encrypted_data when present
+        let plaintext: Vec<u8> = if let Some(ref ct) = self.encrypted_data {
+            if let Some(k) = key {
+                k.decrypt(ct).map_err(|e| format!("Decrypt failed: {}", e))?
+            } else {
+                return Err("Quarantined file is encrypted; unlock required to release".to_string());
+            }
+        } else {
+            self.data.clone()
+        };
+
         // Write file
         let path = destination.join(&self.filename);
-        std::fs::write(&path, &self.data)
+        std::fs::write(&path, &plaintext)
             .map_err(|e| format!("Failed to write: {}", e))?;
         
         // Mark file as downloaded from internet so OS applies warnings
@@ -287,6 +299,55 @@ impl QuarantinedFile {
         }
         
         Ok(path)
+    }
+}
+
+impl QuarantinedFile {
+    /// Reconstruct a quarantined file from persisted state. Plaintext `data`
+    /// will be empty when only `encrypted_data` is available.
+    pub fn from_state(s: &crate::data::QuarantinedFileState) -> Self {
+        // compute quarantined_at as now minus age if possible
+        let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+        let age_ms = now_ms.saturating_sub(s.quarantined_at_ms);
+        let quarantined_at = Instant::now() - std::time::Duration::from_millis(age_ms as u64);
+
+        QuarantinedFile {
+            id: s.id.clone(),
+            filename: s.filename.clone(),
+            source_url: s.source_url.clone(),
+            content_type: s.content_type.clone(),
+            size_bytes: s.size_bytes,
+            sha256: s.sha256.clone(),
+            security: SecurityContext::new(s.source_url.clone(), ContentType::Download),
+            warnings: Vec::new(),
+            data: Vec::new(),
+            encrypted_data: s.encrypted_data.clone(),
+            quarantined_at,
+        }
+    }
+}
+
+impl QuarantinedFile {
+    /// Encrypt the in-memory data with the provided user `EncryptionKey`.
+    /// After encryption the ciphertext is stored in `encrypted_data` and
+    /// the plaintext `data` is left intact so callers can choose when to
+    /// zero it. This is a non-breaking, opt-in helper for integrating
+    /// encrypted storage.
+    pub fn encrypt_with(&mut self, key: &crate::crypto::EncryptionKey) -> Result<(), String> {
+        let ct = key.encrypt(&self.data)?;
+        self.encrypted_data = Some(ct);
+        Ok(())
+    }
+
+    /// Decrypt stored encrypted bytes with the provided key. If no
+    /// encrypted data is present this returns a clone of the plaintext
+    /// `data` buffer for compatibility.
+    pub fn decrypt_with(&self, key: &crate::crypto::EncryptionKey) -> Result<Vec<u8>, String> {
+        if let Some(ref ct) = self.encrypted_data {
+            key.decrypt(ct)
+        } else {
+            Ok(self.data.clone())
+        }
     }
 }
 
@@ -328,7 +389,6 @@ fn mark_as_downloaded(_path: &std::path::Path, _source_url: &str) -> Result<(), 
     Ok(())
 }
 
-#[allow(dead_code)] // Fields for status reporting
 #[derive(Debug, Clone)]
 pub enum ReleaseStatus {
     Ready,
@@ -338,13 +398,11 @@ pub enum ReleaseStatus {
 }
 
 /// The quarantine vault
-#[allow(dead_code)] // Fields used for file storage
 #[derive(Debug, Default)]
 pub struct Quarantine {
     files: HashMap<String, QuarantinedFile>,
 }
 
-#[allow(dead_code)] // Public API methods
 impl Quarantine {
     pub fn new() -> Self {
         Self {
@@ -425,6 +483,8 @@ mod tests {
             ReleaseStatus::NeedsInteraction { .. }
         ));
     }
+
+    
     
     #[test]
     fn test_dangerous_exe() {

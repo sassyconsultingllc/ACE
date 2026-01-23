@@ -12,6 +12,8 @@
 use crate::js::{JsInterpreter, DomBridge};
 use eframe::egui::{self, Color32, RichText, Ui, Vec2};
 use std::collections::HashMap;
+use std::sync::mpsc;
+use std::thread;
 use crate::fontcase;
 
 /// Parsed HTML document
@@ -53,6 +55,7 @@ pub struct HtmlRenderer {
     font_size_base: f32,
     warn_color: Color32,
     pub cached_doc: Option<HtmlDocument>,
+    image_update_registered: bool,
 }
 
 impl HtmlRenderer {
@@ -68,6 +71,7 @@ impl HtmlRenderer {
             font_size_base: 16.0,
             warn_color: Color32::from_rgb(0xf7, 0x8c, 0x1f),
             cached_doc: None,
+            image_update_registered: false,
         }
     }
 
@@ -239,8 +243,37 @@ impl HtmlRenderer {
 
         let nodes = self.parse_nodes(&body_html);
 
+        // Execute inline <script> blocks found in the parsed nodes so that
+        // the JS interpreter is kept in sync with the rendered DOM.
+        for script in self.collect_inline_scripts(&nodes) {
+            if let Err(e) = self.js.execute(&script) {
+                tracing::warn!("script execution error: {}", e);
+            }
+        }
+
         let doc = HtmlDocument { title, nodes, styles };
         self.cached_doc = Some(doc);
+    }
+
+    /// Recursively collect inline script contents from parsed nodes.
+    fn collect_inline_scripts(&self, nodes: &[HtmlNode]) -> Vec<String> {
+        let mut out = Vec::new();
+        for node in nodes {
+            if let HtmlNode::Element { tag, children, .. } = node {
+                if tag.eq_ignore_ascii_case("script") {
+                    let mut s = String::new();
+                    for c in children {
+                        if let HtmlNode::Text(t) = c {
+                            s.push_str(t);
+                        }
+                    }
+                    out.push(s);
+                } else {
+                    out.extend(self.collect_inline_scripts(children));
+                }
+            }
+        }
+        out
     }
 
     /// Very small fallback HTML -> nodes parser (returns a single text node for now)
@@ -444,11 +477,41 @@ impl HtmlRenderer {
     
     /// Render HTML document to egui
     pub fn render(&mut self, ui: &mut Ui, url: &str) {
+        // Register for image-update notifications on first render so
+        // background imaging workers can trigger UI repaints.
+        if !self.image_update_registered {
+            let (tx, rx) = mpsc::channel::<String>();
+            // Register sender with imaging module
+            crate::imaging::register_image_update_sender(tx);
+            let ctx = ui.ctx().clone();
+            // Spawn a listener thread that requests repaint when images update
+            // and enqueues the url into the imaging update queue for selective reload.
+            thread::spawn(move || {
+                while let Ok(url) = rx.recv() {
+                    // push into imaging queue so render() can selectively reload textures
+                    crate::imaging::push_image_update_to_queue(&url);
+                    ctx.request_repaint();
+                }
+            });
+            self.image_update_registered = true;
+        }
         // Try to fetch and parse if we don't have cached content
         if self.cached_doc.is_none() {
             self.load_url(url);
         }
         
+        // Drain any image updates and reload textures for those specific URLs
+        let updates = crate::imaging::drain_image_update_queue();
+        for u in updates {
+            if let Some(crate::imaging::ImageState::Loaded(img)) = crate::imaging::cache_get_global(&u) {
+                let size = [img.width as usize, img.height as usize];
+                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &img.pixels);
+                let key = format!("sassy_image:{}", u);
+                // Replace or insert texture so subsequent draw uses fresh data
+                let _ = ui.ctx().load_texture(&key, color_image, egui::TextureOptions::LINEAR);
+            }
+        }
+
         if let Some(doc) = &self.cached_doc.clone() {
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
@@ -670,10 +733,38 @@ impl HtmlRenderer {
                     }
                     
                     "img" => {
-                        let _src = attrs.get("src").cloned().unwrap_or_default();
+                        let src = attrs.get("src").cloned().unwrap_or_default();
                         let alt = attrs.get("alt").cloned().unwrap_or_else(|| "Image".into());
-                        ui.label(RichText::new(format!("[Image: {}]", alt)).italics().color(Color32::GRAY));
-                        // TODO: Actually load and display images
+
+                        // If it's a data: URL, try to decode immediately
+                        let maybe_img = if src.starts_with("data:") {
+                            crate::imaging::load_data_url(&src).ok()
+                        } else {
+                            // Trigger background load and then check cache for a loaded image
+                            crate::imaging::load_image_background(&src);
+                            match crate::imaging::cache_get_global(&src) {
+                                Some(crate::imaging::ImageState::Loaded(img)) => Some(img),
+                                _ => None,
+                            }
+                        };
+
+                        if let Some(img) = maybe_img {
+                            // Convert to egui ColorImage and display
+                            let size = [img.width as usize, img.height as usize];
+                            let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &img.pixels);
+                            let key = format!("sassy_image:{}", src);
+                            let texture = ui.ctx().load_texture(&key, color_image, egui::TextureOptions::LINEAR);
+                            ui.image((texture.id(), Vec2::new(img.width as f32, img.height as f32)));
+                        } else {
+                            // Show placeholder text or small placeholder image
+                            let ph = crate::imaging::placeholder_image(64, 48);
+                            let size = [ph.width as usize, ph.height as usize];
+                            let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &ph.pixels);
+                            let key = format!("sassy_image_placeholder:{}", src);
+                            let texture = ui.ctx().load_texture(&key, color_image, egui::TextureOptions::LINEAR);
+                            ui.image((texture.id(), Vec2::new(ph.width as f32, ph.height as f32)));
+                            ui.label(RichText::new(alt.to_string()).italics().color(Color32::GRAY));
+                        }
                     }
                     
                     "table" => {

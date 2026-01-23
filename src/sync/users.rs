@@ -149,7 +149,6 @@ fn get_initials(name: &str) -> String {
 }
 
 /// Active session
-#[allow(dead_code)] // Fields for session tracking
 #[derive(Debug, Clone)]
 pub struct UserSession {
     pub user_id: String,
@@ -160,7 +159,6 @@ pub struct UserSession {
     pub last_activity: std::time::Instant,
 }
 
-#[allow(dead_code)] // Session management methods
 impl UserSession {
     pub fn new(user_id: String, device_name: String) -> Self {
         let now = std::time::Instant::now();
@@ -314,7 +312,6 @@ impl UserManager {
 }
 
 /// What phone sees for login
-#[allow(dead_code)] // Fields for login display
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserLoginInfo {
     pub id: String,

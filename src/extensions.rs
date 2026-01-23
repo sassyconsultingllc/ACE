@@ -1,6 +1,5 @@
 ﻿// Extensions - WebExtension-compatible extension support
-#![allow(dead_code)]
-
+ 
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;

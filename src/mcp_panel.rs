@@ -3,8 +3,7 @@
 //! A beautiful, integrated panel for conversational code editing.
 //! Shows the multi-agent conversation, task progress, and pending edits.
 
-#![allow(dead_code)]
-
+ 
 #[allow(unused_imports)]
 use crate::mcp::{
     AgentRole, CodeEdit, EditOperation, McpMessage, McpOrchestrator,

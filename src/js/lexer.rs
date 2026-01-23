@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_variables, unused_imports)]
+﻿#![allow(unused_variables, unused_imports)]
 
 use std::iter::Peekable;
 use std::str::Chars;
@@ -41,7 +41,6 @@ pub enum TokenKind {
     Eof,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,

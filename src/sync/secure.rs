@@ -179,7 +179,6 @@ impl SyncConfig {
 }
 
 /// Device info from connection
-#[allow(dead_code)] // Fields for connected device tracking
 #[derive(Debug, Clone)]
 pub struct ConnectedDevice {
     pub ip: IpAddr,
@@ -189,7 +188,6 @@ pub struct ConnectedDevice {
     pub approved: bool,
 }
 
-#[allow(dead_code)] // Public API methods
 impl ConnectedDevice {
     /// Check if this device is from Tailscale
     pub fn is_tailscale(&self) -> bool {
@@ -211,7 +209,6 @@ impl ConnectedDevice {
 }
 
 /// Secure server wrapper
-#[allow(dead_code)] // Fields for secure server state
 pub struct SecureSyncServer {
     pub config: SyncConfig,
     pub tailscale: TailscaleInfo,
@@ -219,7 +216,6 @@ pub struct SecureSyncServer {
     listener: Option<TcpListener>,
 }
 
-#[allow(dead_code)] // Public API methods for secure sync server
 impl SecureSyncServer {
     pub fn new(config: SyncConfig) -> Self {
         let tailscale = TailscaleInfo::detect();

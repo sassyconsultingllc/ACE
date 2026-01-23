@@ -1,6 +1,5 @@
 ﻿// DOM - Document Object Model representation
-#![allow(dead_code)]
-
+ 
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;

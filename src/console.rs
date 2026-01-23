@@ -3,8 +3,7 @@
 //! Interactive JavaScript console, network inspector, and DOM explorer.
 //! The core feature that makes Sassy the developer's browser.
 
-#![allow(dead_code)]
-
+ 
 use crate::style::Color;
 use crate::syntax::{SyntaxHighlighter, Language};
 use std::collections::VecDeque;

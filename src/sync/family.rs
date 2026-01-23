@@ -27,7 +27,6 @@ pub enum TrustLevel {
     Blocked,
 }
 
-#[allow(dead_code)] // Public API methods
 impl TrustLevel {
     /// Get human-readable description
     pub fn description(&self) -> &'static str {
@@ -71,7 +70,6 @@ pub struct FamilyConfig {
     pub notify_admins: Vec<String>,
 }
 
-#[allow(dead_code)] // Public API methods for family device management
 impl FamilyConfig {
     /// Check if a device is allowed to connect
     pub fn is_allowed(&self, device_id: &str) -> bool {
@@ -228,7 +226,6 @@ impl FamilyConfig {
 }
 
 /// What info is shared about connected devices (privacy-respecting)
-#[allow(dead_code)] // Fields for device presence tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DevicePresence {
     pub device_id: String,
@@ -240,7 +237,6 @@ pub struct DevicePresence {
 }
 
 /// Notification types (not surveillance)
-#[allow(dead_code)] // Variants for notification system
 #[allow(clippy::enum_variant_names)] // Device prefix is semantic - these ARE device notifications
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FamilyNotification {

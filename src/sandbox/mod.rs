@@ -34,6 +34,7 @@
 pub mod quarantine;
 pub mod page;
 pub mod popup;
+pub mod network;
 
 #[allow(unused_imports)] // Public API re-exports for external use
 pub use quarantine::{Quarantine, QuarantinedFile, ReleaseStatus, Warning, WarningLevel};
@@ -55,7 +56,6 @@ pub enum TrustLevel {
     Established = 4,
 }
 
-#[allow(dead_code)] // Public API methods for trust level checks
 impl TrustLevel {
     pub fn can_execute(&self) -> bool {
         *self >= TrustLevel::Approved
@@ -81,7 +81,6 @@ impl TrustLevel {
 }
 
 /// Security context for downloads
-#[allow(dead_code)] // Fields used for security tracking
 #[derive(Debug, Clone)]
 pub struct SecurityContext {
     pub id: String,
@@ -104,14 +103,12 @@ pub enum ContentType {
     Extension,
 }
 
-#[allow(dead_code)] // Timestamp for auditing
 #[derive(Debug, Clone)]
 pub struct InteractionRecord {
     pub action: InteractionType,
     pub timestamp: Instant,
 }
 
-#[allow(dead_code)] // Variants for future interaction types
 #[derive(Debug, Clone, Copy)]
 pub enum InteractionType {
     Acknowledge,
@@ -121,7 +118,6 @@ pub enum InteractionType {
     Deny,
 }
 
-#[allow(dead_code)] // Fields for security audit
 #[derive(Debug, Clone)]
 pub struct Violation {
     pub description: String,
@@ -129,7 +125,6 @@ pub struct Violation {
     pub timestamp: Instant,
 }
 
-#[allow(dead_code)] // Severity levels for future use
 #[derive(Debug, Clone, Copy)]
 pub enum ViolationSeverity {
     Low,
@@ -215,7 +210,6 @@ impl SecurityContext {
         }
     }
     
-    #[allow(dead_code)]
     pub fn meets_time_requirement(&self) -> bool {
         self.created_at.elapsed() >= Duration::from_secs(5)
     }

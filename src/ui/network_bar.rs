@@ -3,8 +3,7 @@
 //! Shows when the browser is doing network activity, so users know
 //! something is happening even when the page looks static.
 
-#![allow(dead_code)]
-
+ 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
@@ -39,7 +38,6 @@ pub struct NetworkBar {
     pub expanded: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct NetworkRequest {
     pub id: u64,
@@ -123,7 +121,6 @@ impl RequestTiming {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RequestState {
     Connecting,
@@ -135,7 +132,6 @@ pub enum RequestState {
     Cancelled,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub struct ActivitySample {
     pub timestamp: Instant,
@@ -584,5 +580,25 @@ impl NetworkBarColors {
             text: 0xff202020,
             text_dim: 0xff808080,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_and_truncate_helpers() {
+        assert_eq!(format_bytes(512), "512 B");
+        assert!(format_bytes(1024 * 1024).contains("MB"));
+
+        let long = "https://sub.example.com/path/to/resource?query=1";
+        let host = truncate_host(long, 10);
+        assert!(host.len() <= 10 + 3);
+
+        let short_url = truncate_url(long, 20);
+        assert!(short_url.len() <= 23);
+
+        assert_eq!(state_text(RequestState::Connecting), "Connecting");
     }
 }

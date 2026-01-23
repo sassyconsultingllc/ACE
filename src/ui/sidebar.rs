@@ -2,8 +2,7 @@
 //! Sidebars can be placed on any edge: top, right, bottom, left
 //! Each can be hidden, collapsed, or expanded
 
-#![allow(dead_code)]
-
+ 
 use super::theme::{SidebarState, Theme};
 use std::collections::HashMap;
 
@@ -395,5 +394,27 @@ impl SidebarLayout {
 impl Default for SidebarLayout {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sidebar_bounds_and_toggle() {
+        let layout = SidebarLayout::new();
+        let left = layout.get(Edge::Left).unwrap();
+        assert!(left.is_visible());
+
+        // Toggle left sidebar on a separate layout instance
+        let mut layout2 = SidebarLayout::new();
+        layout2.toggle(Edge::Left);
+        let left2 = layout2.get(Edge::Left).unwrap();
+        assert!(!matches!(left2.state, super::SidebarState::Hidden));
+
+        // Content rect should shrink when left sidebar present
+        let rect = layout.content_rect(800, 600);
+        assert!(rect.width < 800);
     }
 }

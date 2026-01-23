@@ -13,7 +13,6 @@ pub fn normalize_key<S: AsRef<str>>(s: S) -> String {
 }
 
 /// Case-insensitive equality after normalization.
-#[allow(dead_code)]
 pub fn eq_normalized<A: AsRef<str>, B: AsRef<str>>(a: A, b: B) -> bool {
     normalize_key(a) == normalize_key(b)
 }

@@ -3774,10 +3774,18 @@ fn configure_fonts(ctx: &egui::Context) {
     // proportional font to avoid runtime lookups failing.
     let mut fonts = egui::FontDefinitions::default();
     let space_bytes = include_bytes!("../Space_Grotesk/static/SpaceGrotesk-Regular.ttf");
-    fonts.font_data.insert(
-        "Space Grotesk".into(),
-        egui::FontData::from_static(space_bytes),
-    );
+    // Register several common lookup keys that other code or libraries
+    // might use when requesting the font.
+    let fb = egui::FontData::from_static(space_bytes);
+    let keys = [
+        "Space Grotesk",
+        "SpaceGrotesk",
+        "Space Grotesk Regular",
+        "SpaceGrotesk-Regular",
+    ];
+    for &k in &keys {
+        fonts.font_data.insert(k.into(), fb.clone());
+    }
     fonts
         .families
         .entry(egui::FontFamily::Proportional)

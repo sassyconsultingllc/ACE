@@ -8,6 +8,7 @@ pub mod input;
 pub mod network_bar;
 pub mod popup;
 pub mod render;
+pub mod app;
 
 pub use theme::{Theme, ThemeManager, SidebarState};
 #[allow(unused_imports)] // Public API re-exports
@@ -27,7 +28,6 @@ use crate::sync::{SyncServer, SyncEvent};
 use crate::ai::AiConfig;
 
 /// Main UI state
-#[allow(dead_code)] // Window state fields
 pub struct UI {
     pub theme_manager: ThemeManager,
     pub sidebar_layout: SidebarLayout,
@@ -53,7 +53,6 @@ pub struct UI {
     pub hover_element: Option<HoverElement>,
 }
 
-#[allow(dead_code)] // Drag state variants for future drag operations
 #[derive(Debug, Clone)]
 pub enum DragState {
     SidebarResize { edge: Edge, start_size: u32 },
@@ -61,7 +60,6 @@ pub enum DragState {
     PanelMove { panel_id: String },
 }
 
-#[allow(dead_code)] // Hover element variants for UI interaction
 #[derive(Debug, Clone, PartialEq)]
 pub enum HoverElement {
     Tab(u64),
@@ -113,8 +111,6 @@ impl UI {
         Ok(())
     }
     
-    /// Stop phone sync
-    #[allow(dead_code)]
     pub fn stop_sync(&mut self) {
         if let Some(ref mut server) = self.sync_server {
             server.stop();
@@ -122,8 +118,6 @@ impl UI {
         self.sync_server = None;
     }
     
-    /// Process sync commands from phone
-    #[allow(dead_code)]
     pub fn process_sync(&mut self) {
         if let Some(ref server) = self.sync_server {
             let mut pending = Vec::new();
@@ -136,7 +130,6 @@ impl UI {
         }
     }
     
-    #[allow(dead_code)]
     fn handle_sync_command(&mut self, _client_id: u64, cmd: crate::sync::SyncCommand) {
         use crate::sync::SyncCommand::*;
         
@@ -336,8 +329,6 @@ impl UI {
         ).columns
     }
     
-    /// Toggle theme between light and dark
-    #[allow(dead_code)]
     pub fn toggle_theme(&mut self) {
         let current = self.theme_manager.current().meta.name.clone();
         if current.contains("Dark") {
@@ -347,8 +338,6 @@ impl UI {
         }
     }
     
-    /// Get cursor style based on hover state
-    #[allow(dead_code)]
     pub fn cursor(&self) -> CursorStyle {
         match &self.hover_element {
             Some(HoverElement::SidebarResize(Edge::Left | Edge::Right)) => CursorStyle::EwResize,
@@ -366,7 +355,6 @@ pub enum MouseButton {
     Middle,
 }
 
-#[allow(dead_code)] // Modifier keys for input handling
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Modifiers {
     pub ctrl: bool,
@@ -375,7 +363,6 @@ pub struct Modifiers {
     pub meta: bool,
 }
 
-#[allow(dead_code)] // Cursor styles for UI states
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CursorStyle {
     Default,

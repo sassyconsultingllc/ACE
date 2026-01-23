@@ -1,5 +1,4 @@
 ﻿// Script Engine - JavaScript-DOM bridge
-#![allow(dead_code)]
 
 #[allow(unused_imports)]
 use crate::js::{JsInterpreter, Value, Lexer, Token, Parser, Expr, Stmt};

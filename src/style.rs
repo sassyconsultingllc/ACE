@@ -1,5 +1,4 @@
 ﻿// Style - CSS parsing and style computation
-#![allow(dead_code)]
 #![allow(unused_variables)]
 
 use std::collections::HashMap;

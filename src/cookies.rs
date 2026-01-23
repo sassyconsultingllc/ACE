@@ -2,7 +2,6 @@
 //!
 //! HTTP cookie storage and management with proper security handling.
 
-#![allow(dead_code)]
 #![allow(unused_variables)]
 
 use std::collections::HashMap;

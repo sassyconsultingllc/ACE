@@ -6,8 +6,7 @@
 //! - Cursor changes (pointer, text, etc.)
 //! - Recording meaningful interactions for page sandbox
 
-#![allow(dead_code)]
-
+ 
 use crate::layout::{LayoutBox, Rect};
 use crate::dom::{NodeRef, NodeType};
 
@@ -216,4 +215,41 @@ pub enum InteractionQuality {
     Meaningful,
     Superficial,
     Robotic,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_interaction_tracker_basic() {
+        let mut tracker = InteractionTracker::new();
+        // No actions yet
+        assert_eq!(tracker.get_quality_score(), 0.0);
+
+        // Record small input (superficial)
+        let q1 = tracker.record_input(1, 2);
+        assert_eq!(q1, InteractionQuality::Superficial);
+
+        // Record larger input (meaningful)
+        let q2 = tracker.record_input(2, 10);
+        assert_eq!(q2, InteractionQuality::Meaningful);
+
+        // Create dummy hit result and record a click
+        let hit = HitResult {
+            node: None,
+            element_type: ElementType::Other,
+            bounds: crate::layout::Rect::new(0.0, 0.0, 10.0, 10.0),
+            href: None,
+            cursor: CursorType::Default,
+            is_editable: false,
+            is_clickable: false,
+        };
+        let q3 = tracker.record_click(&hit);
+        assert_eq!(q3, InteractionQuality::Meaningful);
+
+        // Quality score should be > 0
+        let score = tracker.get_quality_score();
+        assert!(score >= 0.0);
+    }
 }

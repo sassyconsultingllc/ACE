@@ -5,7 +5,6 @@
 //! - Subpixel text rendering via fontdue
 //! - Efficient clipping to viewport
 
-#![allow(dead_code)]
 #![allow(clippy::too_many_arguments)] // Drawing primitives naturally have many parameters
 //! - Full CSS box model support
 

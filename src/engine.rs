@@ -1,7 +1,6 @@
 ﻿//! Browser engine - integrates all components with new UI system
 //! v1.0.1 - Production ready with input, network bar, sandbox, link clicking
 
-#![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(deprecated)]
 
@@ -210,7 +209,7 @@ impl BrowserState {
             ui.tab_manager.create_tab("about:blank".into());
         }
         
-        Self {
+        let mut state = Self {
             document: None,
             renderer: Renderer::new(DEFAULT_WIDTH, DEFAULT_HEIGHT),
             layout: None,
@@ -249,7 +248,20 @@ impl BrowserState {
             family_config: FamilyConfig::default(),
             user_manager: UserManager::new(),
             secure_sync: None,
+        };
+
+        // Restore persisted quarantined files (if any)
+        if let Some(session) = crate::data::SessionRestore::load("default") {
+            for q in &session.quarantine {
+                let file = crate::sandbox::QuarantinedFile::from_state(q);
+                state.quarantine.add(file);
+            }
+            if !session.quarantine.is_empty() {
+                println!("Restored {} quarantined files", session.quarantine.len());
+            }
         }
+
+        state
     }
     
     /// Generate unique request ID for network tracking
@@ -1667,13 +1679,25 @@ impl BrowserState {
         }
         
         // Create quarantined file
-        let file = QuarantinedFile::new(
+        let mut file = QuarantinedFile::new(
             filename.to_string(),
             url.to_string(),
             content_type.to_string(),
             data,
         );
-        
+
+        // Try to encrypt quarantined data at rest using a user's data key.
+        // We attempt to authenticate the first known user without a PIN; if
+        // that succeeds we derive the user's data key and encrypt the file.
+        if let Some(first_user_id) = self.user_manager.users.keys().next().cloned() {
+            if let Ok(master) = self.user_manager.authenticate(&first_user_id, None) {
+                if let Some(user) = self.user_manager.get(&first_user_id) {
+                    let key = user.data_key(&master);
+                    let _ = file.encrypt_with(&key);
+                }
+            }
+        }
+
         let id = self.quarantine.add(file);
         println!("ðŸ“¥ Download quarantined: {} (id: {})", filename, id);
         println!("   Three interactions required to release");
@@ -1718,8 +1742,18 @@ impl BrowserState {
         let downloads = dirs::download_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."));
         
-        if let Some(file) = self.quarantine.get(file_id) {
-            let path = file.release(downloads)?;
+        if let Some(file) = self.quarantine.get_mut(file_id) {
+            // Attempt to decrypt using a user's data key if available (heuristic)
+            let mut maybe_key: Option<crate::crypto::EncryptionKey> = None;
+            if let Some(first_user_id) = self.user_manager.users.keys().next().cloned() {
+                if let Ok(master) = self.user_manager.authenticate(&first_user_id, None) {
+                    if let Some(user) = self.user_manager.get(&first_user_id) {
+                        maybe_key = Some(user.data_key(&master));
+                    }
+                }
+            }
+
+            let path = file.release(downloads, maybe_key.as_ref())?;
             self.quarantine.remove(file_id);
             println!("âœ… File released to: {}", path.display());
             Ok(path)
@@ -1731,6 +1765,8 @@ impl BrowserState {
     /// Save current session for restore on next launch
     fn save_session(&self) {
         use crate::data::{SessionRestore, TabState};
+        use crate::data::QuarantinedFileState;
+        use std::time::SystemTime;
         
         let tabs: Vec<TabState> = self.ui.tab_manager.tabs().iter().map(|t| {
             TabState {
@@ -1749,6 +1785,24 @@ impl BrowserState {
             user_id: "default".to_string(),
             tabs,
             active_tab,
+            quarantine: self.quarantine.list().iter().map(|f| {
+                // compute approximate quarantined_at in epoch ms
+                let now_ms = SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis()).unwrap_or(0);
+                let age_ms = f.quarantined_at.elapsed().as_millis();
+                let quarantined_at_ms = if now_ms >= age_ms { now_ms - age_ms } else { now_ms };
+
+                QuarantinedFileState {
+                    id: f.id.clone(),
+                    filename: f.filename.clone(),
+                    source_url: f.source_url.clone(),
+                    content_type: f.content_type.clone(),
+                    size_bytes: f.size_bytes,
+                    sha256: f.sha256.clone(),
+                    quarantined_at_ms,
+                    encrypted_data: f.encrypted_data.clone(),
+                }
+            }).collect(),
         };
         
         if let Err(e) = session.save() {

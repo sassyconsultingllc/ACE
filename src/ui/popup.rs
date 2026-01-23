@@ -33,7 +33,6 @@ pub struct PopupManager {
     pub total_allowed: u64,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PendingPopup {
     pub url: String,
@@ -44,7 +43,6 @@ pub struct PendingPopup {
     pub classification: PopupClassification,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PopupReason {
     WindowOpen,      // window.open()
@@ -65,7 +63,6 @@ pub enum PopupClassification {
     Blocked,         // Definitely block
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InteractionType {
     Click,
@@ -75,7 +72,6 @@ pub enum InteractionType {
 }
 
 /// Result of popup evaluation
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PopupDecision {
     pub allow: bool,
@@ -311,14 +307,10 @@ impl PopupManager {
         self.pending_popups.retain(|p| p.timestamp > popup_cutoff);
     }
     
-    /// Get blocked popup count for domain
-    #[allow(dead_code)]
     pub fn blocked_for(&self, domain: &str) -> u32 {
         *self.blocked_count.get(domain).unwrap_or(&0)
     }
     
-    /// Get pending popup count
-    #[allow(dead_code)]
     pub fn pending_count(&self) -> usize {
         self.pending_popups.len()
     }
@@ -506,5 +498,29 @@ mod tests {
             false,
         );
         assert!(!decision.allow);
+    }
+
+    #[test]
+    fn test_popup_manager_lifecycle() {
+        let mut pm = PopupManager::new();
+
+        // Record a click interaction and ensure it affects evaluation timing
+        pm.record_interaction(InteractionType::Click);
+
+        // Add pending popup by simulating sandbox block
+        let decision = pm.evaluate("https://suspicious.example/popup", "https://opener.example", PopupReason::Script, false);
+        assert!(!decision.allow);
+        assert!(pm.pending_count() >= 1);
+
+        // Allow pending
+        let urls = pm.allow_all_pending();
+        assert!(!urls.is_empty());
+
+        // Domain allow/block
+        pm.allow_domain("trusted.example");
+        assert!(pm.allowed_domains.contains(&"trusted.example".to_string()));
+        pm.block_domain("evil.example");
+        assert!(pm.blocked_domains.contains(&"evil.example".to_string()));
+        assert_eq!(pm.blocked_for("evil.example"), 0);
     }
 }

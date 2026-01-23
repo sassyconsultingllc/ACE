@@ -1,8 +1,7 @@
 ﻿//! Theme system for Sassy Browser
 //! Handles loading, parsing, and applying themes from TOML config
 
-#![allow(dead_code)]
-
+ 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -420,5 +419,31 @@ impl ThemeManager {
 impl Default for ThemeManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_theme_defaults_and_color_parse() {
+        let dark = Theme::dark();
+        assert!(dark.meta.name.contains("Sassy"));
+
+        let light = Theme::light();
+        assert!(light.meta.name.contains("Light"));
+
+        // 6-digit hex
+        let rgba = Theme::parse_color("#112233");
+        assert_eq!(rgba, (0x11, 0x22, 0x33, 255));
+
+        // 3-digit hex
+        let rgba2 = Theme::parse_color("#abc");
+        assert_eq!(rgba2, (0xaa, 0xbb, 0xcc, 255));
+
+        // color_to_u32 basic check
+        let v = Theme::color_to_u32("#010203");
+        assert_eq!(v, 0x010203);
     }
 }

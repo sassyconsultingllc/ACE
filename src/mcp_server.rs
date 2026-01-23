@@ -30,8 +30,7 @@
 //! sassy-browser.exe --mcp-server --mcp-port 9999
 //! ```
 
-#![allow(dead_code)]
-
+ 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 use std::collections::HashMap;

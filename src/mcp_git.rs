@@ -6,8 +6,7 @@
 //! - Commit creation (with approval)
 //! - Branch management
 
-#![allow(dead_code)]
-
+ 
 #[allow(unused_imports)]
 use std::collections::HashMap;
 #[allow(unused_imports)]

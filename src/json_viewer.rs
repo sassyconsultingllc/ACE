@@ -3,8 +3,7 @@
 //! Pretty-print and navigate JSON responses.
 //! Collapsible tree view with syntax highlighting.
 
-#![allow(dead_code)]
-
+ 
 use crate::style::Color;
 #[allow(unused_imports)]
 use std::collections::HashMap;

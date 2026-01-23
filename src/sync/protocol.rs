@@ -320,7 +320,6 @@ impl SyncMessage {
         }
     }
     
-    #[allow(dead_code)]
     pub fn command(cmd: SyncCommand) -> Self {
         Self::new(MessagePayload::Command(cmd))
     }
@@ -358,7 +357,6 @@ impl SyncMessage {
 // === User Authentication Commands ===
 
 /// Commands for user management
-#[allow(dead_code)] // Variants for user authentication
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action")]
 pub enum UserCommand {
@@ -402,7 +400,6 @@ pub enum UserCommand {
 }
 
 /// User-related events
-#[allow(dead_code)] // Variants for user events
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum UserEvent {

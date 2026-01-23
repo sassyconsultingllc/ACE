@@ -24,7 +24,6 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 /// Known legitimate popup domains
-#[allow(dead_code)] // Used in evaluate() for domain matching
 const OAUTH_DOMAINS: &[&str] = &[
     "accounts.google.com",
     "login.microsoftonline.com",
@@ -40,7 +39,6 @@ const OAUTH_DOMAINS: &[&str] = &[
     "slack.com/oauth",
 ];
 
-#[allow(dead_code)] // Used in evaluate() for domain matching
 const CAPTCHA_DOMAINS: &[&str] = &[
     "google.com/recaptcha",
     "recaptcha.net",
@@ -50,7 +48,6 @@ const CAPTCHA_DOMAINS: &[&str] = &[
     "verify",   // Generic pattern
 ];
 
-#[allow(dead_code)] // Used in evaluate() for domain matching
 const PAYMENT_DOMAINS: &[&str] = &[
     "checkout.stripe.com",
     "paypal.com",
@@ -61,7 +58,6 @@ const PAYMENT_DOMAINS: &[&str] = &[
 ];
 
 /// Popup request with context
-#[allow(dead_code)] // Fields for popup tracking
 #[derive(Debug, Clone)]
 pub struct PopupRequest {
     pub source_url: String,
@@ -73,7 +69,6 @@ pub struct PopupRequest {
 }
 
 /// Result of popup evaluation
-#[allow(dead_code)] // Public API enum
 #[derive(Debug, Clone)]
 pub enum PopupDecision {
     Allow { reason: &'static str },
@@ -82,7 +77,6 @@ pub enum PopupDecision {
 }
 
 /// Blocked popup record
-#[allow(dead_code)] // Fields for blocked popup tracking
 #[derive(Debug, Clone)]
 pub struct BlockedPopup {
     pub request: PopupRequest,
@@ -91,7 +85,6 @@ pub struct BlockedPopup {
 }
 
 /// Smart popup handler
-#[allow(dead_code)] // Fields for popup handling state
 #[derive(Debug)]
 pub struct PopupHandler {
     /// Recent popup attempts (for rate limiting)
@@ -104,7 +97,6 @@ pub struct PopupHandler {
     page_loaded_at: Option<Instant>,
 }
 
-#[allow(dead_code)] // Public API methods for popup handling
 impl PopupHandler {
     pub fn new() -> Self {
         Self {
@@ -294,7 +286,6 @@ impl Default for PopupHandler {
 }
 
 /// Extract domain from URL
-#[allow(dead_code)]
 fn extract_domain(url: &str) -> String {
     url.split("://")
         .nth(1)

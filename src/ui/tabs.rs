@@ -1,7 +1,6 @@
 ﻿//! Tab tile system - visual grid of tab previews
 //! Like Windows alt+tab but for browser tabs
 
-#![allow(dead_code)]
 #![allow(unused_variables)]
 
 use std::time::{Duration, Instant};
@@ -1247,5 +1246,51 @@ impl TabManager {
 impl Default for TabManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tile_layout_and_hit_test() {
+        let layout = TileLayout::calculate(800, 600, 6, 100, 300, 0.75, 8);
+        assert!(layout.columns >= 1);
+        let rect = layout.tile_rect(0);
+        assert!(rect.2 >= 100);
+
+        // Hit test inside first tile
+        let maybe = layout.hit_test(rect.0 + 4, rect.1 + 4, 6);
+        assert_eq!(maybe, Some(0));
+    }
+
+    #[test]
+    fn test_tab_manager_basic_ops() {
+        let mut tm = TabManager::new();
+        let id = tm.create_tab("https://example.com".to_string());
+        assert_eq!(tm.tab_count(), 1);
+
+        tm.activate_tab(id);
+        assert!(tm.active_tab().is_some());
+
+        let dup = tm.duplicate_tab(id).unwrap();
+        assert_eq!(tm.tab_count(), 2);
+
+        tm.close_tab(id);
+        assert_eq!(tm.tab_count(), 1);
+    }
+
+    #[test]
+    fn test_tab_sandbox_trust_progression() {
+        let mut sandbox = TabSandbox::new();
+        assert_eq!(sandbox.trust_level, TrustLevel::Untrusted);
+
+        sandbox.record_interaction(MeaningfulInteraction::FormInput);
+        assert!(matches!(sandbox.trust_level, TrustLevel::Building | TrustLevel::Untrusted));
+
+        sandbox.record_interaction(MeaningfulInteraction::LinkClick);
+        sandbox.record_interaction(MeaningfulInteraction::TextSelection);
+        assert!(matches!(sandbox.trust_level, TrustLevel::Trusted | TrustLevel::Building));
     }
 }

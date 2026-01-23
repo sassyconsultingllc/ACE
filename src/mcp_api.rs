@@ -7,7 +7,6 @@
 //! - Google (Gemini) for code review and feasibility auditing
 //! - Together.ai for open source models (Llama, Qwen, DeepSeek)
 
-#![allow(dead_code)]
 //! - Hugging Face Inference Endpoints for self-hosted models
 //! - Ollama for local models
 //!

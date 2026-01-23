@@ -7,7 +7,6 @@
 //! 3. Cryptographic keys generated:
 //!    - Ed25519 identity key pair
 
-#![allow(dead_code)]
 //!    - Master secret for encryption
 //!    - Device ID for sync
 //! 4. Recovery key displayed (SAVE THIS!)

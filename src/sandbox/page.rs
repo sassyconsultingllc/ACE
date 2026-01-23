@@ -44,7 +44,6 @@ pub enum PageTrust {
     Trusted = 3,
 }
 
-#[allow(dead_code)] // Public API methods for permission checks
 impl PageTrust {
     pub fn can_access_clipboard(&self) -> bool {
         *self >= PageTrust::Trusted
@@ -77,7 +76,6 @@ impl PageTrust {
 }
 
 /// Types of user interactions
-#[allow(dead_code)] // Variants for future interaction types
 #[derive(Debug, Clone)]
 pub enum Interaction {
     Click {
@@ -148,7 +146,6 @@ impl Interaction {
 }
 
 /// Sandbox state for a single page
-#[allow(dead_code)] // Fields for sandbox state tracking
 #[derive(Debug)]
 pub struct PageSandbox {
     pub url: String,
@@ -160,7 +157,6 @@ pub struct PageSandbox {
     pub blocked_actions: Vec<BlockedAction>,
 }
 
-#[allow(dead_code)] // Fields for blocked action logging
 #[derive(Debug, Clone)]
 pub struct BlockedAction {
     pub action: String,
@@ -258,7 +254,6 @@ pub struct SandboxManager {
     pages: HashMap<u64, PageSandbox>,  // tab_id -> sandbox
 }
 
-#[allow(dead_code)] // Public API methods for sandbox management
 impl SandboxManager {
     pub fn new() -> Self {
         Self {

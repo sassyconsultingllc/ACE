@@ -1,5 +1,4 @@
 ﻿// Protocol - HTTP/HTTPS handling
-#![allow(dead_code)]
 
 use url::Url;
 use std::collections::HashMap;

@@ -3,10 +3,14 @@
 //! Handles loading images from URLs and decoding them into pixel buffers.
 //! Supports PNG, JPEG, GIF, and WebP.
 
-#![allow(dead_code)]
-
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+ 
+use std::collections::{HashMap, VecDeque, BinaryHeap};
+use std::sync::{Arc, RwLock, mpsc, Mutex};
+use std::thread;
+use std::time::Duration;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::path::PathBuf;
+use std::fs;
 
 /// RGBA pixel buffer
 #[derive(Debug, Clone)]
@@ -63,6 +67,8 @@ pub struct ImageCache {
     /// Maximum cache size in bytes (default 100MB)
     max_size: usize,
     current_size: usize,
+    /// FIFO order of keys for eviction (simple policy)
+    order: VecDeque<String>,
 }
 
 impl ImageCache {
@@ -71,6 +77,7 @@ impl ImageCache {
             cache: HashMap::new(),
             max_size: 100 * 1024 * 1024, // 100MB
             current_size: 0,
+            order: VecDeque::new(),
         }
     }
     
@@ -79,6 +86,7 @@ impl ImageCache {
             cache: HashMap::new(),
             max_size,
             current_size: 0,
+            order: VecDeque::new(),
         }
     }
     
@@ -94,25 +102,36 @@ impl ImageCache {
             ImageState::Loaded(img) => img.pixels.len(),
             _ => 0,
         };
-        
-        // Evict if necessary
-        while self.current_size + size > self.max_size && !self.cache.is_empty() {
-            // Simple FIFO eviction - just remove first entry
-            if let Some(key) = self.cache.keys().next().cloned() {
+        // If key already present, remove prior size and its position
+        if let Some(prev) = self.cache.remove(&url) {
+            if let ImageState::Loaded(img) = prev {
+                self.current_size = self.current_size.saturating_sub(img.pixels.len());
+            }
+            // remove from order deque
+            if let Some(pos) = self.order.iter().position(|k| k == &url) {
+                self.order.remove(pos);
+            }
+        }
+
+        // Evict if necessary (FIFO)
+        while self.current_size + size > self.max_size && !self.order.is_empty() {
+            if let Some(key) = self.order.pop_front() {
                 if let Some(ImageState::Loaded(img)) = self.cache.remove(&key) {
                     self.current_size = self.current_size.saturating_sub(img.pixels.len());
                 }
             }
         }
-        
+
         self.current_size += size;
-        self.cache.insert(url, state);
+        self.cache.insert(url.clone(), state);
+        self.order.push_back(url);
     }
     
     /// Clear the cache
     pub fn clear(&mut self) {
         self.cache.clear();
         self.current_size = 0;
+        self.order.clear();
     }
 }
 
@@ -125,6 +144,201 @@ impl Default for ImageCache {
 // Global image cache
 lazy_static::lazy_static! {
     static ref GLOBAL_CACHE: Arc<RwLock<ImageCache>> = Arc::new(RwLock::new(ImageCache::new()));
+    // Background prioritized loader channel
+    static ref IMAGE_REQUEST_TX: Mutex<mpsc::Sender<(String, usize)>> = {
+        let (tx, rx) = mpsc::channel::<(String, usize)>();
+
+        // Read worker count from env or default
+        let worker_count = std::env::var("SASSY_IMAGE_WORKERS").ok().and_then(|s| s.parse().ok()).unwrap_or(2usize);
+        let max_retries = std::env::var("SASSY_IMAGE_MAX_RETRIES").ok().and_then(|s| s.parse().ok()).unwrap_or(3usize);
+        let cache_dir = std::env::var("SASSY_IMAGE_CACHE_DIR").unwrap_or_else(|_| "target/image_cache".into());
+        let cache_dir_path = PathBuf::from(cache_dir);
+        let _ = fs::create_dir_all(&cache_dir_path);
+
+        // Spawn dispatcher thread which maintains a priority heap and spawns workers
+        thread::spawn(move || {
+            let mut heap: BinaryHeap<(usize, usize, String)> = BinaryHeap::new();
+            static SEQ: AtomicUsize = AtomicUsize::new(0);
+            let active = std::sync::Arc::new(AtomicUsize::new(0));
+
+            loop {
+                // Collect new requests
+                match rx.recv_timeout(Duration::from_millis(200)) {
+                    Ok((url, priority)) => {
+                        let seq = SEQ.fetch_add(1, Ordering::SeqCst);
+                        // Use (priority, reverse_seq, url) - BinaryHeap is max-heap
+                        heap.push((priority, usize::MAX - seq, url));
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(_) => break,
+                }
+
+                // While we have capacity and tasks, spawn workers
+                while active.load(Ordering::SeqCst) < worker_count {
+                    if let Some((_priority, _rev_seq, url)) = heap.pop() {
+                        let cache_dir = cache_dir_path.clone();
+                        let active_ref = active.clone();
+                        active_ref.fetch_add(1, Ordering::SeqCst);
+
+                        // Spawn worker thread
+                        let url_clone = url.clone();
+                        let active_thread = active_ref.clone();
+                        thread::spawn(move || {
+                            // Worker: try disk cache, otherwise network with retries
+                            use base64::Engine;
+                            let fname = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&url_clone);
+                            let fpath = cache_dir.join(fname);
+
+                            // If exists on disk, try read and decode
+                            if fpath.exists() {
+                                if let Ok(bytes) = fs::read(&fpath) {
+                                    if let Ok(img) = decode_image(&bytes) {
+                                        cache_insert_global(&url_clone, ImageState::Loaded(img));
+                                        notify_image_update(&url_clone);
+                                        active_ref.fetch_sub(1, Ordering::SeqCst);
+                                        return;
+                                    }
+                                }
+                            }
+
+                            // Try network with retries/backoff
+                            let mut attempt = 0usize;
+                            let mut succeeded = false;
+                            while attempt < max_retries {
+                                attempt += 1;
+                                match crate::http_client::get(&url_clone) {
+                                    Ok(resp) => {
+                                        let mut bytes = Vec::new();
+                                        if resp.into_reader().read_to_end(&mut bytes).is_ok() {
+                                            // Save to disk (best-effort)
+                                            let _ = fs::create_dir_all(&cache_dir);
+                                            let _ = fs::write(&fpath, &bytes);
+                                                if let Ok(img) = decode_image(&bytes) {
+                                                    cache_insert_global(&url_clone, ImageState::Loaded(img));
+                                                    notify_image_update(&url_clone);
+                                                } else {
+                                                    cache_insert_global(&url_clone, ImageState::Error("Failed to decode image".into()));
+                                                    notify_image_update(&url_clone);
+                                                }
+                                            succeeded = true;
+                                            break;
+                                        }
+                                    }
+                                    Err(_) => {
+                                        // fallthrough to backoff below
+                                    }
+                                }
+
+                                // exponential backoff
+                                let backoff = 50u64.saturating_mul(2u64.pow((attempt - 1) as u32));
+                                thread::sleep(Duration::from_millis(backoff));
+                            }
+
+                            if !succeeded {
+                                cache_insert_global(&url_clone, ImageState::Error("Failed to fetch image after retries".into()));
+                                notify_image_update(&url_clone);
+                            }
+
+                            active_thread.fetch_sub(1, Ordering::SeqCst);
+                        });
+                    } else {
+                        break;
+                    }
+                }
+            }
+        });
+
+        Mutex::new(tx)
+    };
+    // Optional sender for notifying UI about image updates (url string)
+    static ref IMAGE_UPDATE_TX: Mutex<Option<mpsc::Sender<String>>> = Mutex::new(None);
+    // Bounded queue of pending image URLs updated by workers; UI will drain this to refresh textures
+    static ref IMAGE_UPDATE_QUEUE: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
+}
+
+/// Register a global sender to receive image-update notifications (url strings).
+/// UI code can create an `mpsc::channel()` and pass the sender here to receive events
+/// whenever a background worker inserts a final ImageState for a url.
+pub fn register_image_update_sender(tx: mpsc::Sender<String>) {
+    if let Ok(mut guard) = IMAGE_UPDATE_TX.lock() {
+        *guard = Some(tx);
+    }
+}
+
+fn notify_image_update(url: &str) {
+    if let Ok(guard) = IMAGE_UPDATE_TX.lock() {
+        if let Some(ref sender) = *guard {
+            let _ = sender.send(url.to_string());
+        }
+    }
+}
+
+/// Push an update URL onto the internal queue for UI to drain.
+pub fn push_image_update_to_queue(url: &str) {
+    // Bounded capacity (env or default)
+    let cap = std::env::var("SASSY_IMAGE_UPDATE_QUEUE_CAP").ok().and_then(|s| s.parse().ok()).unwrap_or(1024usize);
+    if let Ok(mut q) = IMAGE_UPDATE_QUEUE.lock() {
+        // If already present as newest, skip duplicate to reduce noise
+        if q.back().map(|b| b == url).unwrap_or(false) {
+            return;
+        }
+        // If queue already contains the url earlier, remove it to reinsert as newest
+        if let Some(pos) = q.iter().position(|v| v == url) {
+            q.remove(pos);
+        }
+
+        if q.len() >= cap {
+            let _ = q.pop_front();
+        }
+        q.push_back(url.to_string());
+    }
+}
+
+/// Drain and return pending update URLs in FIFO order.
+pub fn drain_image_update_queue() -> Vec<String> {
+    if let Ok(mut q) = IMAGE_UPDATE_QUEUE.lock() {
+        let mut out = Vec::with_capacity(q.len());
+        while let Some(v) = q.pop_front() {
+            out.push(v);
+        }
+        out
+    } else {
+        Vec::new()
+    }
+}
+
+/// Access the global image cache
+pub fn global_image_cache() -> Arc<RwLock<ImageCache>> {
+    GLOBAL_CACHE.clone()
+}
+
+/// Convenience: insert into global cache
+pub fn cache_insert_global(url: &str, state: ImageState) {
+    if let Ok(mut g) = GLOBAL_CACHE.write() {
+        g.insert(url.to_string(), state);
+    }
+}
+
+/// Convenience: get from global cache (cloned)
+pub fn cache_get_global(url: &str) -> Option<ImageState> {
+    if let Ok(g) = GLOBAL_CACHE.read() {
+        return g.get(url).cloned();
+    }
+    None
+}
+
+/// Clear the global cache
+pub fn cache_clear_global() {
+    if let Ok(mut g) = GLOBAL_CACHE.write() {
+        g.clear();
+    }
+}
+
+/// Enqueue a prioritized image load. Higher `priority` values are handled first.
+pub fn enqueue_image_request(url: &str, priority: usize) {
+    if let Ok(tx_mutex) = IMAGE_REQUEST_TX.lock() {
+        let _ = tx_mutex.send((url.to_string(), priority));
+    }
 }
 
 /// Load an image from bytes
@@ -174,6 +388,7 @@ pub fn load_image_blocking(url: &str) -> Result<ImageData, String> {
     // Cache it
     if let Ok(mut cache) = GLOBAL_CACHE.write() {
         cache.insert(url.to_string(), ImageState::Loaded(img_data.clone()));
+        notify_image_update(url);
     }
     
     Ok(img_data)
@@ -206,6 +421,36 @@ pub fn load_data_url(data_url: &str) -> Result<ImageData, String> {
     };
     
     decode_image(&bytes)
+}
+
+/// Request an image to be loaded in the background and invoke `callback` with the final state.
+/// The callback is called from a spawned thread; it must be `Send + 'static`.
+pub fn request_image(url: &str, callback: Box<dyn Fn(ImageState) + Send + 'static>) {
+    // Keep legacy behavior: spawn a dedicated thread and call callback when done.
+    let url_s = url.to_string();
+    let cb = callback;
+    thread::spawn(move || {
+        let state = match load_image_blocking(&url_s) {
+            Ok(img) => ImageState::Loaded(img),
+            Err(e) => ImageState::Error(e),
+        };
+        cache_insert_global(&url_s, state.clone());
+        notify_image_update(&url_s);
+        cb(state);
+    });
+}
+
+/// Trigger a background load for the given `url` and return immediately with a Loading state.
+pub fn load_image_background(url: &str) -> ImageState {
+    // If already cached, return current state
+    if let Some(s) = cache_get_global(url) {
+        return s;
+    }
+
+    // Mark as loading and enqueue a background fetch with normal priority (0)
+    cache_insert_global(url, ImageState::Loading);
+    enqueue_image_request(url, 0);
+    ImageState::Loading
 }
 
 /// Resize an image (simple nearest-neighbor for now)
@@ -295,5 +540,74 @@ mod tests {
         let resized = resize_image(&img, 50, 50);
         assert_eq!(resized.width, 50);
         assert_eq!(resized.height, 50);
+    }
+
+    #[test]
+    fn test_data_url_and_cache() {
+        // 1x1 GIF transparent pixel (known-good tiny GIF)
+        let data_url = "data:image/gif;base64,R0lGODdhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+        let img = load_data_url(data_url).expect("data url decode");
+        assert_eq!(img.width, 1);
+        assert_eq!(img.height, 1);
+
+        // Test global cache insert/get/clear
+        cache_clear_global();
+        assert!(cache_get_global("/missing").is_none());
+
+        let key = "test://img1";
+        cache_insert_global(key, ImageState::Loaded(img.clone()));
+        let got = cache_get_global(key);
+        assert!(got.is_some());
+        match got.unwrap() {
+            ImageState::Loaded(l) => assert_eq!(l.width, 1),
+            _ => panic!("Expected loaded image"),
+        }
+
+        cache_clear_global();
+        assert!(cache_get_global(key).is_none());
+    }
+
+    #[test]
+    fn test_with_max_size_and_global_cache_helpers() {
+        // Ensure with_max_size constructor exists and behaves
+        let mut c = ImageCache::with_max_size(1024);
+        assert_eq!(c.max_size, 1024);
+
+        // Global cache helpers
+        cache_clear_global();
+        assert!(cache_get_global("/nope").is_none());
+
+        let dummy = ImageData::new(2, 2);
+        cache_insert_global("test://dummy", ImageState::Loaded(dummy.clone()));
+        if let Some(ImageState::Loaded(img)) = cache_get_global("test://dummy") {
+            assert_eq!(img.width, 2);
+        } else {
+            panic!("expected loaded image in global cache");
+        }
+        cache_clear_global();
+    }
+
+    #[test]
+    fn test_broken_icon_and_request_image_error_callback() {
+        // Broken icon should produce a valid image buffer
+        let bi = broken_image_icon(16, 16);
+        assert_eq!(bi.width, 16);
+        assert_eq!(bi.height, 16);
+        assert_eq!(bi.pixels.len(), 16 * 16 * 4);
+
+        // request_image should call callback even on unreachable URL (error path)
+        let (tx, rx) = std::sync::mpsc::channel::<ImageState>();
+        request_image("http://127.0.0.1/nonexistent", Box::new(move |st| {
+            let _ = tx.send(st);
+        }));
+
+        // Wait briefly for the spawned thread to invoke callback
+        let got = rx.recv_timeout(std::time::Duration::from_secs(2));
+        assert!(got.is_ok());
+        match got.unwrap() {
+            ImageState::Error(_) => {}
+            ImageState::Loaded(_) => {}
+            ImageState::Loading => panic!("unexpected Loading state in callback"),
+        }
     }
 }

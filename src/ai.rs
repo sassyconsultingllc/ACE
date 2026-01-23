@@ -3,8 +3,7 @@
 //! Off by default. When enabled, provides contextual help like Windows XP's "?" button.
 //! Easter eggs throughout encourage exploration and learning.
 
-#![allow(dead_code)]
-
+ 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::fs;
@@ -450,5 +449,31 @@ pub fn load_whisper_config() -> crate::voice::VoiceConfig {
         silence_duration: ws.silence_duration,
         max_duration: ws.max_duration,
         live_preview: ws.live_preview,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ai_config_easter_eggs_and_enable() {
+        let mut cfg = AiConfig::default();
+        assert!(!cfg.enabled);
+
+        cfg.enable_with_key(AiProvider::OpenAI, "sk_test".to_string());
+        assert!(cfg.enabled);
+        assert!(matches!(cfg.provider, AiProvider::OpenAI));
+        assert_eq!(cfg.api_key.as_deref(), Some("sk_test"));
+
+        let total = AiConfig::total_eggs();
+        assert!(total >= 1);
+
+        // Discover an egg (use first defined id)
+        if let Some((id, _, _)) = EASTER_EGGS.first() {
+            let reward = cfg.discover_easter_egg(id);
+            assert!(reward.is_some());
+            assert_eq!(cfg.eggs_found(), 1);
+        }
     }
 }

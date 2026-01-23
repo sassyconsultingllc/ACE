@@ -5,7 +5,6 @@
 //! - **Manus**: Flow orchestration - breaks down tasks, manages workflow  
 //! - **Claude Opus 5**: Code pusher - writes and edits actual code
 
-#![allow(dead_code)]
 #![allow(unused_variables)]
 //! - **Gemini**: Auditor - reviews feasibility, ensures project coherence
 //!
