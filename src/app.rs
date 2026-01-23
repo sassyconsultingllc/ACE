@@ -3770,9 +3770,19 @@ fn parse_ymd(input: &str) -> Option<(i32, u32, u32)> {
 }
 
 fn configure_fonts(ctx: &egui::Context) {
-    // Use egui defaults to avoid font lookup panics; embedding Space
-    // Grotesk is available in the repo but not forced as primary here.
-    let fonts = egui::FontDefinitions::default();
+    // Embed Space Grotesk from the repo and make it the preferred
+    // proportional font to avoid runtime lookups failing.
+    let mut fonts = egui::FontDefinitions::default();
+    let space_bytes = include_bytes!("../Space_Grotesk/static/SpaceGrotesk-Regular.ttf");
+    fonts.font_data.insert(
+        "Space Grotesk".into(),
+        egui::FontData::from_static(space_bytes),
+    );
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "Space Grotesk".into());
 
     ctx.set_fonts(fonts);
 }
