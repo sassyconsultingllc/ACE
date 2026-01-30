@@ -40,6 +40,15 @@ markup5ever_rcdom = "0.3"
 
 # CSS parsing
 cssparser = "0.34"
+lightningcss = "1.0.0-alpha.70"           # Fast CSS parsing + transforms
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PURE RUST LAYOUT & RENDERING ENGINE
+# ═══════════════════════════════════════════════════════════════════════════════
+taffy = "0.7"                    # Flexbox + CSS Grid layout (used by Zed, Dioxus, Bevy)
+egui_taffy = "0.10"              # egui + taffy integration
+parley = "0.2"                   # Text layout/shaping (Google's Rust text engine)
+vello = "0.3"                    # GPU 2D vector rendering (Google's Rust renderer)
 
 # Font rendering (Pure Rust, no FreeType, no HarfBuzz)
 fontdue = "0.9"

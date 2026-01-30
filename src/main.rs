@@ -40,6 +40,7 @@ mod renderer;               // HTML renderer
 mod engine;                 // Core browser engine
 mod script_engine;          // Script execution
 mod html_renderer;          // HTML to egui rendering
+mod layout_engine;          // CSS layout engine (taffy - flexbox/grid)
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // SECURITY & SANDBOXING

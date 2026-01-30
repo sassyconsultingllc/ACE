@@ -524,7 +524,7 @@ impl BrowserApp {
                     .clicked() {
                     self.engine.go_back();
                 }
-            } else if ui.add_enabled(can_back, egui::Button::new("*€").min_size(Vec2::new(28.0, 24.0)))
+            } else if ui.add_enabled(can_back, egui::Button::new("<").min_size(Vec2::new(28.0, 24.0)))
                 .on_hover_text("Back (Alt+Left)")
                 .clicked() {
                 self.engine.go_back();
@@ -536,7 +536,7 @@ impl BrowserApp {
                     .clicked() {
                     self.engine.go_forward();
                 }
-            } else if ui.add_enabled(can_forward, egui::Button::new("â–¶").min_size(Vec2::new(28.0, 24.0)))
+            } else if ui.add_enabled(can_forward, egui::Button::new(">").min_size(Vec2::new(28.0, 24.0)))
                 .on_hover_text("Forward (Alt+Right)")
                 .clicked() {
                 self.engine.go_forward();
@@ -1621,7 +1621,7 @@ impl BrowserApp {
     
     fn render_bookmarks_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading("â\u{AD} Bookmarks");
+            ui.heading("ï¿½\u{AD} Bookmarks");
             ui.separator();
             
             let bookmarks: Vec<_> = self.engine.bookmarks.all()
