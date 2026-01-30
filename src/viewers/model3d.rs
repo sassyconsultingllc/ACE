@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! 3D Model Viewer - OBJ, STL, GLTF/GLB, PLY visualization
 
 use crate::file_handler::{BoundingBox, Face3D, FileContent, Model3DContent, Model3DFormat, OpenFile, Vertex3D};
@@ -77,7 +77,7 @@ impl Model3DViewer {
             if ui.selectable_label(self.render_mode == RenderMode::SolidWireframe, "Both").clicked() {
                 self.render_mode = RenderMode::SolidWireframe;
             }
-            if ui.selectable_label(self.render_mode == RenderMode::Points, "âš« Points").clicked() {
+            if ui.selectable_label(self.render_mode == RenderMode::Points, "* Points").clicked() {
                 self.render_mode = RenderMode::Points;
             }
             

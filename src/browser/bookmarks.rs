@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_variables, unused_imports)]
+#![allow(dead_code, unused_variables, unused_imports)]
 //! Bookmark management - Store and organize bookmarks
 
 use serde::{Deserialize, Serialize};

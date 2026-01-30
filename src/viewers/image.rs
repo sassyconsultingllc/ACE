@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Image Editor - Full editing capabilities for all image formats
 //! 
 //! Features:
@@ -261,9 +261,9 @@ impl ImageViewer {
         }
     }
     
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     // TRANSFORMATIONS
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     
     /// Rotate 90 degrees clockwise
     pub fn rotate_cw(&mut self) {
@@ -344,9 +344,9 @@ impl ImageViewer {
         }
     }
     
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     // ADJUSTMENTS
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     
     /// Apply brightness adjustment (-100 to 100)
     pub fn apply_adjustments(&mut self) {
@@ -408,9 +408,9 @@ impl ImageViewer {
         }
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     // EXPORT / SAVE
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     
     /// Save image to file
     pub fn save(&self, path: &Path) -> Result<(), String> {
@@ -457,9 +457,9 @@ impl ImageViewer {
         self.working_image.as_ref().map(|img| img.dimensions())
     }
     
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     // UI RENDERING
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     
     pub fn render(&mut self, ui: &mut egui::Ui, file: &crate::file_handler::OpenFile, zoom: f32) {
         // Load image if not already loaded
@@ -499,13 +499,13 @@ impl ImageViewer {
     fn render_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             // File operations
-            if ui.button("ðŸ’¾ Save").clicked() {
+            if ui.button("(save) Save").clicked() {
                 self.show_export = true;
             }
-            if ui.button("ðŸ“¤ Export").clicked() {
+            if ui.button("(export) Export").clicked() {
                 self.show_export = true;
             }
-            if ui.button("ðŸ–¨ï¸ Print").clicked() {
+            if ui.button("(print) Print").clicked() {
                 // TODO: System print dialog
             }
             
@@ -513,55 +513,55 @@ impl ImageViewer {
             
             // Undo/Redo
             ui.add_enabled_ui(self.history_index > 0, |ui| {
-                if ui.button("â†© Undo").clicked() {
+                if ui.button("<- Undo").clicked() {
                     self.undo();
                 }
             });
             ui.add_enabled_ui(self.history_index < self.history.len().saturating_sub(1), |ui| {
-                if ui.button("â†ª Redo").clicked() {
+                if ui.button("-> Redo").clicked() {
                     self.redo();
                 }
             });
-            if ui.button("ðŸ”„ Reset").clicked() {
+            if ui.button("(resize)„ Reset").clicked() {
                 self.reset();
             }
             
             ui.separator();
             
             // Transform tools
-            if ui.button("â†º").on_hover_text("Rotate Left").clicked() {
+            if ui.button("(refresh)").on_hover_text("Rotate Left").clicked() {
                 self.rotate_ccw();
             }
-            if ui.button("â†»").on_hover_text("Rotate Right").clicked() {
+            if ui.button("(refresh)").on_hover_text("Rotate Right").clicked() {
                 self.rotate_cw();
             }
-            if ui.button("âŸ·").on_hover_text("Flip Horizontal").clicked() {
+            if ui.button("").on_hover_text("Flip Horizontal").clicked() {
                 self.flip_horizontal();
             }
-            if ui.button("â¥¯").on_hover_text("Flip Vertical").clicked() {
+            if ui.button("").on_hover_text("Flip Vertical").clicked() {
                 self.flip_vertical();
             }
             
             ui.separator();
             
             // Tool selection
-            ui.selectable_value(&mut self.current_tool, EditTool::Select, "â˜ Select");
-            ui.selectable_value(&mut self.current_tool, EditTool::Crop, "âœ‚ Crop");
+            ui.selectable_value(&mut self.current_tool, EditTool::Select, " Select");
+            ui.selectable_value(&mut self.current_tool, EditTool::Crop, "(cut) Crop");
             
             ui.separator();
             
             // Panel toggles
             ui.toggle_value(&mut self.show_adjustments, "Adjust");
             ui.toggle_value(&mut self.show_filters, "Filters");
-            ui.toggle_value(&mut self.show_resize, "ðŸ“ Resize");
+            ui.toggle_value(&mut self.show_resize, "(resize) Resize");
             
             // Right side - image info
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if let Some((w, h)) = self.dimensions() {
-                    ui.label(format!("{}Ã—{}", w, h));
+                    ui.label(format!("{}Ã--{}", w, h));
                 }
                 if self.has_unsaved_changes {
-                    ui.label("â—").on_hover_text("Unsaved changes");
+                    ui.label("*").on_hover_text("Unsaved changes");
                 }
             });
         });
@@ -571,7 +571,7 @@ impl ImageViewer {
         egui::ScrollArea::vertical().show(ui, |ui| {
             // Adjustments panel
             if self.show_adjustments {
-                ui.collapsing("ðŸŽ¨ Adjustments", |ui| {
+                ui.collapsing("(style) Adjustments", |ui| {
                     let mut changed = false;
                     
                     ui.label("Brightness");
@@ -602,7 +602,7 @@ impl ImageViewer {
             
             // Filters panel
             if self.show_filters {
-                ui.collapsing("âœ¨ Filters", |ui| {
+                ui.collapsing("* Filters", |ui| {
                     let filters = [
                         (ImageFilter::None, "None"),
                         (ImageFilter::Grayscale, "Grayscale"),
@@ -627,7 +627,7 @@ impl ImageViewer {
             
             // Resize panel
             if self.show_resize {
-                ui.collapsing("ðŸ“ Resize", |ui| {
+                ui.collapsing("(resize) Resize", |ui| {
                     if let Some((orig_w, orig_h)) = self.dimensions() {
                         let aspect = orig_w as f32 / orig_h as f32;
                         
@@ -685,10 +685,10 @@ impl ImageViewer {
                     if ui.button("16:9").clicked() { self.crop_aspect = Some(16.0/9.0); }
                 });
                 
-                if ui.button("âœ“ Apply Crop").clicked() {
+                if ui.button("[OK] Apply Crop").clicked() {
                     self.apply_crop();
                 }
-                if ui.button("âœ— Cancel").clicked() {
+                if ui.button("[X] Cancel").clicked() {
                     self.crop_selection = None;
                 }
             }
@@ -906,7 +906,7 @@ impl ImageViewer {
                 }
                 
                 if let Some((w, h)) = self.dimensions() {
-                    ui.label(format!("Size: {}Ã—{} pixels", w, h));
+                    ui.label(format!("Size: {}Ã--{} pixels", w, h));
                 }
                 
                 ui.separator();

@@ -89,7 +89,7 @@ impl VideoViewer {
         ui.allocate_ui_at_rect(controls_rect.shrink(10.0), |ui| {
             ui.horizontal(|ui| {
                 // Play/Pause button
-                let play_text = if self.is_playing { "⏸" } else { "▶" };
+                let play_text = if self.is_playing { "⏸" } else { ">" };
                 if ui.button(RichText::new(play_text).size(20.0)).clicked() {
                     self.is_playing = !self.is_playing;
                 }
@@ -105,12 +105,12 @@ impl VideoViewer {
                 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Fullscreen toggle
-                    if ui.button("⛶").clicked() {
+                    if ui.button("").clicked() {
                         self.is_fullscreen = !self.is_fullscreen;
                     }
                     
                     // Volume
-                    let vol_icon = if self.is_muted { "🔇" } else { "🔊" };
+                    let vol_icon = if self.is_muted { "" } else { "" };
                     if ui.button(vol_icon).clicked() {
                         self.is_muted = !self.is_muted;
                     }

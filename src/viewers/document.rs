@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Document Editor - Full editing for DOCX, ODT, RTF
 //!
 //! Features:
@@ -307,9 +307,9 @@ impl DocumentViewer {
         }
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     // FORMATTING
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     
     /// Toggle bold on selection
     pub fn toggle_bold(&mut self) {
@@ -388,9 +388,9 @@ impl DocumentViewer {
         }
     }
     
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     // FIND / REPLACE
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     
     /// Find text in document
     pub fn find(&mut self, text: &str) {
@@ -464,9 +464,9 @@ impl DocumentViewer {
         self.find_replace.results.clear();
     }
     
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     // SAVE / EXPORT
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     
     /// Save to original format
     pub fn save(&self) -> Result<(), String> {
@@ -647,9 +647,9 @@ impl DocumentViewer {
         Err("PDF export not yet implemented".to_string())
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     // UI RENDERING
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ---------------------------------------------------------------------------
     
     pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
         // Load document if empty
@@ -708,12 +708,12 @@ impl DocumentViewer {
             
             // Undo/Redo
             ui.add_enabled_ui(self.history_index > 0, |ui| {
-                if ui.button("â†©").on_hover_text("Undo").clicked() {
+                if ui.button("<-").on_hover_text("Undo").clicked() {
                     self.undo();
                 }
             });
             ui.add_enabled_ui(self.history_index < self.history.len().saturating_sub(1), |ui| {
-                if ui.button("â†ª").on_hover_text("Redo").clicked() {
+                if ui.button("->").on_hover_text("Redo").clicked() {
                     self.redo();
                 }
             });
@@ -787,16 +787,16 @@ impl DocumentViewer {
             
             // Alignment
             let align = self.current_format.alignment;
-            if ui.selectable_label(align == TextAlignment::Left, "â¬…").on_hover_text("Align Left").clicked() {
+            if ui.selectable_label(align == TextAlignment::Left, "<-").on_hover_text("Align Left").clicked() {
                 self.set_alignment(TextAlignment::Left);
             }
-            if ui.selectable_label(align == TextAlignment::Center, "â¬Œ").on_hover_text("Center").clicked() {
+            if ui.selectable_label(align == TextAlignment::Center, "").on_hover_text("Center").clicked() {
                 self.set_alignment(TextAlignment::Center);
             }
-            if ui.selectable_label(align == TextAlignment::Right, "âž¡").on_hover_text("Align Right").clicked() {
+            if ui.selectable_label(align == TextAlignment::Right, "->").on_hover_text("Align Right").clicked() {
                 self.set_alignment(TextAlignment::Right);
             }
-            if ui.selectable_label(align == TextAlignment::Justify, "â˜°").on_hover_text("Justify").clicked() {
+            if ui.selectable_label(align == TextAlignment::Justify, "=").on_hover_text("Justify").clicked() {
                 self.set_alignment(TextAlignment::Justify);
             }
             

@@ -1,4 +1,4 @@
-﻿// Layout - Box layout engine with Flexbox support
+// Layout - Box layout engine with Flexbox support
 #![allow(unused_variables)]
 
 use crate::dom::{NodeRef, NodeType};

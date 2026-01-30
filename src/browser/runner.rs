@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_variables, unused_imports)]
+#![allow(dead_code, unused_variables, unused_imports)]
 //! Browser runner - Pure Rust, NO CHROME/WEBKIT
 use anyhow::Result;
 use std::path::PathBuf;

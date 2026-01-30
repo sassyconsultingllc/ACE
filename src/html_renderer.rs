@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_variables, unused_imports)]
+#![allow(dead_code, unused_variables, unused_imports)]
 //! HTML Renderer - Pure Rust HTML/CSS/JS rendering
 //! 
 //! Renders web pages using:
@@ -576,7 +576,7 @@ impl HtmlRenderer {
                 <head><title>New Tab</title></head>
                 <body style="font-family: sans-serif; text-align: center; padding: 60px;">
                     <h1>Sassy Browser</h1>
-                    <p>Fast â€¢ Free â€¢ Handles Everything</p>
+                    <p>Fast - Free - Handles Everything</p>
                 </body>
                 </html>
             "#.into(),
@@ -586,7 +586,7 @@ impl HtmlRenderer {
                 <html>
                 <head><title>Settings</title></head>
                 <body style="font-family: sans-serif; padding: 20px;">
-                    <h1>âš™ï¸ Settings</h1>
+                    <h1>(settings) Settings</h1>
                     <p>Settings page content here</p>
                 </body>
                 </html>
@@ -711,7 +711,7 @@ impl HtmlRenderer {
                             if let HtmlNode::Element { tag, children: li_children, .. } = child {
                                 if tag == "li" {
                                     ui.horizontal(|ui| {
-                                        ui.label("â€¢");
+                                        ui.label("-");
                                         self.render_nodes(ui, li_children, styles);
                                     });
                                 }

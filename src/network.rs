@@ -1,4 +1,4 @@
-﻿//! Network Activity Monitor
+//! Network Activity Monitor
 //!
 //! Always-visible indicator showing network state.
 //! Like XFCE panel - you always know when something's happening.

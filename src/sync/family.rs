@@ -1,4 +1,4 @@
-﻿//! Family device management
+//! Family device management
 //! 
 //! Philosophy: Approve devices, not monitor sessions.
 //! - Parent approves which devices can connect (one-time)

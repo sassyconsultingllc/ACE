@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! PDF Viewer - Pure Rust PDF viewing with text extraction
 //!
 //! REPLACES: Adobe Acrobat ($240/yr), Foxit PDF ($140/yr)
@@ -279,7 +279,7 @@ impl PdfViewer {
         
         // Error message
         if let Some(ref err) = self.error_message {
-            ui.colored_label(Color32::YELLOW, format!("âš  {}", err));
+            ui.colored_label(Color32::YELLOW, format!("[!] {}", err));
             ui.separator();
         }
         
@@ -309,10 +309,10 @@ impl PdfViewer {
             ui.separator();
             
             // Navigation
-            if ui.button("â®").on_hover_text("First page").clicked() {
+            if ui.button("⏮").on_hover_text("First page").clicked() {
                 self.current_page = 0;
             }
-            if ui.button("*€").on_hover_text("Previous page").clicked() {
+            if ui.button("<").on_hover_text("Previous page").clicked() {
                 self.current_page = self.current_page.saturating_sub(1);
             }
             
@@ -337,18 +337,18 @@ impl PdfViewer {
             ui.separator();
             
             // Zoom
-            if ui.button("âž–").clicked() {
+            if ui.button("").clicked() {
                 self.zoom = (self.zoom - 0.1).max(0.5);
             }
             ui.label(format!("{:.0}%", self.zoom * 100.0));
-            if ui.button("âž•").clicked() {
+            if ui.button("").clicked() {
                 self.zoom = (self.zoom + 0.1).min(3.0);
             }
             
             ui.separator();
             
             // Tools
-            ui.selectable_value(&mut self.current_tool, PdfTool::Select, "â˜ Select");
+            ui.selectable_value(&mut self.current_tool, PdfTool::Select, " Select");
             ui.selectable_value(&mut self.current_tool, PdfTool::Highlight, "Highlight");
             ui.selectable_value(&mut self.current_tool, PdfTool::Note, "Note");
             
@@ -370,8 +370,8 @@ impl PdfViewer {
                 }
                 
                 if !self.search_results.is_empty() {
-                    if ui.button("â–¼").clicked() { self.next_search_result(); }
-                    if ui.button("â–²").clicked() { self.prev_search_result(); }
+                    if ui.button("v").clicked() { self.next_search_result(); }
+                    if ui.button("^").clicked() { self.prev_search_result(); }
                     ui.label(format!("{}/{}", self.current_search_index + 1, self.search_results.len()));
                 }
             });

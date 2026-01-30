@@ -1,4 +1,4 @@
-﻿// Extensions - WebExtension-compatible extension support
+// Extensions - WebExtension-compatible extension support
  
 use std::collections::HashMap;
 use std::fs;

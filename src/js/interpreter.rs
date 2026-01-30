@@ -1,4 +1,4 @@
-﻿#![allow(unexpected_cfgs)]
+#![allow(unexpected_cfgs)]
 
 use std::cell::RefCell;
 use std::collections::HashMap;

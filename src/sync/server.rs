@@ -1,4 +1,4 @@
-﻿//! WebSocket server for phone sync
+//! WebSocket server for phone sync
 //! Handles connections from phone companion app
 
 use super::protocol::{

@@ -1,4 +1,4 @@
-﻿//! Cookie Jar
+//! Cookie Jar
 //!
 //! HTTP cookie storage and management with proper security handling.
 

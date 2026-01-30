@@ -1,4 +1,4 @@
-﻿//! MCP File System Tools - AI-Controlled File Operations
+//! MCP File System Tools - AI-Controlled File Operations
 //!
 //! Provides safe, sandboxed file system access for the AI agents.
 //! All operations are logged and can be reviewed before execution.

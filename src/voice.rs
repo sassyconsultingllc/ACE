@@ -1,4 +1,4 @@
-﻿//! Voice Input System - Microphone â†’ Whisper â†’ AI
+//! Voice Input System - Microphone -> Whisper -> AI
 //!
 //! Provides speech-to-text transcription using OpenAI's Whisper model.
 //! Supports multiple input sources:
@@ -12,9 +12,9 @@
 //!
 //! # Architecture
 //! ```text
-//! Microphone â†’ cpal capture â†’ 16kHz f32 samples â†’ Whisper â†’ Text â†’ MCP Voice Agent
-//!              â†“
-//!           VAD (Voice Activity Detection) â†’ Auto-stop on silence
+//! Microphone -> cpal capture -> 16kHz f32 samples -> Whisper -> Text -> MCP Voice Agent
+//!              <-
+//!           VAD (Voice Activity Detection) -> Auto-stop on silence
 //! ```
 //!
 //! # GPU Acceleration

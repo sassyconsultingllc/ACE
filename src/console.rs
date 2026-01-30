@@ -1,4 +1,4 @@
-﻿//! Developer Console
+//! Developer Console
 //!
 //! Interactive JavaScript console, network inspector, and DOM explorer.
 //! The core feature that makes Sassy the developer's browser.
@@ -32,9 +32,9 @@ impl LogLevel {
     pub fn prefix(&self) -> &'static str {
         match self {
             LogLevel::Log => "",
-            LogLevel::Info => "â„¹ ",
-            LogLevel::Warn => "âš  ",
-            LogLevel::Error => "âœ— ",
+            LogLevel::Info => "[i] ",
+            LogLevel::Warn => "[!] ",
+            LogLevel::Error => "[X] ",
             LogLevel::Debug => "",
         }
     }

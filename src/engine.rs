@@ -1,4 +1,4 @@
-﻿//! Browser engine - integrates all components with new UI system
+//! Browser engine - integrates all components with new UI system
 //! v1.0.1 - Production ready with input, network bar, sandbox, link clicking
 
 #![allow(unused_variables)]
@@ -546,7 +546,7 @@ impl BrowserState {
             <html>
             <head><title>Error</title></head>
             <body style="font-family: system-ui; padding: 40px; background: #0d1117; color: #e6edf3;">
-                <h1 style="color: #f85149;">âš ï¸ Error</h1>
+                <h1 style="color: #f85149;">[!] Error</h1>
                 <pre style="background: #161b22; padding: 20px; border-radius: 8px; overflow: auto;">{}</pre>
                 <p><a href="about:blank" style="color: #58a6ff;">Go to blank page</a></p>
             </body>
@@ -1634,11 +1634,11 @@ impl BrowserState {
                     println!("Update available: v{}", info.version);
                     println!("   Changelog: {}", info.changelog);
                     if info.required {
-                        println!("   âš ï¸ This is a security update - please install soon!");
+                        println!("   [!] This is a security update - please install soon!");
                     }
                 }
                 UpdateStatus::UpToDate => {
-                    println!("âœ“ Sassy Browser is up to date");
+                    println!("[OK] Sassy Browser is up to date");
                 }
                 UpdateStatus::Error(ref e) => {
                     eprintln!("Update check failed: {}", e);
@@ -1657,9 +1657,9 @@ impl BrowserState {
     pub fn download_update(&self) -> Result<std::path::PathBuf, String> {
         match self.update_checker.status() {
             UpdateStatus::Available(info) => {
-                println!("â¬‡ï¸ Downloading update v{}...", info.version);
+                println!("v Downloading update v{}...", info.version);
                 let path = self.update_checker.download(info)?;
-                println!("âœ… Downloaded to: {:?}", path);
+                println!("[OK] Downloaded to: {:?}", path);
                 Ok(path)
             }
             UpdateStatus::UpToDate => Err("Already up to date".to_string()),
@@ -1673,7 +1673,7 @@ impl BrowserState {
         // Check if download is allowed by sandbox
         if let Some(tab) = self.ui.tab_manager.active_tab() {
             if !self.sandbox_manager.check(tab.id, "download") {
-                println!("â›” Download blocked: page not trusted enough");
+                println!("[STOP] Download blocked: page not trusted enough");
                 return;
             }
         }
@@ -1706,8 +1706,8 @@ impl BrowserState {
         if let Some(q_file) = self.quarantine.get(&id) {
             for warning in &q_file.warnings {
                 let icon = match warning.level {
-                    crate::sandbox::WarningLevel::Info => "â„¹ï¸",
-                    crate::sandbox::WarningLevel::Caution => "âš ï¸",
+                    crate::sandbox::WarningLevel::Info => "[i]",
+                    crate::sandbox::WarningLevel::Caution => "[!]",
                     crate::sandbox::WarningLevel::Warning => "",
                     crate::sandbox::WarningLevel::Danger => "",
                 };
@@ -1722,13 +1722,13 @@ impl BrowserState {
             file.interact(crate::sandbox::InteractionType::Acknowledge);
             match file.can_release() {
                 ReleaseStatus::Ready => {
-                    println!("âœ… File ready for release: {}", file.filename);
+                    println!("[OK] File ready for release: {}", file.filename);
                 }
                 ReleaseStatus::NeedsInteraction { current, required } => {
                     println!("Progress: {}/{} interactions", current, required);
                 }
                 ReleaseStatus::Waiting { seconds_remaining } => {
-                    println!("â³ Wait {} more seconds", seconds_remaining);
+                    println!("... Wait {} more seconds", seconds_remaining);
                 }
                 ReleaseStatus::Blocked { reason } => {
                     println!("Cannot release: {}", reason);
@@ -1755,7 +1755,7 @@ impl BrowserState {
 
             let path = file.release(downloads, maybe_key.as_ref())?;
             self.quarantine.remove(file_id);
-            println!("âœ… File released to: {}", path.display());
+            println!("[OK] File released to: {}", path.display());
             Ok(path)
         } else {
             Err("File not found in quarantine".to_string())
@@ -1860,8 +1860,8 @@ impl BrowserState {
     /// Approve a pending device
     pub fn approve_device(&mut self, device_id: &str, approver_id: &str) {
         match self.family_config.approve_device(device_id, approver_id, crate::sync::TrustLevel::Trusted) {
-            Ok(()) => println!("âœ… Device {} approved", device_id),
-            Err(e) => println!("âŒ Approval failed: {}", e),
+            Ok(()) => println!("[OK] Device {} approved", device_id),
+            Err(e) => println!("[X] Approval failed: {}", e),
         }
     }
     
@@ -1873,7 +1873,7 @@ impl BrowserState {
                 // Touch family device
                 self.family_config.touch_device(device_id);
             }
-            Err(e) => println!("âŒ Login failed: {}", e),
+            Err(e) => println!("[X] Login failed: {}", e),
         }
     }
     
@@ -1893,13 +1893,13 @@ impl BrowserState {
         
         match &decision {
             PopupDecision::Allow { reason } => {
-                println!("âœ… Popup allowed: {}", reason);
+                println!("[OK] Popup allowed: {}", reason);
             }
             PopupDecision::Block { reason } => {
                 println!("Popup blocked: {}", reason);
             }
             PopupDecision::Prompt { reason } => {
-                println!("â“ Popup pending: {}", reason);
+                println!("[X] Popup pending: {}", reason);
             }
         }
         
@@ -1925,18 +1925,16 @@ pub fn run_browser(initial_url: Option<String>) {
     use winit::event_loop::ControlFlow;
     
     println!();
-    println!("  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—");
-    println!("  â•‘       Sassy Browser v1.0.1            â•‘");
-    println!("  â•‘  Pure Rust | SassyScript | Sandboxed  â•‘");
-    println!("  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+    println!("  Sassy Browser v1.0.1");
+    println!("  Pure Rust | SassyScript | Sandboxed");
     println!();
     println!("  Features:");
-    println!("    â€¢ Click address bar or Ctrl+L to type URL");
-    println!("    â€¢ Click links to navigate");
-    println!("    â€¢ Scroll with mouse wheel or arrow keys");
-    println!("    â€¢ Alt+Tab for tab tile view");
-    println!("    â€¢ Network activity indicator (top right)");
-    println!("    â€¢ Trust indicator (builds with 3 interactions)");
+    println!("    - Click address bar or Ctrl+L to type URL");
+    println!("    - Click links to navigate");
+    println!("    - Scroll with mouse wheel or arrow keys");
+    println!("    - Alt+Tab for tab tile view");
+    println!("    - Network activity indicator (top right)");
+    println!("    - Trust indicator (builds with 3 interactions)");
     println!();
     
     let event_loop = EventLoop::new().expect("Failed to create event loop");

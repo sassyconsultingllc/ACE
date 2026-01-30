@@ -1,4 +1,4 @@
-﻿//! JSON Viewer
+//! JSON Viewer
 //!
 //! Pretty-print and navigate JSON responses.
 //! Collapsible tree view with syntax highlighting.

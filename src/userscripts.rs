@@ -804,7 +804,7 @@ impl UserScriptUI {
     pub fn render(&mut self, ui: &mut eframe::egui::Ui) {
         use eframe::egui;
         
-        ui.heading("📜 User Scripts");
+        ui.heading("(doc) User Scripts");
         ui.separator();
         
         // Add script section

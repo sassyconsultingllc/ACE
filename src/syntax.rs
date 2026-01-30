@@ -1,4 +1,4 @@
-﻿//! Syntax Highlighting Engine
+//! Syntax Highlighting Engine
 //!
 //! Renders code blocks with beautiful syntax highlighting.
 //! Supports: JavaScript, TypeScript, Rust, Python, HTML, CSS, JSON, Markdown

@@ -1,4 +1,4 @@
-﻿//! Page Sandbox - Every page starts untrusted
+//! Page Sandbox - Every page starts untrusted
 //!
 //! SECURITY MODEL:
 //! ================
