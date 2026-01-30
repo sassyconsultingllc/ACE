@@ -35,6 +35,7 @@ mod js;                     // SassyScript JavaScript interpreter
 mod dom;                    // DOM simulation
 mod style;                  // CSS engine
 mod layout;                 // Layout engine (flexbox, etc.)
+mod layout_engine;          // CSS layout engine (taffy-based)
 mod paint;                  // Painting/rendering
 mod renderer;               // HTML renderer
 mod engine;                 // Core browser engine

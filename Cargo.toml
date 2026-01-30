@@ -41,6 +41,9 @@ markup5ever_rcdom = "0.3"
 # CSS parsing
 cssparser = "0.34"
 
+# Layout engine (Pure Rust flexbox/grid)
+taffy = "0.7"
+
 # Font rendering (Pure Rust, no FreeType, no HarfBuzz)
 fontdue = "0.9"
 
