@@ -181,8 +181,18 @@ fn main() {
                 return;
             }
             path if std::path::Path::new(path).exists() => {
-                // Open file directly
-                run_browser(Some(format!("file://{}", path)));
+                // Open file directly - convert to absolute path for proper file:// URL
+                let abs_path = std::fs::canonicalize(path)
+                    .unwrap_or_else(|_| std::path::PathBuf::from(path));
+                // Create proper file:// URL (file:// + / + path for Unix, file:/// + C:/... for Windows)
+                let file_url = if cfg!(windows) {
+                    // Windows: convert backslashes to forward slashes
+                    format!("file:///{}", abs_path.display().to_string().replace('\\', "/"))
+                } else {
+                    // Unix: path already starts with /, so file:// + path = file:///path
+                    format!("file://{}", abs_path.display())
+                };
+                run_browser(Some(file_url));
                 return;
             }
             _ => {
@@ -196,16 +206,21 @@ fn main() {
     run_browser(None);
 }
 
-fn run_browser(_url: Option<String>) {
+fn run_browser(url: Option<String>) {
     // Check first-run setup
     if setup::ensure_setup().is_none() {
         tracing::warn!("Setup cancelled by user");
         return;
     }
-    
+
+    // Enable webview mode by default for full web browsing capability
+    if std::env::var("SASSY_ENABLE_WEBVIEW").is_err() {
+        std::env::set_var("SASSY_ENABLE_WEBVIEW", "1");
+    }
+
     // Run the egui-based browser with pure Rust file viewers
     // Web content rendered by our custom engine (dom, style, layout, paint)
-    if let Err(e) = app::run_browser() {
+    if let Err(e) = app::run_browser_with_url(url) {
         tracing::error!("Browser error: {}", e);
         eprintln!("âŒ Fatal error: {}", e);
         std::process::exit(1);

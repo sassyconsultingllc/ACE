@@ -317,17 +317,34 @@ impl BrowserEngine {
     
     fn navigate_to_file(&mut self, url: &str) {
         let path = if url.starts_with("file://") {
-            PathBuf::from(url.strip_prefix("file://").unwrap_or(url))
+            // Strip "file://" prefix and decode URL encoding
+            let raw_path = url.strip_prefix("file://").unwrap_or(url);
+            // Decode URL encoding (e.g., %20 -> space)
+            let decoded = urlencoding::decode(raw_path).unwrap_or_else(|_| raw_path.into());
+            let path_str = decoded.as_ref();
+
+            // Handle Windows paths: file:///C:/path becomes /C:/path after strip
+            // We need to remove the leading / on Windows when we have a drive letter
+            #[cfg(windows)]
+            let path_str = if path_str.len() >= 3
+                && path_str.starts_with('/')
+                && path_str.chars().nth(2) == Some(':') {
+                &path_str[1..] // Remove leading / for Windows drive paths
+            } else {
+                path_str
+            };
+
+            PathBuf::from(path_str)
         } else {
             PathBuf::from(url)
         };
-        
+
         if let Ok(file) = self.file_handler.load_file(&path) {
             if let Some(tab) = self.active_tab_mut() {
                 tab.content = TabContent::File(Box::new(file));
             }
         }
-        
+
         self.update_address_bar();
     }
     
