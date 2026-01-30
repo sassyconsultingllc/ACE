@@ -88,7 +88,8 @@ pdf-extract = "0.7"                      # Text extraction
 # ═══════════════════════════════════════════════════════════════════════════════
 # DOCUMENT FORMATS - No Microsoft, No Google Docs
 # ═══════════════════════════════════════════════════════════════════════════════
-calamine = "0.26"                        # Excel/ODS spreadsheets
+calamine = "0.26"                        # Excel/ODS spreadsheets (read)
+rust_xlsxwriter = "0.79"                 # Excel XLSX writing (write)
 quick-xml = "0.37"                       # XML parsing (DOCX, ODT internals)
 zip = "2.2"                              # ZIP/DOCX/XLSX container handling
 epub = "2.1"                             # EPUB parser

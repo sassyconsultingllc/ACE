@@ -1,6 +1,31 @@
 # Sassy Browser v2.0.0 - Release Checklist
 
-## Status: READY FOR COMPILATION TEST
+## Status: COMPILATION CLEAN-UP IN PROGRESS
+
+### 🔧 CURRENT TASK: Dead Code Warning Reduction
+**Progress: 649 → 468 warnings (targeting <30)**
+
+#### Completed Wiring:
+- [x] `engine::run_browser()` → main.rs --pure-engine flag
+- [x] `get_page_trust_status()` → engine update() loop
+- [x] `get_update_status()` → engine update() loop
+
+#### Remaining Dead Code (Top Priority):
+- [ ] `dom.rs` - set_attribute, remove_attribute, has_attribute, add_event_listener, new_comment
+- [ ] `style.rs` - add_stylesheet method  
+- [ ] `layout.rs` - hit_test, find_layout_for_node methods
+- [ ] `paint.rs` - resize, paint, draw_line, draw_image methods
+- [ ] `renderer.rs` - entire pipeline (17 methods) not wired
+- [ ] `sandbox/*.rs` - security methods: record_interaction, record_violation, encrypt/decrypt
+- [ ] `cookies.rs` - CookieJar full API unused
+- [ ] `crypto.rs` - UserIdentity: public_key, sign, verify
+- [ ] `console.rs` - DevConsole not wired to UI
+- [ ] `mcp*.rs` - McpOrchestrator scaffolded but unused
+- [ ] `voice.rs` - WhisperEngine, hotkey system scaffolded
+- [ ] `sync/server.rs` - SecureSyncServer not started
+- [ ] `fontcase.rs` - eq_normalized helper unused
+
+---
 
 ### ✅ COMPLETED - Chrome-Free Pure Rust Browser
 

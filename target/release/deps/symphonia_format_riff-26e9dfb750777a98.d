@@ -1,0 +1,10 @@
+V:\sassy-browser-FIXED\target\release\deps\symphonia_format_riff-26e9dfb750777a98.d: C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\lib.rs C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\common.rs C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\wave\mod.rs C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\wave\chunks.rs
+
+V:\sassy-browser-FIXED\target\release\deps\libsymphonia_format_riff-26e9dfb750777a98.rlib: C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\lib.rs C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\common.rs C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\wave\mod.rs C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\wave\chunks.rs
+
+V:\sassy-browser-FIXED\target\release\deps\libsymphonia_format_riff-26e9dfb750777a98.rmeta: C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\lib.rs C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\common.rs C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\wave\mod.rs C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\wave\chunks.rs
+
+C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\lib.rs:
+C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\common.rs:
+C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\wave\mod.rs:
+C:\Users\Admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\symphonia-format-riff-0.5.5\src\wave\chunks.rs:

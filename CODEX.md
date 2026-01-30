@@ -1,12 +1,43 @@
 # SASSY BROWSER v2.0.0 - DISRUPTOR CODEX
 ## Persistent Project Context (Chat-Crash Proof)
 
-**Last Updated:** 2026-01-15 UTC  
-**Build Status:** ✅ READY FOR COMPILATION  
+**Last Updated:** 2026-01-23 UTC  
+**Build Status:** ✅ COMPILES (468 warnings, targeting <30)  
 **Root Files:** BUILD-WINDOWS.bat/ps1, build.bat, README.md - ALL UPDATED v2.0.0  
 **Location:** `V:\sassy-browser-FIXED`  
 **Source Files:** 81 Rust files  
 **Architecture:** PURE RUST - NO CHROME/GOOGLE/WEBKIT
+
+---
+
+## 🔧 CURRENT SPRINT: WARNING REDUCTION
+
+**Goal:** Reduce dead_code warnings from 649 → under 30 by wiring all modules
+
+### Progress: 649 → 468 warnings ✓
+| Module | Status | Notes |
+|--------|--------|-------|
+| `engine.rs` | ✅ Wired | `run_browser()` called from main.rs --pure-engine |
+| `main.rs` | ✅ Updated | Pure engine now uses engine::run_browser() |
+| `dom.rs` | 🔄 Partial | Core used by engine, some methods unused |
+| `style.rs` | 🔄 Partial | `add_stylesheet()` still dead |
+| `layout.rs` | 🔄 Partial | `hit_test`, `find_layout_for_node` dead |
+| `paint.rs` | 🔄 Partial | `resize`, `paint`, `draw_line`, `draw_image` dead |
+| `renderer.rs` | ❌ Unused | Full pipeline not wired to main app |
+| `sandbox/*` | 🔄 Partial | Many security methods unused |
+| `cookies.rs` | ❌ Unused | Full cookie jar unused |
+| `crypto.rs` | 🔄 Partial | Identity methods unused |
+| `console.rs` | ❌ Unused | Dev console not wired |
+| `mcp*.rs` | ❌ Unused | MCP orchestrator scaffolded |
+| `sync/*` | 🔄 Partial | Server unused, family partial |
+| `voice.rs` | ❌ Unused | Whisper/hotkey system scaffolded |
+
+### Next Steps:
+1. Wire Renderer pipeline to app.rs HTML rendering
+2. Connect sandbox security methods to navigation
+3. Enable cookie persistence for sessions
+4. Wire console to dev tools panel
+5. Connect MCP to AI features
 
 ---
 
