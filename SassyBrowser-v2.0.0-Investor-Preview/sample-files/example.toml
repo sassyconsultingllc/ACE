@@ -1,0 +1,29 @@
+# Sassy Browser - Cargo.toml Example
+# TOML format demo
+
+[package]
+name = "sassy-browser"
+version = "2.0.0"
+edition = "2021"
+authors = ["Shane Alan Smith <shane@sassyconsultingllc.com>"]
+description = "Pure Rust Web Browser & Universal File Viewer"
+license = "Proprietary"
+repository = "https://github.com/sassyconsultingllc/sassy-browser"
+
+[features]
+default = ["webview", "devtools"]
+webview = []
+devtools = ["rest-client", "network-inspector"]
+rest-client = []
+network-inspector = []
+
+[dependencies]
+egui = "0.28"
+eframe = "0.28"
+html5ever = "0.27"
+cssparser = "0.34"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

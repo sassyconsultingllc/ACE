@@ -100,10 +100,10 @@ impl ChemicalViewer {
             if ui.selectable_label(self.render_mode == RenderMode::BallAndStick, "âš› Ball & Stick").clicked() {
                 self.render_mode = RenderMode::BallAndStick;
             }
-            if ui.selectable_label(self.render_mode == RenderMode::Wireframe, "ðŸ“ Wireframe").clicked() {
+            if ui.selectable_label(self.render_mode == RenderMode::Wireframe, "Wireframe").clicked() {
                 self.render_mode = RenderMode::Wireframe;
             }
-            if ui.selectable_label(self.render_mode == RenderMode::Spacefill, "ðŸ”´ Spacefill").clicked() {
+            if ui.selectable_label(self.render_mode == RenderMode::Spacefill, "Spacefill").clicked() {
                 self.render_mode = RenderMode::Spacefill;
             }
             
@@ -135,7 +135,7 @@ impl ChemicalViewer {
             ui.separator();
             
             // Reset view
-            if ui.button("ðŸ”„ Reset View").clicked() {
+            if ui.button("Reset View").clicked() {
                 self.rotation_x = 0.0;
                 self.rotation_y = 0.0;
                 self.zoom = 1.0;
@@ -300,7 +300,7 @@ impl ChemicalViewer {
             .show_inside(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     // Title
-                    ui.heading("ðŸ“Š Structure Info");
+                    ui.heading("Structure Info");
                     ui.separator();
                     
                     if !chem.title.is_empty() {
@@ -312,7 +312,7 @@ impl ChemicalViewer {
                     
                     // Element composition
                     ui.separator();
-                    ui.heading("ðŸ§ª Composition");
+                    ui.heading("Composition");
                     
                     let mut element_counts: HashMap<String, usize> = HashMap::new();
                     for atom in &chem.atoms {
@@ -328,7 +328,7 @@ impl ChemicalViewer {
                             .unwrap_or(Color32::GRAY);
                         
                         ui.horizontal(|ui| {
-                            ui.colored_label(color, format!("â— {}: {}", element, count));
+                            ui.colored_label(color, format!("* {}: {}", element, count));
                         });
                     }
                     
@@ -336,7 +336,7 @@ impl ChemicalViewer {
                     if let Some(idx) = self.selected_atom {
                         if let Some(atom) = chem.atoms.get(idx) {
                             ui.separator();
-                            ui.heading("ðŸŽ¯ Selected Atom");
+                            ui.heading("Selected Atom");
                             ui.label(format!("Element: {}", atom.element));
                             ui.label(format!("Serial: {}", atom.serial));
                             ui.label(format!("Position: ({:.2}, {:.2}, {:.2})", 
@@ -355,7 +355,7 @@ impl ChemicalViewer {
                     
                     if chains.len() > 1 {
                         ui.separator();
-                        ui.heading("ðŸ”— Chains");
+                        ui.heading("Chains");
                         for chain in chains {
                             let count = chem.atoms.iter().filter(|a| a.chain == chain).count();
                             ui.label(format!("Chain {}: {} atoms", chain, count));

@@ -35,7 +35,7 @@ impl LogLevel {
             LogLevel::Info => "â„¹ ",
             LogLevel::Warn => "âš  ",
             LogLevel::Error => "âœ— ",
-            LogLevel::Debug => "ðŸ” ",
+            LogLevel::Debug => "",
         }
     }
 }

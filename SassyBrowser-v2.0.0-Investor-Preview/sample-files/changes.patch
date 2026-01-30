@@ -1,0 +1,25 @@
+diff --git a/src/main.rs b/src/main.rs
+index 1234567..abcdefg 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -1,5 +1,6 @@
+ //! Sassy Browser v2.0.0 - Pure Rust Web Browser
+ 
++use tracing::info;
+ use eframe::egui;
+ 
+ fn main() {
+@@ -15,6 +16,8 @@ fn main() {
+     let options = eframe::NativeOptions::default();
+     
++    info!("Starting Sassy Browser");
++    
+     eframe::run_native(
+         "Sassy Browser",
+         options,
+@@ -25,4 +28,5 @@ fn main() {
+ fn run_browser() {
+     // Initialize browser engine
++    // Added webview support
+     let engine = BrowserEngine::new();
+ }

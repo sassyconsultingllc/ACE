@@ -1,0 +1,32 @@
+# Sassy Browser - Git Ignore
+# .gitignore demo
+
+# Build artifacts
+/target/
+/dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+node_modules/

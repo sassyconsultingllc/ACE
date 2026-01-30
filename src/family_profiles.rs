@@ -26,10 +26,10 @@ pub enum ProfileType {
 impl ProfileType {
     pub fn icon(&self) -> &'static str {
         match self {
-            ProfileType::Admin => "ðŸ‘‘",
-            ProfileType::Adult => "ðŸ‘¤",
-            ProfileType::Teen => "ðŸ§‘",
-            ProfileType::Kid => "ðŸ‘¶",
+            ProfileType::Admin => "",
+            ProfileType::Adult => "",
+            ProfileType::Teen => "",
+            ProfileType::Kid => "",
         }
     }
     

@@ -558,7 +558,7 @@ impl HtmlRenderer {
             <html>
             <head><title>Web Page</title></head>
             <body style="font-family: sans-serif; padding: 40px; text-align: center;">
-                <h1>ðŸŒ {}</h1>
+                <h1>{}</h1>
                 <p>This page would be rendered with the system webview in full mode.</p>
                 <p style="color: #666;">For full web browsing, run with --webview flag</p>
             </body>
@@ -575,7 +575,7 @@ impl HtmlRenderer {
                 <html>
                 <head><title>New Tab</title></head>
                 <body style="font-family: sans-serif; text-align: center; padding: 60px;">
-                    <h1>ðŸŒ Sassy Browser</h1>
+                    <h1>Sassy Browser</h1>
                     <p>Fast â€¢ Free â€¢ Handles Everything</p>
                 </body>
                 </html>

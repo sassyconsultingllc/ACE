@@ -39,7 +39,7 @@ impl TextViewer {
     pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
         // Toolbar
         ui.horizontal(|ui| {
-            if ui.selectable_label(!self.is_editing, "ðŸ‘ View").clicked() {
+            if ui.selectable_label(!self.is_editing, "View").clicked() {
                 self.is_editing = false;
             }
             if ui.selectable_label(self.is_editing, "âœï¸ Edit").clicked() {
@@ -85,7 +85,7 @@ impl TextViewer {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // Show syntax type
                 if let FileContent::Text { syntax: Some(syn), .. } = &file.content {
-                    ui.label(format!("ðŸ“ {}", syn));
+                    ui.label(format!("{}", syn));
                 }
                 
                 ui.label(format!("Ln {}, Col {}", self.cursor_line, self.cursor_column));

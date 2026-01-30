@@ -694,13 +694,13 @@ impl DocumentViewer {
     fn render_toolbar(&mut self, ui: &mut egui::Ui) {
         // Row 1: File operations
         ui.horizontal(|ui| {
-            if ui.button("ðŸ’¾ Save").clicked() {
+            if ui.button("Save").clicked() {
                 let _ = self.save();
             }
-            if ui.button("ðŸ“¤ Export").clicked() {
+            if ui.button("Export").clicked() {
                 self.show_export = true;
             }
-            if ui.button("ðŸ–¨ï¸ Print").clicked() {
+            if ui.button("Print").clicked() {
                 // TODO: Print
             }
             
@@ -721,7 +721,7 @@ impl DocumentViewer {
             ui.separator();
             
             // Find/Replace
-            if ui.button("ðŸ”").on_hover_text("Find & Replace").clicked() {
+            if ui.button("").on_hover_text("Find & Replace").clicked() {
                 self.show_find_replace = !self.show_find_replace;
             }
             
@@ -735,7 +735,7 @@ impl DocumentViewer {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(format!("Words: {} | Chars: {}", self.word_count, self.char_count));
                 if self.has_unsaved_changes {
-                    ui.label("â—").on_hover_text("Unsaved changes");
+                    ui.label("*").on_hover_text("Unsaved changes");
                 }
             });
         });

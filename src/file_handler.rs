@@ -47,20 +47,20 @@ pub enum FileType {
 impl FileType {
     pub fn icon(&self) -> &'static str {
         match self {
-            Self::Image | Self::ImageRaw | Self::ImagePsd => "ðŸ–¼ï¸",
-            Self::Pdf => "ðŸ“•",
-            Self::Document => "ðŸ“„",
-            Self::Spreadsheet => "ðŸ“Š",
-            Self::Chemical => "ðŸ§¬",
-            Self::Archive => "ðŸ“¦",
-            Self::Model3D => "ðŸŽ²",
-            Self::Font => "ðŸ”¤",
-            Self::Audio => "ðŸŽµ",
-            Self::Video => "ðŸŽ¬",
-            Self::Text => "ðŸ“",
-            Self::Markdown => "ðŸ“‘",
-            Self::Ebook => "ðŸ“š",
-            Self::Unknown => "ðŸ“",
+            Self::Image | Self::ImageRaw | Self::ImagePsd => "",
+            Self::Pdf => "",
+            Self::Document => "",
+            Self::Spreadsheet => "",
+            Self::Chemical => "",
+            Self::Archive => "",
+            Self::Model3D => "",
+            Self::Font => "",
+            Self::Audio => "",
+            Self::Video => "",
+            Self::Text => "",
+            Self::Markdown => "",
+            Self::Ebook => "",
+            Self::Unknown => "",
         }
     }
     

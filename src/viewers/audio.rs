@@ -74,7 +74,7 @@ impl AudioViewer {
                     .show(ui, |ui| {
                         ui.set_min_size(Vec2::splat(art_size));
                         ui.centered_and_justified(|ui| {
-                            ui.label(RichText::new("ðŸŽµ").size(80.0 * zoom));
+                            ui.label(RichText::new("").size(80.0 * zoom));
                         });
                     });
             } else {
@@ -85,7 +85,7 @@ impl AudioViewer {
                     .show(ui, |ui| {
                         ui.set_min_size(Vec2::splat(art_size));
                         ui.centered_and_justified(|ui| {
-                            ui.label(RichText::new("ðŸŽµ").size(80.0 * zoom));
+                            ui.label(RichText::new("").size(80.0 * zoom));
                         });
                     });
             }
@@ -182,9 +182,9 @@ impl AudioViewer {
             
             // Repeat button
             let repeat_icon = match self.repeat_mode {
-                RepeatMode::None => "ðŸ”",
-                RepeatMode::One => "ðŸ”‚",
-                RepeatMode::All => "ðŸ”",
+                RepeatMode::None => "",
+                RepeatMode::One => "",
+                RepeatMode::All => "",
             };
             let repeat_color = if self.repeat_mode != RepeatMode::None {
                 Color32::from_rgb(100, 180, 255)
@@ -219,7 +219,7 @@ impl AudioViewer {
             }
             
             // Shuffle
-            if ui.button(RichText::new("ðŸ”€").color(Color32::GRAY)).clicked() {
+            if ui.button(RichText::new("").color(Color32::GRAY)).clicked() {
                 // Toggle shuffle
             }
         });
@@ -231,11 +231,11 @@ impl AudioViewer {
             
             // Mute button
             let volume_icon = if self.is_muted || self.volume == 0.0 {
-                "ðŸ”‡"
+                ""
             } else if self.volume < 0.5 {
-                "ðŸ”‰"
+                ""
             } else {
-                "ðŸ”Š"
+                ""
             };
             
             if ui.button(volume_icon).clicked() {

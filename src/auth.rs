@@ -99,11 +99,11 @@ pub enum DeviceType {
 impl DeviceType {
     pub fn icon(&self) -> &'static str {
         match self {
-            DeviceType::Desktop => "ðŸ–¥ï¸",
-            DeviceType::Laptop => "ðŸ’»",
-            DeviceType::Phone => "ðŸ“±",
-            DeviceType::Tablet => "ðŸ“²",
-            DeviceType::Server => "ðŸ–§",
+            DeviceType::Desktop => "",
+            DeviceType::Laptop => "",
+            DeviceType::Phone => "",
+            DeviceType::Tablet => "",
+            DeviceType::Server => "",
         }
     }
     
@@ -1036,8 +1036,8 @@ mod tests {
     
     #[test]
     fn test_device_type_icons() {
-        assert_eq!(DeviceType::Desktop.icon(), "ðŸ–¥ï¸");
-        assert_eq!(DeviceType::Phone.icon(), "ðŸ“±");
-        assert_eq!(DeviceType::Tablet.icon(), "ðŸ“²");
+        assert_eq!(DeviceType::Desktop.icon(), "");
+        assert_eq!(DeviceType::Phone.icon(), "");
+        assert_eq!(DeviceType::Tablet.icon(), "");
     }
 }

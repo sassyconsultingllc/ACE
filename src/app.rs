@@ -59,7 +59,7 @@ pub struct BrowserApp {
     // DISRUPTOR FEATURES - Kills paid software & Chrome bloat
     // =========================================================================
     
-    // ðŸ“¡ Network Activity Monitor - NO HIDDEN TRAFFIC
+    // Network Activity Monitor - NO HIDDEN TRAFFIC
     network_monitor: NetworkMonitor,
     activity_indicator: ActivityIndicatorState,
     download_connections: HashMap<Uuid, TrackedDownload>,
@@ -71,7 +71,7 @@ pub struct BrowserApp {
     network_active_connection: Option<u64>,
     network_last_net_sample: Option<Instant>,
     
-    // ðŸ” Password Vault - Replaces LastPass, 1Password, Chrome passwords
+    // Password Vault - Replaces LastPass, 1Password, Chrome passwords
     password_vault: PasswordVault,
     vault_search_query: String,
     vault_panel_visible: bool,
@@ -114,7 +114,7 @@ pub struct BrowserApp {
     history_last_url: Option<String>,
     history_last_title: Option<String>,
     
-    // ðŸ‘¨â€ðŸ‘©â€ðŸ‘§â€ðŸ‘¦ Family Profiles - Parental controls that work
+    // Family Profiles - Parental controls that work
     profile_manager: ProfileManager,
     profiles_panel_visible: bool,
     extensions_panel_visible: bool,
@@ -218,7 +218,7 @@ impl BrowserApp {
 
         let extensions_snapshot = self.extension_manager.list_extensions();
 
-        egui::Window::new("ðŸ§© Extensions")
+        egui::Window::new("Extensions")
             .open(&mut self.extensions_panel_visible)
             .resizable(true)
             .default_size(Vec2::new(640.0, 420.0))
@@ -524,7 +524,7 @@ impl BrowserApp {
                     .clicked() {
                     self.engine.go_back();
                 }
-            } else if ui.add_enabled(can_back, egui::Button::new("â—€").min_size(Vec2::new(28.0, 24.0)))
+            } else if ui.add_enabled(can_back, egui::Button::new("*€").min_size(Vec2::new(28.0, 24.0)))
                 .on_hover_text("Back (Alt+Left)")
                 .clicked() {
                 self.engine.go_back();
@@ -567,7 +567,7 @@ impl BrowserApp {
                 
                 // Security indicator
                 if is_secure {
-                    ui.colored_label(Color32::from_rgb(100, 200, 100), "ðŸ”’");
+                    ui.colored_label(Color32::from_rgb(100, 200, 100), "");
                 }
 
                 let engine_text = self.engine.address_bar_text().to_string();
@@ -887,7 +887,7 @@ impl BrowserApp {
         let paired = self.auth.paired_devices.clone();
         let tailscale_status = self.tailscale.get_status();
 
-        egui::Window::new("ðŸ”‘ Account & Sync")
+        egui::Window::new("Account & Sync")
             .open(&mut self.auth_panel_visible)
             .default_size(Vec2::new(720.0, 520.0))
             .show(ctx, |ui| {
@@ -1121,7 +1121,7 @@ impl BrowserApp {
                             
                             // Close button (not for pinned tabs)
                             if !*pinned
-                                && ui.small_button("Ã—").clicked() {
+                                && ui.small_button("x").clicked() {
                                     close_tab = Some(idx);
                                 }
                         });
@@ -1192,7 +1192,7 @@ impl BrowserApp {
                 // TODO: Implement find in webview
             }
             
-            if ui.button("Ã—").clicked() {
+            if ui.button("x").clicked() {
                 self.find_bar_visible = false;
             }
         });
@@ -1228,7 +1228,7 @@ impl BrowserApp {
                         .collect();
                     ui.vertical_centered(|ui| {
                         ui.add_space(60.0);
-                        ui.heading(RichText::new("ðŸš« Site Blocked").size(36.0).color(Color32::RED));
+                        ui.heading(RichText::new("Site Blocked").size(36.0).color(Color32::RED));
                         ui.add_space(10.0);
                         ui.label(RichText::new(reason).size(20.0).color(Color32::RED));
                         ui.add_space(10.0);
@@ -1454,7 +1454,7 @@ impl BrowserApp {
                 // Show console output if dev tools enabled
                 if self.show_dev_tools {
                     ui.separator();
-                    ui.collapsing("ðŸ“ Console", |ui| {
+                    ui.collapsing("Console", |ui| {
                         for line in self.html_renderer.console_output() {
                             ui.label(RichText::new(line).monospace().size(12.0));
                         }
@@ -1463,7 +1463,7 @@ impl BrowserApp {
                 // Show option to open in system browser
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("ðŸ’¡ Tip:").small().color(Color32::GRAY));
+                    ui.label(RichText::new("Tip:").small().color(Color32::GRAY));
                     if ui.small_button("Open in system browser").clicked() {
                         let _ = open::that(&url);
                     }
@@ -1567,7 +1567,7 @@ impl BrowserApp {
     fn render_history_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.heading("ðŸ• History");
+                ui.heading("History");
                 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("Clear All History").clicked() {
@@ -1639,7 +1639,7 @@ impl BrowserApp {
                     }
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("Ã—").clicked() {
+                        if ui.small_button("x").clicked() {
                             remove_id = Some(*id);
                         }
                         ui.label(RichText::new(url).color(Color32::from_rgb(150,150,150)));
@@ -1813,7 +1813,7 @@ impl BrowserApp {
                     ui.heading("Downloads");
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Ã—").clicked() {
+                        if ui.button("x").clicked() {
                             self.engine.set_show_downloads_panel(false);
                         }
                     });
@@ -1998,7 +1998,7 @@ impl BrowserApp {
             self.vault_status = "Vault locked - reauthenticate".into();
         }
 
-        egui::Window::new("ðŸ” Password Vault")
+        egui::Window::new("Password Vault")
             .open(&mut self.vault_panel_visible)
             .resizable(true)
             .default_size(Vec2::new(520.0, 520.0))
@@ -2411,7 +2411,7 @@ impl BrowserApp {
         let profiles_snapshot: Vec<Profile> = self.profile_manager.profiles().to_vec();
         let active_profile_id = self.profile_manager.active_profile().map(|p| p.id.clone());
 
-        egui::Window::new("ðŸ‘¨â€ðŸ‘©â€ðŸ‘§ Family Profiles")
+        egui::Window::new("Family Profiles")
             .open(&mut self.profiles_panel_visible)
             .resizable(true)
             .default_size(Vec2::new(640.0, 520.0))
@@ -2798,7 +2798,7 @@ impl BrowserApp {
             Vec::new()
         };
 
-        egui::Window::new("ðŸ• History")
+        egui::Window::new("History")
             .open(&mut self.history_panel_visible)
             .resizable(true)
             .default_size(Vec2::new(760.0, 560.0))
@@ -3104,7 +3104,7 @@ impl BrowserApp {
                 ui.add_space(50.0);
                 
                 // Header
-                ui.heading(RichText::new("ðŸ¦Š Sassy Browser").size(48.0).color(Color32::from_rgb(255, 140, 0)));
+                ui.heading(RichText::new("Sassy Browser").size(48.0).color(Color32::from_rgb(255, 140, 0)));
                 ui.add_space(10.0);
                 ui.label(RichText::new("Pure Rust â€¢ No Chrome â€¢ No Google â€¢ No Tracking").size(16.0).color(Color32::GRAY));
                 ui.add_space(40.0);
@@ -3166,11 +3166,11 @@ impl BrowserApp {
             ui.vertical(|ui| {
                 ui.add_space(10.0);
                 let features = [
-                    ("ðŸ”’", "100% Pure Rust", "No Chrome, no WebKit, no Google telemetry"),
-                    ("ðŸ“", "200+ File Formats", "PDF, PDB, RAW photos, CAD files - all built-in"),
-                    ("ðŸ’°", "Kills Paid Software", "Adobe Suite ($504/yr), AutoCAD ($2K/yr) - FREE"),
-                    ("ðŸ”—", "Tailscale Mesh", "Sync across all your devices securely"),
-                    ("ðŸ“±", "Phone App", "Pair your phone for seamless sync"),
+                    ("", "100% Pure Rust", "No Chrome, no WebKit, no Google telemetry"),
+                    ("", "200+ File Formats", "PDF, PDB, RAW photos, CAD files - all built-in"),
+                    ("", "Kills Paid Software", "Adobe Suite ($504/yr), AutoCAD ($2K/yr) - FREE"),
+                    ("", "Tailscale Mesh", "Sync across all your devices securely"),
+                    ("", "Phone App", "Pair your phone for seamless sync"),
                 ];
                 
                 for (icon, title, desc) in features {
@@ -3213,7 +3213,7 @@ impl BrowserApp {
             .saturating_sub(elapsed.as_secs());
         let timer_done = elapsed.as_secs_f32() >= self.first_run.entropy_min_seconds as f32;
 
-        ui.heading("ðŸ” Creating Your Security Key");
+        ui.heading("Creating Your Security Key");
         ui.add_space(20.0);
         
         ui.label("Move your mouse around to generate cryptographic entropy.");
@@ -3340,7 +3340,7 @@ impl BrowserApp {
     }
     
     fn render_wizard_device(&mut self, ui: &mut egui::Ui) {
-        ui.heading("ðŸ–¥ï¸ Name This Device");
+        ui.heading("Name This Device");
         ui.add_space(20.0);
         
         ui.label("Give this device a name so you can identify it in your network.");
@@ -3356,9 +3356,9 @@ impl BrowserApp {
         ui.label("Device Type:");
         ui.horizontal(|ui| {
             let types = [
-                (DeviceType::Desktop, "ðŸ–¥ï¸ Desktop"),
-                (DeviceType::Laptop, "ðŸ’» Laptop"),
-                (DeviceType::Server, "ðŸ–§ Server"),
+                (DeviceType::Desktop, "Desktop"),
+                (DeviceType::Laptop, "Laptop"),
+                (DeviceType::Server, "Server"),
             ];
             
             for (dtype, label) in types {
@@ -3406,7 +3406,7 @@ impl BrowserApp {
     }
     
     fn render_wizard_tailscale(&mut self, ui: &mut egui::Ui) {
-        ui.heading("ðŸ”— Tailscale Setup");
+        ui.heading("Tailscale Setup");
         ui.add_space(20.0);
         
         match self.tailscale.status {
@@ -3470,7 +3470,7 @@ impl BrowserApp {
                 if !peers.is_empty() {
                     ui.label(RichText::new("Devices on your network:").strong());
                     for peer in peers {
-                        let status = if peer.online { "ðŸŸ¢" } else { "âšª" };
+                        let status = if peer.online { "" } else { "âšª" };
                         ui.label(format!("{} {} ({})", status, peer.hostname, peer.ip_address));
                     }
                 }
@@ -3518,7 +3518,7 @@ impl BrowserApp {
     }
     
     fn render_wizard_phone(&mut self, ui: &mut egui::Ui) {
-        ui.heading("ðŸ“± Phone App Pairing");
+        ui.heading("Phone App Pairing");
         ui.add_space(20.0);
         
         // Generate pairing code if not already done

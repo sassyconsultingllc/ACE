@@ -1600,7 +1600,7 @@ impl BrowserState {
             let hour = ((secs % 86400) / 3600) as u32;
             if (2..5).contains(&hour) {
                 if let Some(reward) = self.ui.ai.discover_easter_egg("night_owl") {
-                    println!("ðŸ¦‰ Easter Egg: {}", reward.message);
+                    println!("Easter Egg: {}", reward.message);
                     println!("   Redeem at: {}", reward.redeem_url);
                 }
             }
@@ -1609,7 +1609,7 @@ impl BrowserState {
         // First popup blocked
         if self.popup_manager.total_blocked == 1 {
             if let Some(reward) = self.ui.ai.discover_easter_egg("first_block") {
-                println!("ðŸ›¡ï¸ Easter Egg: {}", reward.message);
+                println!("Easter Egg: {}", reward.message);
                 println!("   Redeem at: {}", reward.redeem_url);
             }
         }
@@ -1618,7 +1618,7 @@ impl BrowserState {
         if let Some(tab) = self.ui.tab_manager.active_tab() {
             if tab.sandbox.trust_level == TrustLevel::Trusted {
                 if let Some(reward) = self.ui.ai.discover_easter_egg("trust_watcher") {
-                    println!("ðŸ”’ Easter Egg: {}", reward.message);
+                    println!("Easter Egg: {}", reward.message);
                     println!("   Redeem at: {}", reward.redeem_url);
                 }
             }
@@ -1631,7 +1631,7 @@ impl BrowserState {
             let status = self.update_checker.check();
             match status {
                 UpdateStatus::Available(ref info) => {
-                    println!("ðŸ“¦ Update available: v{}", info.version);
+                    println!("Update available: v{}", info.version);
                     println!("   Changelog: {}", info.changelog);
                     if info.required {
                         println!("   âš ï¸ This is a security update - please install soon!");
@@ -1699,7 +1699,7 @@ impl BrowserState {
         }
 
         let id = self.quarantine.add(file);
-        println!("ðŸ“¥ Download quarantined: {} (id: {})", filename, id);
+        println!("Download quarantined: {} (id: {})", filename, id);
         println!("   Three interactions required to release");
         
         // Display warnings
@@ -1708,8 +1708,8 @@ impl BrowserState {
                 let icon = match warning.level {
                     crate::sandbox::WarningLevel::Info => "â„¹ï¸",
                     crate::sandbox::WarningLevel::Caution => "âš ï¸",
-                    crate::sandbox::WarningLevel::Warning => "ðŸ”¶",
-                    crate::sandbox::WarningLevel::Danger => "ðŸ”´",
+                    crate::sandbox::WarningLevel::Warning => "",
+                    crate::sandbox::WarningLevel::Danger => "",
                 };
                 println!("   {} {}: {}", icon, warning.message, warning.detail);
             }
@@ -1725,13 +1725,13 @@ impl BrowserState {
                     println!("âœ… File ready for release: {}", file.filename);
                 }
                 ReleaseStatus::NeedsInteraction { current, required } => {
-                    println!("ðŸ”„ Progress: {}/{} interactions", current, required);
+                    println!("Progress: {}/{} interactions", current, required);
                 }
                 ReleaseStatus::Waiting { seconds_remaining } => {
                     println!("â³ Wait {} more seconds", seconds_remaining);
                 }
                 ReleaseStatus::Blocked { reason } => {
-                    println!("ðŸš« Cannot release: {}", reason);
+                    println!("Cannot release: {}", reason);
                 }
             }
         }
@@ -1817,7 +1817,7 @@ impl BrowserState {
         let config = SyncConfig::default();
         let mut server = SecureSyncServer::new(config);
         
-        println!("ðŸ”’ Secure sync status:");
+        println!("Secure sync status:");
         println!("   Tailscale: {}", if server.tailscale.available { "detected" } else { "not found" });
         if let Some(ref hostname) = server.tailscale.hostname {
             println!("   Hostname: {}", hostname);
@@ -1844,7 +1844,7 @@ impl BrowserState {
             name.to_string(),
             owner.to_string(),
         );
-        println!("ðŸ“± Device registered: {} ({})", device.name, device.trust_level.description());
+        println!("Device registered: {} ({})", device.name, device.trust_level.description());
         
         if self.family_config.devices.len() == 1 {
             // First device becomes admin
@@ -1869,7 +1869,7 @@ impl BrowserState {
     pub fn login_user(&mut self, username: &str, device_id: &str) {
         match self.user_manager.login(username, device_id) {
             Ok(session) => {
-                println!("ðŸ‘¤ User logged in: {} (session: {})", username, session.session_id);
+                println!("User logged in: {} (session: {})", username, session.session_id);
                 // Touch family device
                 self.family_config.touch_device(device_id);
             }
@@ -1896,7 +1896,7 @@ impl BrowserState {
                 println!("âœ… Popup allowed: {}", reason);
             }
             PopupDecision::Block { reason } => {
-                println!("ðŸ›¡ï¸ Popup blocked: {}", reason);
+                println!("Popup blocked: {}", reason);
             }
             PopupDecision::Prompt { reason } => {
                 println!("â“ Popup pending: {}", reason);

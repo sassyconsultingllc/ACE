@@ -135,7 +135,7 @@ fn main() {
 â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 "#);
 
-    tracing::info!("ðŸš€ Starting Sassy Browser v2.0.0 - Pure Rust Edition");
+    tracing::info!("Starting Sassy Browser v2.0.0 - Pure Rust Edition");
     
     let args: Vec<String> = env::args().collect();
     
@@ -226,14 +226,14 @@ fn run_pure_engine() {
 }
 
 fn serve_phone_app() {
-    println!("ðŸ“± Starting phone sync server...");
+    println!("Starting phone sync server...");
     println!("Uses Tailscale for peer-to-peer sync - NO cloud, NO Google, NO tracking");
     println!("Scan the QR code with your phone to connect.");
     // TODO: Start phone sync server via sync module
 }
 
 fn reset_data() {
-    println!("ðŸ—‘ï¸ Resetting all browser data...");
+    println!("Resetting all browser data...");
     if let Some(data_dir) = dirs::data_dir() {
         let sassy_dir = data_dir.join("sassy-browser");
         if sassy_dir.exists() {
@@ -249,7 +249,7 @@ fn reset_data() {
 }
 
 fn run_mcp_server_mode(args: &[String]) {
-    println!("ðŸ¤– Starting Sassy Browser MCP Server...");
+    println!("Starting Sassy Browser MCP Server...");
     println!("Connect from Claude Desktop or any MCP client.");
     
     let mut config = mcp_server::McpServerConfig { enabled: true, ..Default::default() };

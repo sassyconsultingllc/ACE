@@ -63,7 +63,7 @@ impl SpreadsheetViewer {
     
     fn render_toolbar(&mut self, ui: &mut egui::Ui, _spreadsheet: &SpreadsheetContent, zoom: f32) {
         ui.horizontal(|ui| {
-            if ui.selectable_label(!self.edit_mode, "ðŸ‘ View").clicked() {
+            if ui.selectable_label(!self.edit_mode, "View").clicked() {
                 self.edit_mode = false;
             }
             if ui.selectable_label(self.edit_mode, "âœï¸ Edit").clicked() {

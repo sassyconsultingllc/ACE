@@ -50,7 +50,7 @@ pub fn run_setup() -> Option<SetupResult> {
             println!("  âœ“ Tailscale IP: {}", ip);
         }
     } else {
-        println!("  â—‹ Tailscale not detected");
+        println!("  *‹ Tailscale not detected");
         println!("    Phone sync requires Tailscale.");
         println!("    Get it at: https://tailscale.com/download");
     }
@@ -126,7 +126,7 @@ pub fn run_setup() -> Option<SetupResult> {
     // CRITICAL: Display recovery key
     println!();
     println!("  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—");
-    println!("  â•‘             ðŸ”‘ RECOVERY KEY - SAVE THIS! ðŸ”‘               â•‘");
+    println!("  â•‘             RECOVERY KEY - SAVE THIS!               â•‘");
     println!("  â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£");
     println!("  â•‘                                                           â•‘");
     println!("  â•‘  {}  â•‘", format_recovery_key(&recovery_key));
@@ -144,7 +144,7 @@ pub fn run_setup() -> Option<SetupResult> {
     if pin.is_some() {
         println!("  âœ“ PIN protection enabled");
     } else {
-        println!("  â—‹ No PIN (anyone with computer access can use)");
+        println!("  *‹ No PIN (anyone with computer access can use)");
     }
     println!("  âœ“ Ed25519 identity key generated");
     println!("  âœ“ Data encryption key derived");

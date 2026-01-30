@@ -98,9 +98,9 @@ impl EbookViewer {
             
             // Header with toggle
             ui.horizontal(|ui| {
-                ui.heading(RichText::new("ðŸ“š Contents").size(16.0));
+                ui.heading(RichText::new("Contents").size(16.0));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.small_button("â—€").on_hover_text("Hide sidebar").clicked() {
+                    if ui.small_button("*€").on_hover_text("Hide sidebar").clicked() {
                         self.show_toc = false;
                     }
                 });
@@ -120,7 +120,7 @@ impl EbookViewer {
                             .show(ui, |ui| {
                                 ui.set_min_size(Vec2::new(150.0, 200.0));
                                 ui.centered_and_justified(|ui| {
-                                    ui.label(RichText::new("ðŸ“–").size(60.0));
+                                    ui.label(RichText::new("").size(60.0));
                                 });
                             });
                     });
@@ -211,10 +211,10 @@ impl EbookViewer {
                     if ui.selectable_label(self.theme == ReadingTheme::Light, "â˜€ï¸").clicked() {
                         self.theme = ReadingTheme::Light;
                     }
-                    if ui.selectable_label(self.theme == ReadingTheme::Sepia, "ðŸ“œ").clicked() {
+                    if ui.selectable_label(self.theme == ReadingTheme::Sepia, "").clicked() {
                         self.theme = ReadingTheme::Sepia;
                     }
-                    if ui.selectable_label(self.theme == ReadingTheme::Dark, "ðŸŒ™").clicked() {
+                    if ui.selectable_label(self.theme == ReadingTheme::Dark, "").clicked() {
                         self.theme = ReadingTheme::Dark;
                     }
                 });
@@ -257,7 +257,7 @@ impl EbookViewer {
                 let can_prev = self.current_chapter > 0;
                 let can_next = self.current_chapter < ebook.chapters.len().saturating_sub(1);
                 
-                if ui.add_enabled(can_prev, egui::Button::new("â—€ Previous")).clicked() {
+                if ui.add_enabled(can_prev, egui::Button::new("*€ Previous")).clicked() {
                     self.current_chapter -= 1;
                     self.scroll_position = 0.0;
                 }
@@ -276,13 +276,13 @@ impl EbookViewer {
             ui.separator();
             
             // Bookmark
-            if ui.button("ðŸ”– Bookmark").on_hover_text("Add bookmark").clicked() {
+            if ui.button("Bookmark").on_hover_text("Add bookmark").clicked() {
                 self.bookmarks.push((self.current_chapter, String::new()));
             }
             
             // Search
             ui.separator();
-            ui.label("ðŸ”");
+            ui.label("");
             let search_resp = ui.add(egui::TextEdit::singleline(&mut self.search_query)
                 .desired_width(150.0)
                 .hint_text("Search..."));
@@ -355,7 +355,7 @@ impl EbookViewer {
                     ui.centered_and_justified(|ui| {
                         ui.vertical_centered(|ui| {
                             ui.add_space(60.0);
-                            ui.label(RichText::new("ðŸ“š").size(64.0));
+                            ui.label(RichText::new("").size(64.0));
                             ui.add_space(16.0);
                             ui.label(RichText::new("eBook")
                                 .size(24.0)

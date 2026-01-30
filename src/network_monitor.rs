@@ -49,15 +49,15 @@ pub enum ConnectionType {
 impl ConnectionType {
     pub fn icon(&self) -> &'static str {
         match self {
-            ConnectionType::Document => "ðŸ“„",
+            ConnectionType::Document => "",
             ConnectionType::Download => "â¬‡ï¸",
             ConnectionType::Script => "âš¡",
-            ConnectionType::Stylesheet => "ðŸŽ¨",
-            ConnectionType::Image => "ðŸ–¼ï¸",
-            ConnectionType::Font => "ðŸ”¤",
-            ConnectionType::Xhr => "ðŸ“¡",
-            ConnectionType::WebSocket => "ðŸ”Œ",
-            ConnectionType::Media => "ðŸŽ¬",
+            ConnectionType::Stylesheet => "",
+            ConnectionType::Image => "",
+            ConnectionType::Font => "",
+            ConnectionType::Xhr => "",
+            ConnectionType::WebSocket => "",
+            ConnectionType::Media => "",
             ConnectionType::Other => "â“",
         }
     }

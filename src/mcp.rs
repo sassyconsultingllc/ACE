@@ -106,10 +106,10 @@ impl AgentRole {
     
     pub fn icon(&self) -> &'static str {
         match self {
-            AgentRole::Voice => "ðŸ—£ï¸",
-            AgentRole::Orchestrator => "ðŸŽ¯",
+            AgentRole::Voice => "",
+            AgentRole::Orchestrator => "",
             AgentRole::Coder => "âš¡",
-            AgentRole::Auditor => "ðŸ”",
+            AgentRole::Auditor => "",
         }
     }
     
@@ -386,11 +386,11 @@ impl TaskStatus {
     pub fn icon(&self) -> &'static str {
         match self {
             TaskStatus::Pending => "â³",
-            TaskStatus::InProgress => "ðŸ”„",
-            TaskStatus::Review => "ðŸ‘ï¸",
+            TaskStatus::InProgress => "",
+            TaskStatus::Review => "",
             TaskStatus::Completed => "âœ…",
             TaskStatus::Failed => "âŒ",
-            TaskStatus::Blocked => "ðŸš«",
+            TaskStatus::Blocked => "",
         }
     }
 }
@@ -426,7 +426,7 @@ impl AuditVerdict {
         match self {
             AuditVerdict::Approved => "âœ…",
             AuditVerdict::ApprovedWithWarnings => "âš ï¸",
-            AuditVerdict::NeedsRevision => "ðŸ”„",
+            AuditVerdict::NeedsRevision => "",
             AuditVerdict::Rejected => "âŒ",
         }
     }
@@ -460,7 +460,7 @@ impl IssueSeverity {
             IssueSeverity::Info => "â„¹ï¸",
             IssueSeverity::Warning => "âš ï¸",
             IssueSeverity::Error => "âŒ",
-            IssueSeverity::Critical => "ðŸš¨",
+            IssueSeverity::Critical => "",
         }
     }
 }
@@ -653,10 +653,10 @@ impl McpOrchestrator {
         // Add system message
         self.add_system_message(
             "MCP Session started. Agents online:\n\
-             ðŸ—£ï¸ Grok (Voice) - Ready to understand your intent\n\
-             ðŸŽ¯ Manus (Orchestrator) - Ready to plan your workflow\n\
+             Grok (Voice) - Ready to understand your intent\n\
+             Manus (Orchestrator) - Ready to plan your workflow\n\
              âš¡ Claude Opus 5 (Coder) - Ready to write code\n\
-             ðŸ” Gemini (Auditor) - Ready to review feasibility"
+             Gemini (Auditor) - Ready to review feasibility"
         );
     }
     

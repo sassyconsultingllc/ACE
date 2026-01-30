@@ -68,13 +68,13 @@ impl Model3DViewer {
         ui.horizontal(|ui| {
             // Render mode
             ui.label("Render:");
-            if ui.selectable_label(self.render_mode == RenderMode::Wireframe, "ðŸ“ Wire").clicked() {
+            if ui.selectable_label(self.render_mode == RenderMode::Wireframe, "Wire").clicked() {
                 self.render_mode = RenderMode::Wireframe;
             }
-            if ui.selectable_label(self.render_mode == RenderMode::Solid, "ðŸ”· Solid").clicked() {
+            if ui.selectable_label(self.render_mode == RenderMode::Solid, "Solid").clicked() {
                 self.render_mode = RenderMode::Solid;
             }
-            if ui.selectable_label(self.render_mode == RenderMode::SolidWireframe, "ðŸ”¶ Both").clicked() {
+            if ui.selectable_label(self.render_mode == RenderMode::SolidWireframe, "Both").clicked() {
                 self.render_mode = RenderMode::SolidWireframe;
             }
             if ui.selectable_label(self.render_mode == RenderMode::Points, "âš« Points").clicked() {
@@ -90,7 +90,7 @@ impl Model3DViewer {
             ui.separator();
             
             // Auto-rotate
-            ui.checkbox(&mut self.auto_rotate, "ðŸ”„ Auto-rotate");
+            ui.checkbox(&mut self.auto_rotate, "Auto-rotate");
             if self.auto_rotate {
                 ui.add(egui::Slider::new(&mut self.auto_rotate_speed, 0.1..=2.0).text("Speed"));
             }
@@ -98,7 +98,7 @@ impl Model3DViewer {
             ui.separator();
             
             // Reset view
-            if ui.button("ðŸ  Reset View").clicked() {
+            if ui.button(" Reset View").clicked() {
                 self.rotation_x = -30.0;
                 self.rotation_y = 45.0;
                 self.zoom = 1.0;
@@ -113,7 +113,7 @@ impl Model3DViewer {
                     Model3DFormat::Glb => "GLB",
                     Model3DFormat::Ply => "PLY",
                 };
-                ui.label(format!("ðŸŽ² {} | {} verts | {} faces", 
+                ui.label(format!("{} | {} verts | {} faces", 
                     format_name, model.vertices.len(), model.faces.len()));
             });
         });
@@ -358,7 +358,7 @@ impl Model3DViewer {
             .exact_width(190.0)
             .show_inside(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.heading("ðŸ“Š Model Info");
+                    ui.heading("Model Info");
                     ui.separator();
                     
                     ui.label(format!("Vertices: {}", model.vertices.len()));
@@ -377,7 +377,7 @@ impl Model3DViewer {
                     }
                     
                     ui.separator();
-                    ui.heading("ðŸ“ Bounds");
+                    ui.heading("Bounds");
                     
                     let bounds = &model.bounds;
                     let size = [
@@ -386,14 +386,14 @@ impl Model3DViewer {
                         bounds.max[2] - bounds.min[2],
                     ];
                     
-                    ui.label(format!("Size: {:.2} Ã— {:.2} Ã— {:.2}", size[0], size[1], size[2]));
+                    ui.label(format!("Size: {:.2} x {:.2} x {:.2}", size[0], size[1], size[2]));
                     ui.label(format!("Min: ({:.2}, {:.2}, {:.2})", 
                         bounds.min[0], bounds.min[1], bounds.min[2]));
                     ui.label(format!("Max: ({:.2}, {:.2}, {:.2})", 
                         bounds.max[0], bounds.max[1], bounds.max[2]));
                     
                     ui.separator();
-                    ui.heading("ðŸŽ¨ Colors");
+                    ui.heading("Colors");
                     
                     ui.horizontal(|ui| {
                         ui.label("Model:");
@@ -406,7 +406,7 @@ impl Model3DViewer {
                     });
                     
                     ui.separator();
-                    ui.heading("ðŸ’¡ Controls");
+                    ui.heading("Controls");
                     ui.label("Left drag: Rotate");
                     ui.label("Right drag: Pan");
                     ui.label("Scroll: Zoom");

@@ -52,10 +52,10 @@ impl FontViewer {
     fn render_toolbar(&mut self, ui: &mut egui::Ui, font: &FontContent) {
         ui.horizontal(|ui| {
             // View mode
-            if ui.selectable_label(!self.show_charset, "ðŸ“ Preview").clicked() {
+            if ui.selectable_label(!self.show_charset, "Preview").clicked() {
                 self.show_charset = false;
             }
-            if ui.selectable_label(self.show_charset, "ðŸ”¤ Character Map").clicked() {
+            if ui.selectable_label(self.show_charset, "Character Map").clicked() {
                 self.show_charset = true;
             }
             
@@ -211,7 +211,7 @@ impl FontViewer {
                 self.charset_start = 0x1F300;
             }
             
-            if ui.button("â—€").clicked() {
+            if ui.button("*€").clicked() {
                 self.charset_start = self.charset_start.saturating_sub(256);
             }
             if ui.button("â–¶").clicked() {

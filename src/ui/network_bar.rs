@@ -432,13 +432,13 @@ impl NetworkBar {
         
         for req in &self.requests {
             let state_icon = match req.state {
-                RequestState::Connecting => "ðŸ”„",
-                RequestState::Sending => "ðŸ“¤",
+                RequestState::Connecting => "",
+                RequestState::Sending => "",
                 RequestState::Waiting => "â³",
-                RequestState::Receiving => "ðŸ“¥",
+                RequestState::Receiving => "",
                 RequestState::Complete => "âœ…",
                 RequestState::Failed => "âŒ",
-                RequestState::Cancelled => "ðŸš«",
+                RequestState::Cancelled => "",
             };
             
             let progress = req.bytes_total.map(|total| {

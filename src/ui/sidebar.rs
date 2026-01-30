@@ -257,7 +257,7 @@ impl SidebarLayout {
         left.add_content(SidebarContent {
             id: "tabs".into(),
             title: "Tabs".into(),
-            icon: Some("ðŸ“‘".into()),
+            icon: Some("".into()),
             widget: SidebarWidget::TabTiles,
         });
         left.add_content(SidebarContent {
@@ -271,7 +271,7 @@ impl SidebarLayout {
         right.add_content(SidebarContent {
             id: "devtools".into(),
             title: "DevTools".into(),
-            icon: Some("ðŸ”§".into()),
+            icon: Some("".into()),
             widget: SidebarWidget::DevTools,
         });
         

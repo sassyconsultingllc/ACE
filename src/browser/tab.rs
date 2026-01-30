@@ -141,26 +141,26 @@ impl Tab {
     pub fn icon(&self) -> &'static str {
         match &self.content {
             TabContent::Web { is_secure, .. } => {
-                if *is_secure { "ðŸ”’" } else { "ðŸŒ" }
+                if *is_secure { "" } else { "" }
             }
             TabContent::File(f) => match f.file_type {
-                FileType::Image | FileType::ImageRaw | FileType::ImagePsd => "ðŸ–¼ï¸",
-                FileType::Pdf => "ðŸ“„",
-                FileType::Document => "ðŸ“",
-                FileType::Spreadsheet => "ðŸ“Š",
-                FileType::Chemical => "ðŸ§¬",
-                FileType::Text | FileType::Markdown => "ðŸ“ƒ",
-                FileType::Archive => "ðŸ“¦",
-                FileType::Model3D => "ðŸ§Š",
-                FileType::Font => "ðŸ”¤",
-                FileType::Audio => "ðŸŽµ",
-                FileType::Video => "ðŸŽ¬",
-                FileType::Ebook => "ðŸ“š",
-                FileType::Unknown => "ðŸ“",
+                FileType::Image | FileType::ImageRaw | FileType::ImagePsd => "",
+                FileType::Pdf => "",
+                FileType::Document => "",
+                FileType::Spreadsheet => "",
+                FileType::Chemical => "",
+                FileType::Text | FileType::Markdown => "",
+                FileType::Archive => "",
+                FileType::Model3D => "",
+                FileType::Font => "",
+                FileType::Audio => "",
+                FileType::Video => "",
+                FileType::Ebook => "",
+                FileType::Unknown => "",
             },
             TabContent::NewTab => "âž•",
             TabContent::Settings => "âš™ï¸",
-            TabContent::History => "ðŸ•",
+            TabContent::History => "",
                 TabContent::Bookmarks => "🔖",
             TabContent::Downloads => "â¬‡ï¸",
         }

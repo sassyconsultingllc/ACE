@@ -1,7 +1,7 @@
 # Sassy Browser v2.0.0 — Comprehensive Technical Analysis
 
 **Generated:** January 23, 2026  
-**Location:** `V:\sassy-browser-FIXED\`  
+**Location:** `V:\sassy-browser\`  
 **Website:** https://sassyconsultingllc.com/browser
 
 ---

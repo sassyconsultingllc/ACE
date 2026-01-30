@@ -304,7 +304,7 @@ impl PdfViewer {
     fn render_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             // Thumbnail toggle
-            ui.toggle_value(&mut self.show_thumbnails, "ðŸ–¼ Thumbnails");
+            ui.toggle_value(&mut self.show_thumbnails, "Thumbnails");
             
             ui.separator();
             
@@ -312,7 +312,7 @@ impl PdfViewer {
             if ui.button("â®").on_hover_text("First page").clicked() {
                 self.current_page = 0;
             }
-            if ui.button("â—€").on_hover_text("Previous page").clicked() {
+            if ui.button("*€").on_hover_text("Previous page").clicked() {
                 self.current_page = self.current_page.saturating_sub(1);
             }
             
@@ -349,12 +349,12 @@ impl PdfViewer {
             
             // Tools
             ui.selectable_value(&mut self.current_tool, PdfTool::Select, "â˜ Select");
-            ui.selectable_value(&mut self.current_tool, PdfTool::Highlight, "ðŸ–Œ Highlight");
-            ui.selectable_value(&mut self.current_tool, PdfTool::Note, "ðŸ“ Note");
+            ui.selectable_value(&mut self.current_tool, PdfTool::Highlight, "Highlight");
+            ui.selectable_value(&mut self.current_tool, PdfTool::Note, "Note");
             
             // Search (right aligned)
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("ðŸ”").clicked() {
+                if ui.button("").clicked() {
                     let q = self.search_query.clone();
                     self.search(&q);
                 }

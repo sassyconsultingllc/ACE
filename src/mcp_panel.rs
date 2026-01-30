@@ -120,7 +120,7 @@ impl McpPanel {
         
         // Header
         elements.push(RenderElement::Header {
-            title: "ðŸ¤– AI Coding Assistant".to_string(),
+            title: "AI Coding Assistant".to_string(),
             subtitle: Some(format!("Session: {}", &self.orchestrator.session_id[..8])),
         });
         
@@ -172,7 +172,7 @@ impl McpPanel {
         let mut elements = Vec::new();
         
         elements.push(RenderElement::Header {
-            title: "ðŸŽ¯ Task Pipeline".to_string(),
+            title: "Task Pipeline".to_string(),
             subtitle: Some(format!("{} tasks total", self.orchestrator.tasks.len())),
         });
         
@@ -189,7 +189,7 @@ impl McpPanel {
         
         if !in_progress.is_empty() {
             elements.push(RenderElement::SectionHeader {
-                title: "ðŸ”„ In Progress".to_string(),
+                title: "In Progress".to_string(),
             });
             for task in in_progress {
                 elements.push(self.render_task(task));
@@ -259,7 +259,7 @@ impl McpPanel {
             }
         } else {
             elements.push(RenderElement::EmptyState {
-                icon: "ðŸ“".to_string(),
+                icon: "".to_string(),
                 message: "No pending code changes".to_string(),
                 hint: "Ask the AI to create or modify code".to_string(),
             });

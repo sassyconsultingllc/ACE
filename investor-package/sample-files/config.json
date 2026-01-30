@@ -1,0 +1,20 @@
+{
+  "company": "Sassy Consulting LLC",
+  "product": "Sassy Browser",
+  "version": "2.0.0",
+  "features": [
+    "Pure Rust implementation",
+    "Zero Google dependencies",
+    "200+ file format support",
+    "4-layer security sandbox"
+  ],
+  "pricing": {
+    "free": { "price": 0, "users": "unlimited" },
+    "pro": { "price": 9.99, "features": ["cloud sync", "priority support"] },
+    "enterprise": { "price": "contact", "features": ["SSO", "audit logs", "SLA"] }
+  },
+  "contact": {
+    "email": "shane@sassyconsultingllc.com",
+    "phone": "262-370-6421"
+  }
+}

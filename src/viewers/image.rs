@@ -551,8 +551,8 @@ impl ImageViewer {
             ui.separator();
             
             // Panel toggles
-            ui.toggle_value(&mut self.show_adjustments, "ðŸŽ¨ Adjust");
-            ui.toggle_value(&mut self.show_filters, "âœ¨ Filters");
+            ui.toggle_value(&mut self.show_adjustments, "Adjust");
+            ui.toggle_value(&mut self.show_filters, "Filters");
             ui.toggle_value(&mut self.show_resize, "ðŸ“ Resize");
             
             // Right side - image info

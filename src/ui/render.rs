@@ -338,7 +338,7 @@ impl UIRenderer {
         // Refresh button
         self.fill_rounded_rect(buffer, Rect { x, y: btn_y, width: btn_size, height: btn_size },
                     hex_to_u32(&theme.colors.surface_elevated), 4);
-        let refresh_char = if state.loading { "â—Œ" } else { "â†»" };
+        let refresh_char = if state.loading { "*Œ" } else { "â†»" };
         self.draw_text(buffer, refresh_char, (x + 8) as i32, (btn_y + 22) as i32, 16.0, text_color);
         x += btn_size + 12;
 
@@ -421,7 +421,7 @@ impl UIRenderer {
                     let spinner_color = if is_active { 0xffffffff } else { accent };
                 // Globe icon placeholder
                 let icon_color = if is_active { 0xffffffff } else { text_dim };
-                self.draw_text(buffer, "â—‹", favicon_x as i32, (favicon_y + 14) as i32, 14.0, icon_color);
+                self.draw_text(buffer, "*‹", favicon_x as i32, (favicon_y + 14) as i32, 14.0, icon_color);
             }
                     let icon_color = if is_active { 0xffffffff } else { text_dim };
             // Title
@@ -439,9 +439,8 @@ impl UIRenderer {
             if !tab.pinned {
                 let close_x = bounds.x + bounds.width - 24;
                 let close_color = if is_active { 0xccffffff } else { text_dim };
-                self.draw_text(buffer, "Ã—", close_x as i32, (y + 24) as i32, 14.0, close_color);
+                self.draw_text(buffer, "x", close_x as i32, (y + 24) as i32, 14.0, close_color);
             }
-                    let close_color = if is_active { 0xccffffff } else { text_dim };
             y += tab_height + 4;
         }
         
@@ -564,10 +563,10 @@ impl UIRenderer {
                 if y as u32 > bounds.y + bounds.height - 16 { break; }
                 
                 let state_icon = match req.state {
-                    RequestState::Connecting => "ðŸ”„",
-                    RequestState::Sending => "ðŸ“¤",
+                    RequestState::Connecting => "",
+                    RequestState::Sending => "",
                     RequestState::Waiting => "â³",
-                    RequestState::Receiving => "ðŸ“¥",
+                    RequestState::Receiving => "",
                     _ => "âœ“",
                 };
                 let line = format!("{} {}", state_icon, truncate_host(&req.host, 20));
@@ -583,11 +582,11 @@ impl UIRenderer {
         let text_color = hex_to_u32(&theme.colors.text_secondary);
         
         let label = if client_count == 0 {
-            "ðŸ“± No phones".to_string()
+            "No phones".to_string()
         } else if client_count == 1 {
-            "ðŸ“± 1 phone".to_string()
+            "1 phone".to_string()
         } else {
-            format!("ðŸ“± {} phones", client_count)
+            format!("{} phones", client_count)
         };
         
         let width = self.measure_text(&label, 12.0) + 16;
