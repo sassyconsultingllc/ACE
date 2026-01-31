@@ -232,13 +232,10 @@ fn run_pure_engine() {
     // Run the pure Rust engine directly (winit + softbuffer)
     // This bypasses egui and uses our custom rendering pipeline
     tracing::info!("Starting pure Rust engine (winit + softbuffer)");
-    
-    // TODO: Call engine::run() when fully integrated
-    // For now, fall back to egui app
-    if let Err(e) = app::run_browser() {
-        tracing::error!("Engine error: {}", e);
-        std::process::exit(1);
-    }
+    println!("Using pure Rust rendering: winit + softbuffer (no GPU, no WebKit, no Chrome)");
+
+    // Call the engine module's browser implementation
+    engine::run_browser(None);
 }
 
 fn serve_phone_app() {

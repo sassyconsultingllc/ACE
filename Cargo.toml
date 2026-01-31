@@ -140,7 +140,7 @@ ab_glyph = "0.2"                         # Font rendering
 symphonia = { version = "0.5", features = [
     "mp3", "aac", "flac", "ogg", "wav", "pcm"
 ]}
-rodio = { version = "0.19", optional = true }  # Audio playback (requires libasound2-dev on Linux)
+rodio = "0.19"                           # Audio playback
 mp4parse = "0.17"                        # MP4 container
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -227,7 +227,6 @@ core-foundation = "0.10"
 # ═══════════════════════════════════════════════════════════════════════════════
 [features]
 default = []
-audio = ["rodio"]  # Audio playback (requires libasound2-dev on Linux)
 voice = []  # Future: Whisper STT integration
 
 # ═══════════════════════════════════════════════════════════════════════════════

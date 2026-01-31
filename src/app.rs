@@ -8,6 +8,7 @@
 
 use crate::auth::{AuthManager, FirstRunState, FirstRunStep, DeviceType, TailscaleManager, PhoneSync, SyncType};
 use crate::browser::{BrowserEngine, DownloadState, Tab, TabContent, TabId, HistoryManager};
+use crate::console::DevConsole;
 use crate::file_handler::{FileType, OpenFile};
 use crate::html_renderer::HtmlRenderer;
 use crate::extensions::ExtensionManager;
@@ -146,9 +147,11 @@ pub struct BrowserApp {
     
     // HTML/JS renderer for web content
     html_renderer: HtmlRenderer,
+    // Developer Console (F12)
+    dev_console: DevConsole,
     // UI icon textures (loaded at startup)
     icons: std::collections::HashMap<String, TextureHandle>,
-    
+
     // UI state
     dark_mode: bool,
     zoom_level: f32,
@@ -488,6 +491,7 @@ impl BrowserApp {
             video_viewer: VideoViewer::new(),
             ebook_viewer: EbookViewer::new(),
             html_renderer: HtmlRenderer::new(),
+            dev_console: DevConsole::new(),
             icons,
             dark_mode: true,
             zoom_level: 1.0,
@@ -1977,6 +1981,7 @@ impl BrowserApp {
             }
             if i.key_pressed(Key::F12) {
                 self.show_dev_tools = !self.show_dev_tools;
+                self.dev_console.visible = self.show_dev_tools;
             }
             
             // Escape

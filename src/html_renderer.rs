@@ -12,6 +12,7 @@
 
 use crate::js::{JsInterpreter, DomBridge};
 use crate::layout_engine::{LayoutTree, ComputedStyle};
+use crate::style::{StyleEngine, Stylesheet};
 use eframe::egui::{self, Color32, RichText, Ui, Vec2};
 use std::collections::HashMap;
 use std::sync::mpsc;
@@ -52,6 +53,7 @@ pub struct CssRule {
 pub struct HtmlRenderer {
     js: JsInterpreter,
     dom: DomBridge,
+    style_engine: StyleEngine,
     scroll_offset: f32,
     hover_link: Option<String>,
     font_size_base: f32,
@@ -64,10 +66,11 @@ impl HtmlRenderer {
     pub fn new() -> Self {
         let dom = DomBridge::new();
         let js = JsInterpreter::new().with_dom(dom.clone());
-        
+
         Self {
             js,
             dom,
+            style_engine: StyleEngine::new(),
             scroll_offset: 0.0,
             hover_link: None,
             font_size_base: 16.0,
@@ -75,6 +78,16 @@ impl HtmlRenderer {
             cached_doc: None,
             image_update_registered: false,
         }
+    }
+
+    /// Add a CSS stylesheet to the style engine
+    pub fn add_stylesheet(&mut self, css: &str) {
+        self.style_engine.add_stylesheet(css);
+    }
+
+    /// Parse CSS using the style engine (for compatibility)
+    pub fn parse_stylesheet(&self, css: &str) -> Stylesheet {
+        Stylesheet::parse(css)
     }
 
     /// Set the warning accent color used for highlighted links
