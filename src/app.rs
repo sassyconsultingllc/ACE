@@ -3879,6 +3879,15 @@ fn configure_style(ctx: &egui::Context, dark_mode: bool) {
     ctx.set_style(style);
 }
 
+/// Initial URL to open (set before run_browser is called)
+static INITIAL_URL: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+/// Run the browser application with an optional initial URL
+pub fn run_browser_with_url(initial_url: Option<String>) -> Result<()> {
+    let _ = INITIAL_URL.set(initial_url);
+    run_browser()
+}
+
 /// Run the browser application
 pub fn run_browser() -> Result<()> {
     let native_options = eframe::NativeOptions {
@@ -3893,6 +3902,27 @@ pub fn run_browser() -> Result<()> {
     eframe::run_native(
         "Sassy Browser",
         native_options,
-        Box::new(|cc| Ok(Box::new(BrowserApp::new(cc)))),
+        Box::new(|cc| {
+            let mut app = BrowserApp::new(cc);
+            // Open initial URL if provided
+            if let Some(Some(url)) = INITIAL_URL.get() {
+                if !url.is_empty() {
+                    if url.starts_with("file://") {
+                        // Handle file URL
+                        let path = url.strip_prefix("file://").unwrap_or(url);
+                        let path_buf = std::path::PathBuf::from(path);
+                        if path_buf.exists() {
+                            if let Ok(_) = app.engine.open_file(path_buf) {
+                                // File opened successfully
+                            }
+                        }
+                    } else {
+                        // Handle web URL
+                        app.engine.navigate(url);
+                    }
+                }
+            }
+            Ok(Box::new(app))
+        }),
     ).map_err(|e| anyhow::anyhow!("Failed to run browser: {}", e))
 }
