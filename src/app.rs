@@ -3880,13 +3880,24 @@ fn configure_style(ctx: &egui::Context, dark_mode: bool) {
     visuals.widgets.active.rounding = rounding;
     visuals.widgets.open.rounding = rounding;
 
-    // Modern shadow with brand dark blue tint
+    // Modern elevated shadow with brand dark blue tint
     visuals.window_shadow = egui::Shadow {
-        offset: egui::vec2(0.0, 14.0),
-        blur: 28.0,
-        spread: 0.0,
+        offset: egui::vec2(0.0, 16.0),
+        blur: 40.0,
+        spread: 8.0,
+        color: Color32::from_rgba_unmultiplied(0x10, 0x1E, 0x32, 140),
+    };
+
+    // Menu shadow (slightly smaller than windows)
+    visuals.popup_shadow = egui::Shadow {
+        offset: egui::vec2(0.0, 8.0),
+        blur: 24.0,
+        spread: 4.0,
         color: Color32::from_rgba_unmultiplied(0x10, 0x1E, 0x32, 100),
     };
+
+    // Clip rect shadow for floating elements
+    visuals.clip_rect_margin = 3.0;
 
     ctx.set_visuals(visuals);
 
@@ -3903,11 +3914,33 @@ fn configure_style(ctx: &egui::Context, dark_mode: bool) {
     style.spacing.menu_margin = egui::Margin::symmetric(12.0, 10.0);
     style.spacing.slider_width = 180.0;
     style.spacing.interact_size = egui::vec2(40.0, 28.0);
+    style.spacing.scroll = egui::style::ScrollStyle {
+        floating: true,                    // Floating scrollbars (appear on hover)
+        bar_width: 8.0,                    // Slim scrollbar
+        handle_min_length: 24.0,           // Minimum handle size
+        bar_inner_margin: 4.0,             // Margin from content
+        bar_outer_margin: 0.0,
+        floating_width: 6.0,               // Width when floating
+        floating_allocated_width: 0.0,     // No space reserved when hidden
+        foreground_color: true,            // Use foreground color for handle
+        dormant_background_opacity: 0.0,   // Fully hidden when dormant
+        active_background_opacity: 0.4,    // Semi-visible background on hover
+        interact_background_opacity: 0.6,  // More visible when interacting
+        dormant_handle_opacity: 0.0,       // Hidden handle when dormant
+        active_handle_opacity: 0.7,        // Visible handle on hover
+        interact_handle_opacity: 1.0,      // Full opacity when interacting
+    };
+
+    // Smooth animations
+    style.animation_time = 0.15;           // 150ms hover transitions
+    style.explanation_tooltips = true;     // Show helpful tooltips
+
+    // Popup shadow with brand color tint
     style.visuals.popup_shadow = egui::Shadow {
-        offset: egui::vec2(0.0, 10.0),
-        blur: 24.0,
-        spread: 0.0,
-        color: Color32::from_rgba_unmultiplied(0x10, 0x1E, 0x32, 90),
+        offset: egui::vec2(0.0, 12.0),
+        blur: 32.0,
+        spread: 4.0,
+        color: Color32::from_rgba_unmultiplied(0x10, 0x1E, 0x32, 120),
     };
 
     ctx.set_style(style);
