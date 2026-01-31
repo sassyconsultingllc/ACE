@@ -9,12 +9,8 @@
 //! The flow:
 //! HTML → DOM Tree → Style Resolution → Layout Tree (taffy) → Paint → egui
 
-#![allow(unused_imports)]
-
-use std::collections::HashMap;
 use taffy::prelude::*;
 use taffy::{Overflow, Point};
-use cssparser::{Parser, ParserInput, Token, ParseError};
 
 // ============================================================================
 // STYLE RESOLUTION

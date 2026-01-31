@@ -50,9 +50,6 @@ egui_taffy = "0.10"              # egui + taffy integration
 parley = "0.2"                   # Text layout/shaping (Google's Rust text engine)
 vello = "0.3"                    # GPU 2D vector rendering (Google's Rust renderer)
 
-# Layout engine (Pure Rust flexbox/grid)
-taffy = "0.7"
-
 # Font rendering (Pure Rust, no FreeType, no HarfBuzz)
 fontdue = "0.9"
 
@@ -143,7 +140,7 @@ ab_glyph = "0.2"                         # Font rendering
 symphonia = { version = "0.5", features = [
     "mp3", "aac", "flac", "ogg", "wav", "pcm"
 ]}
-rodio = "0.19"                           # Audio playback
+rodio = { version = "0.19", optional = true }  # Audio playback (requires libasound2-dev on Linux)
 mp4parse = "0.17"                        # MP4 container
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -230,6 +227,7 @@ core-foundation = "0.10"
 # ═══════════════════════════════════════════════════════════════════════════════
 [features]
 default = []
+audio = ["rodio"]  # Audio playback (requires libasound2-dev on Linux)
 voice = []  # Future: Whisper STT integration
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -1,15 +1,17 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 //! HTML Renderer - Pure Rust HTML/CSS/JS rendering
-//! 
+//!
 //! Renders web pages using:
 //! - html5ever for HTML parsing
 //! - Our JS interpreter for JavaScript
+//! - taffy for CSS layout (flexbox/grid)
 //! - egui for rendering
-//! 
+//!
 //! This is the fallback renderer when system webview isn't available,
 //! or for rendering HTML in file viewers.
 
 use crate::js::{JsInterpreter, DomBridge};
+use crate::layout_engine::{LayoutTree, ComputedStyle};
 use eframe::egui::{self, Color32, RichText, Ui, Vec2};
 use std::collections::HashMap;
 use std::sync::mpsc;
@@ -78,6 +80,136 @@ impl HtmlRenderer {
     /// Set the warning accent color used for highlighted links
     pub fn set_warn_color(&mut self, c: Color32) {
         self.warn_color = c;
+    }
+
+    /// Build a taffy layout tree from the cached HTML document
+    /// This enables CSS flexbox/grid layout calculation
+    pub fn build_layout_tree(&self, available_width: f32, available_height: f32) -> Option<LayoutTree> {
+        let doc = self.cached_doc.as_ref()?;
+        let mut tree = LayoutTree::new();
+
+        // Build root node with flex column layout
+        let mut root_style = ComputedStyle::default();
+        root_style.display = taffy::prelude::Display::Flex;
+        root_style.flex_direction = taffy::prelude::FlexDirection::Column;
+        root_style.width = taffy::prelude::Dimension::Length(available_width);
+        root_style.height = taffy::prelude::Dimension::Length(available_height);
+
+        let (root_idx, _) = tree.add_node("root", None, root_style);
+
+        // Recursively build layout nodes from HTML
+        let child_indices = self.build_layout_nodes(&mut tree, &doc.nodes, &doc.styles);
+        tree.set_children(root_idx, &child_indices);
+        tree.set_root(root_idx);
+
+        // Compute layout
+        tree.compute(available_width, available_height);
+
+        // Log layout info for debugging (uses get_layout and flatten_layouts)
+        if let Some(root_layout) = tree.get_layout(root_idx) {
+            tracing::debug!(
+                "Layout computed: root size {}x{}",
+                root_layout.size.width,
+                root_layout.size.height
+            );
+        }
+
+        // Get all layouts for potential rendering use
+        let layouts = tree.flatten_layouts();
+        tracing::debug!("Layout tree has {} nodes", layouts.len());
+
+        Some(tree)
+    }
+
+    /// Recursively build layout nodes from HTML nodes
+    fn build_layout_nodes(&self, tree: &mut LayoutTree, nodes: &[HtmlNode], styles: &[CssRule]) -> Vec<usize> {
+        let mut indices = Vec::new();
+
+        for node in nodes {
+            match node {
+                HtmlNode::Text(text) => {
+                    if !text.trim().is_empty() {
+                        let style = ComputedStyle::default();
+                        let (idx, _) = tree.add_node("text", Some(text.clone()), style);
+                        indices.push(idx);
+                    }
+                }
+                HtmlNode::Element { tag, id, class, style: inline_style, children, .. } => {
+                    let mut computed = ComputedStyle::default();
+
+                    // Apply inline styles
+                    for (prop, val) in inline_style {
+                        computed.apply_property(prop, val);
+                    }
+
+                    // Apply matching CSS rules
+                    for rule in styles {
+                        if self.selector_matches(&rule.selector, tag, id.as_deref(), class) {
+                            for (prop, val) in &rule.properties {
+                                computed.apply_property(prop, val);
+                            }
+                        }
+                    }
+
+                    // Set display based on tag for common block/inline elements
+                    match tag.to_lowercase().as_str() {
+                        "div" | "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "section" | "article" | "header" | "footer" | "main" | "nav" => {
+                            if computed.display == taffy::prelude::Display::Block {
+                                computed.display = taffy::prelude::Display::Block;
+                            }
+                        }
+                        "span" | "a" | "strong" | "em" | "b" | "i" | "code" => {
+                            // Inline elements - keep as block for now (taffy doesn't do inline)
+                        }
+                        _ => {}
+                    }
+
+                    let (idx, _) = tree.add_node(tag, None, computed);
+
+                    // Build children
+                    let child_indices = self.build_layout_nodes(tree, children, styles);
+                    tree.set_children(idx, &child_indices);
+
+                    indices.push(idx);
+                }
+                HtmlNode::Script(_) => {
+                    // Skip script nodes in layout
+                }
+            }
+        }
+
+        indices
+    }
+
+    /// Check if a CSS selector matches an element
+    fn selector_matches(&self, selector: &str, tag: &str, id: Option<&str>, classes: &[String]) -> bool {
+        let selector = selector.trim();
+
+        // Tag selector
+        if selector.eq_ignore_ascii_case(tag) {
+            return true;
+        }
+
+        // ID selector
+        if let Some(id_val) = id {
+            if selector == format!("#{}", id_val) {
+                return true;
+            }
+        }
+
+        // Class selector
+        for class in classes {
+            if selector == format!(".{}", class) {
+                return true;
+            }
+        }
+
+        // Universal selector
+        if selector == "*" {
+            return true;
+        }
+
+        false
     }
 
     /// Execute extension/content scripts in the renderer's JS context
@@ -513,6 +645,10 @@ impl HtmlRenderer {
         }
 
         if let Some(doc) = &self.cached_doc.clone() {
+            // Build layout tree using taffy for CSS flexbox/grid computation
+            let available = ui.available_size();
+            let _layout_tree = self.build_layout_tree(available.x, available.y);
+
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
