@@ -198,33 +198,39 @@ impl Theme {
         Self {
             meta: ThemeMeta {
                 name: "Sassy Dark".into(),
-                version: "1.0".into(),
+                version: "2.0".into(),
                 author: "SassyBrowser".into(),
             },
             colors: ThemeColors {
-                background: "#0d1117".into(),
-                surface: "#161b22".into(),
-                surface_elevated: "#21262d".into(),
-                border: "#30363d".into(),
-                text_primary: "#e6edf3".into(),
-                // Slightly stronger secondary/muted colors for readability
-                text_secondary: "#bfc9d3".into(),
-                text_muted: "#9aa0a6".into(),
-                accent: "#58a6ff".into(),
-                accent_hover: "#79c0ff".into(),
-                accent_active: "#388bfd".into(),
+                // Brand palette:
+                // Brand Purple: #6C63FF - Primary accent
+                // Dark Blue: #101E32 - Primary background
+                // Dark Gray: #2E384B - Panels/surfaces
+                // Yellow: #FEC337 - Highlights/warnings
+                // Light Gray: #F6F6F6 - Text on dark
+                background: "#101E32".into(),
+                surface: "#2E384B".into(),
+                surface_elevated: "#384458".into(),
+                border: "#445066".into(),
+                text_primary: "#F6F6F6".into(),
+                text_secondary: "#C0C8D4".into(),
+                text_muted: "#808A9E".into(),
+                accent: "#6C63FF".into(),
+                accent_hover: "#7D75FF".into(),
+                accent_active: "#5B53E6".into(),
                 success: "#3fb950".into(),
-                warning: "#d29922".into(),
+                warning: "#FEC337".into(),
                 error: "#f85149".into(),
-                info: "#58a6ff".into(),
-                tab_active: "#21262d".into(),
-                tab_inactive: "#0d1117".into(),
-                tab_hover: "#161b22".into(),
-                sidebar_bg: "#0d1117".into(),
-                sidebar_border: "#21262d".into(),
+                info: "#6C63FF".into(),
+                tab_active: "#384458".into(),
+                tab_inactive: "#101E32".into(),
+                tab_hover: "#2E384B".into(),
+                sidebar_bg: "#101E32".into(),
+                sidebar_border: "#2E384B".into(),
             },
             typography: Typography {
-                font_family: "Inter, system-ui, sans-serif".into(),
+                // Azo Sans preferred, with Space Grotesk and system fallbacks
+                font_family: "Azo Sans, Space Grotesk, Inter, system-ui, sans-serif".into(),
                 font_mono: "JetBrains Mono, monospace".into(),
                 // Increase base and related sizes for better legibility
                 font_size_xs: 12,
@@ -299,25 +305,27 @@ impl Theme {
         let mut theme = Self::dark();
         theme.meta.name = "Sassy Light".into();
         theme.colors = ThemeColors {
-            background: "#ffffff".into(),
-            surface: "#f6f8fa".into(),
-            surface_elevated: "#ffffff".into(),
-            border: "#d0d7de".into(),
-            text_primary: "#1f2328".into(),
-            text_secondary: "#656d76".into(),
-            text_muted: "#8c959f".into(),
-            accent: "#0969da".into(),
-            accent_hover: "#0550ae".into(),
-            accent_active: "#033d8b".into(),
+            // Light mode using brand colors
+            // Light Gray background, Dark Blue text, Brand Purple accents
+            background: "#F6F6F6".into(),
+            surface: "#EEEEF2".into(),
+            surface_elevated: "#FFFFFF".into(),
+            border: "#D0D4DE".into(),
+            text_primary: "#101E32".into(),  // Dark Blue
+            text_secondary: "#2E384B".into(), // Dark Gray
+            text_muted: "#606878".into(),
+            accent: "#6C63FF".into(),         // Brand Purple
+            accent_hover: "#5B53E6".into(),
+            accent_active: "#4A44CC".into(),
             success: "#1a7f37".into(),
-            warning: "#9a6700".into(),
+            warning: "#B08A00".into(),        // Darker yellow for light bg
             error: "#cf222e".into(),
-            info: "#0969da".into(),
-            tab_active: "#ffffff".into(),
-            tab_inactive: "#f6f8fa".into(),
-            tab_hover: "#eaeef2".into(),
-            sidebar_bg: "#f6f8fa".into(),
-            sidebar_border: "#d0d7de".into(),
+            info: "#6C63FF".into(),
+            tab_active: "#FFFFFF".into(),
+            tab_inactive: "#F6F6F6".into(),
+            tab_hover: "#E8E8EC".into(),
+            sidebar_bg: "#F6F6F6".into(),
+            sidebar_border: "#D0D4DE".into(),
         };
         theme
     }

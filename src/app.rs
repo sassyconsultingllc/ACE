@@ -524,7 +524,7 @@ impl BrowserApp {
                     .clicked() {
                     self.engine.go_back();
                 }
-            } else if ui.add_enabled(can_back, egui::Button::new("*€").min_size(Vec2::new(28.0, 24.0)))
+            } else if ui.add_enabled(can_back, egui::Button::new("*ï¿½").min_size(Vec2::new(28.0, 24.0)))
                 .on_hover_text("Back (Alt+Left)")
                 .clicked() {
                 self.engine.go_back();
@@ -1621,7 +1621,7 @@ impl BrowserApp {
     
     fn render_bookmarks_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading("â\u{AD} Bookmarks");
+            ui.heading("ï¿½\u{AD} Bookmarks");
             ui.separator();
             
             let bookmarks: Vec<_> = self.engine.bookmarks.all()
@@ -3770,94 +3770,123 @@ fn parse_ymd(input: &str) -> Option<(i32, u32, u32)> {
 }
 
 fn configure_fonts(ctx: &egui::Context) {
-    // Embed Space Grotesk from the repo and make it the preferred
-    // proportional font to avoid runtime lookups failing.
+    // Brand font stack: Azo Sans (preferred) -> Space Grotesk (bundled fallback)
+    // Azo Sans is a commercial font - users can install it for brand consistency.
+    // Space Grotesk is bundled and serves as a similar modern sans-serif fallback.
     let mut fonts = egui::FontDefinitions::default();
+
+    // Embed Space Grotesk as the primary bundled font
     let space_bytes = include_bytes!("../Space_Grotesk/static/SpaceGrotesk-Regular.ttf");
-    // Register several common lookup keys that other code or libraries
-    // might use when requesting the font.
     let fb = egui::FontData::from_static(space_bytes);
+
+    // Register Space Grotesk with common lookup keys
     let keys = [
         "Space Grotesk",
         "SpaceGrotesk",
         "Space Grotesk Regular",
         "SpaceGrotesk-Regular",
+        // Also register as Azo Sans fallback for theme compatibility
+        "Azo Sans",
     ];
     for &k in &keys {
         fonts.font_data.insert(k.into(), fb.clone());
     }
+
+    // Set Space Grotesk as the primary proportional font
     fonts
         .families
         .entry(egui::FontFamily::Proportional)
         .or_default()
         .insert(0, "Space Grotesk".into());
 
-    // Debug: list registered font keys and proportional family order.
-    println!("Registered font keys: {:?}", fonts.font_data.keys().cloned().collect::<Vec<_>>());
-    if let Some(fam) = fonts.families.get(&egui::FontFamily::Proportional) {
-        println!("Proportional family: {:?}", fam);
-    }
-
     ctx.set_fonts(fonts);
 }
 
 fn configure_style(ctx: &egui::Context, dark_mode: bool) {
-    // Palette: brutalist-tech hybrid
-    let accent = Color32::from_rgb(0x16, 0xf2, 0xd6); // electric teal
-    let accent_warn = Color32::from_rgb(0xf7, 0x8c, 0x1f);
+    // Brand palette from style guide
+    // Brand Purple: #6C63FF - Primary accent
+    // Dark Blue: #101E32 - Primary background
+    // Dark Gray: #2E384B - Panels/surfaces
+    // Yellow: #FEC337 - Highlights/warnings
+    // Light Gray: #F6F6F6 - Text on dark
+
+    let accent = Color32::from_rgb(0x6C, 0x63, 0xFF); // Brand Purple
+    let accent_hover = Color32::from_rgb(0x7D, 0x75, 0xFF); // Lighter purple for hover
+    let accent_active = Color32::from_rgb(0x5B, 0x53, 0xE6); // Darker purple for active
+    let yellow = Color32::from_rgb(0xFE, 0xC3, 0x37); // Yellow highlight
 
     let mut visuals = if dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
 
     if dark_mode {
-        visuals.window_fill = Color32::from_rgb(0x0f, 0x11, 0x15);
-        visuals.panel_fill = Color32::from_rgb(0x14, 0x18, 0x1f);
-        visuals.extreme_bg_color = Color32::from_rgb(0x0b, 0x0d, 0x10);
-        visuals.faint_bg_color = Color32::from_rgb(0x18, 0x1d, 0x24);
+        // Dark Blue background (#101E32)
+        visuals.window_fill = Color32::from_rgb(0x10, 0x1E, 0x32);
+        // Dark Gray for panels (#2E384B)
+        visuals.panel_fill = Color32::from_rgb(0x2E, 0x38, 0x4B);
+        // Even darker for extreme backgrounds
+        visuals.extreme_bg_color = Color32::from_rgb(0x0A, 0x14, 0x24);
+        // Slightly lighter gray for faint backgrounds
+        visuals.faint_bg_color = Color32::from_rgb(0x38, 0x44, 0x58);
+
         visuals.widgets.noninteractive.bg_fill = visuals.panel_fill;
-        visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x1c, 0x20, 0x27);
-        visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x22, 0x28, 0x31);
-        visuals.widgets.active.bg_fill = Color32::from_rgb(0x27, 0x2e, 0x38);
-        visuals.override_text_color = Some(Color32::from_rgb(0xf4, 0xf5, 0xf7));
+        visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x38, 0x44, 0x58);
+        visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x44, 0x50, 0x66);
+        visuals.widgets.active.bg_fill = Color32::from_rgb(0x50, 0x5C, 0x74);
+
+        // Light Gray text (#F6F6F6)
+        visuals.override_text_color = Some(Color32::from_rgb(0xF6, 0xF6, 0xF6));
+
+        // Brand Purple selection
         visuals.selection.bg_fill = accent;
-        visuals.selection.stroke = egui::Stroke::new(1.5, Color32::from_rgb(0x09, 0x9c, 0x86));
+        visuals.selection.stroke = egui::Stroke::new(1.5, accent_active);
+
+        // Yellow for hyperlinks (stands out on dark)
+        visuals.hyperlink_color = yellow;
+
+        // Widget strokes with brand purple accent
+        visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(0x80, 0x8A, 0x9E));
+        visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, accent_hover);
+        visuals.widgets.active.fg_stroke = egui::Stroke::new(2.0, accent);
     } else {
-        visuals.window_fill = Color32::from_rgb(0xf7, 0xf9, 0xfb);
-        visuals.panel_fill = Color32::from_rgb(0xf0, 0xf3, 0xf7);
-        visuals.extreme_bg_color = Color32::from_rgb(0xeb, 0xee, 0xf2);
-        visuals.faint_bg_color = Color32::from_rgb(0xe5, 0xe9, 0xee);
+        // Light mode with brand colors
+        visuals.window_fill = Color32::from_rgb(0xF6, 0xF6, 0xF6); // Light Gray
+        visuals.panel_fill = Color32::from_rgb(0xEE, 0xEE, 0xF2);
+        visuals.extreme_bg_color = Color32::from_rgb(0xFF, 0xFF, 0xFF);
+        visuals.faint_bg_color = Color32::from_rgb(0xE8, 0xE8, 0xEC);
+
         visuals.widgets.noninteractive.bg_fill = visuals.panel_fill;
-        visuals.widgets.inactive.bg_fill = Color32::from_rgb(0xe8, 0xec, 0xf2);
-        visuals.widgets.hovered.bg_fill = Color32::from_rgb(0xdf, 0xe8, 0xf3);
-        visuals.widgets.active.bg_fill = Color32::from_rgb(0xd4, 0xe1, 0xf1);
-        visuals.override_text_color = Some(Color32::from_rgb(0x14, 0x1a, 0x22));
-        // Use warning accent for hyperlinks in the UI so it matches renderer
-        visuals.hyperlink_color = accent_warn;
-        visuals.selection.bg_fill = Color32::from_rgb(0x0f, 0xb8, 0x9b);
-        visuals.selection.stroke = egui::Stroke::new(1.5, Color32::from_rgb(0x0b, 0x87, 0x72));
+        visuals.widgets.inactive.bg_fill = Color32::from_rgb(0xE4, 0xE4, 0xE8);
+        visuals.widgets.hovered.bg_fill = Color32::from_rgb(0xD8, 0xD8, 0xDE);
+        visuals.widgets.active.bg_fill = Color32::from_rgb(0xCC, 0xCC, 0xD4);
+
+        // Dark Blue text on light background (#101E32)
+        visuals.override_text_color = Some(Color32::from_rgb(0x10, 0x1E, 0x32));
+
+        // Brand Purple for accents
+        visuals.hyperlink_color = accent;
+        visuals.selection.bg_fill = Color32::from_rgb(0xB8, 0xB4, 0xFF); // Light purple
+        visuals.selection.stroke = egui::Stroke::new(1.5, accent);
     }
 
-    visuals.window_stroke = egui::Stroke::new(2.0, Color32::from_rgba_unmultiplied(0x21, 0x26, 0x30, 190));
+    // Window chrome styling
+    visuals.window_stroke = egui::Stroke::new(2.0, Color32::from_rgba_unmultiplied(0x2E, 0x38, 0x4B, 200));
     visuals.window_rounding = egui::Rounding::same(16.0);
     visuals.menu_rounding = egui::Rounding::same(12.0);
-    visuals.widgets.noninteractive.rounding = egui::Rounding::same(12.0);
-    visuals.widgets.inactive.rounding = egui::Rounding::same(12.0);
-    visuals.widgets.hovered.rounding = egui::Rounding::same(12.0);
-    visuals.widgets.active.rounding = egui::Rounding::same(12.0);
-    visuals.widgets.open.rounding = egui::Rounding::same(12.0);
 
-    visuals.window_shadow = egui::Shadow {
-        offset: egui::vec2(0.0, 14.0),
-        blur: 28.0,
-        spread: 0.0,
-        color: Color32::from_rgba_unmultiplied(0, 0, 0, 96),
-    };
-
+    // Consistent rounding for all widgets
     let rounding = egui::Rounding::same(12.0);
     visuals.widgets.noninteractive.rounding = rounding;
     visuals.widgets.inactive.rounding = rounding;
     visuals.widgets.hovered.rounding = rounding;
     visuals.widgets.active.rounding = rounding;
     visuals.widgets.open.rounding = rounding;
+
+    // Modern shadow with brand dark blue tint
+    visuals.window_shadow = egui::Shadow {
+        offset: egui::vec2(0.0, 14.0),
+        blur: 28.0,
+        spread: 0.0,
+        color: Color32::from_rgba_unmultiplied(0x10, 0x1E, 0x32, 100),
+    };
 
     ctx.set_visuals(visuals);
 
@@ -3874,7 +3903,12 @@ fn configure_style(ctx: &egui::Context, dark_mode: bool) {
     style.spacing.menu_margin = egui::Margin::symmetric(12.0, 10.0);
     style.spacing.slider_width = 180.0;
     style.spacing.interact_size = egui::vec2(40.0, 28.0);
-    style.visuals.popup_shadow = egui::Shadow { offset: egui::vec2(0.0, 10.0), blur: 24.0, spread: 0.0, color: Color32::from_rgba_unmultiplied(0, 0, 0, 90) };
+    style.visuals.popup_shadow = egui::Shadow {
+        offset: egui::vec2(0.0, 10.0),
+        blur: 24.0,
+        spread: 0.0,
+        color: Color32::from_rgba_unmultiplied(0x10, 0x1E, 0x32, 90),
+    };
 
     ctx.set_style(style);
 }
