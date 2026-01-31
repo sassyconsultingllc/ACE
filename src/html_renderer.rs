@@ -544,27 +544,32 @@ impl HtmlRenderer {
             return;
         }
         
-        // If enabled via --webview, attempt to fetch the remote page (blocking)
-        if std::env::var("SASSY_ENABLE_WEBVIEW").ok().as_deref() == Some("1") {
-            match crate::http_client::fetch_text(url) {
-                Ok(body) => { self.parse_html(&body); return; }
-                Err(e) => tracing::warn!("Failed to fetch {}: {}", url, e),
+        // Fetch remote page using pure Rust HTTP client (ureq)
+        match crate::http_client::fetch_text(url) {
+            Ok(body) => {
+                self.parse_html(&body);
+                return;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to fetch {}: {}", url, e);
+                // Show error page with details
+                let html = format!(r#"
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Page Load Error</title></head>
+                    <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+                        <h1 style="color: #e74c3c;">⚠️ Failed to Load Page</h1>
+                        <p><strong>URL:</strong> {}</p>
+                        <p><strong>Error:</strong> {}</p>
+                        <hr style="margin: 30px 0;">
+                        <p style="color: #666;">The Sassy Browser pure Rust renderer attempted to fetch this page but encountered an error.</p>
+                        <p style="color: #666;">Common causes: network issues, invalid URL, site blocking non-browser requests</p>
+                    </body>
+                    </html>
+                "#, url, e);
+                self.parse_html(&html);
             }
         }
-
-        // Fallback placeholder when fetching is disabled or failed
-        let html = format!(r#"
-            <!DOCTYPE html>
-            <html>
-            <head><title>Web Page</title></head>
-            <body style="font-family: sans-serif; padding: 40px; text-align: center;">
-                <h1>{}</h1>
-                <p>This page would be rendered with the system webview in full mode.</p>
-                <p style="color: #666;">For full web browsing, run with --webview flag</p>
-            </body>
-            </html>
-        "#, url);
-        self.parse_html(&html);
     }
     
     /// Generate internal pages

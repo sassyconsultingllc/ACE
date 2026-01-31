@@ -1131,7 +1131,7 @@ impl BrowserApp {
             }
             
             // New tab button
-            if ui.button("ï¼‹").on_hover_text("New Tab (Ctrl+T)").clicked() {
+            if ui.button("＋").on_hover_text("New Tab (Ctrl+T)").clicked() {
                 self.engine.new_tab();
             }
             
@@ -1274,7 +1274,7 @@ impl BrowserApp {
                     self.network_monitor.cleanup_old(Duration::from_secs(30));
                 }
             }
-            Some(("file", _)) => {
+            Some(("File", _)) => {
                 // Get file reference carefully
                 if let Some(tab) = self.engine.active_tab() {
                     if let TabContent::File(file) = &tab.content {

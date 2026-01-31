@@ -2,21 +2,21 @@
 1 VERSIONINFO
 FILETYPE 0x1
 FILEFLAGSMASK 0x3f
-FILESUBTYPE 0x0
-FILEOS 0x40004
-FILEVERSION 2, 0, 0, 0
 FILEFLAGS 0x0
+FILEOS 0x40004
 PRODUCTVERSION 2, 0, 0, 0
+FILESUBTYPE 0x0
+FILEVERSION 2, 0, 0, 0
 {
 BLOCK "StringFileInfo"
 {
 BLOCK "000004b0"
 {
-VALUE "FileVersion", "2.0.0"
-VALUE "ProductVersion", "2.0.0"
-VALUE "LegalCopyright", "Sassy Consulting LLC"
 VALUE "FileDescription", "Pure Rust Web Browser"
 VALUE "ProductName", "Sassy Browser"
+VALUE "ProductVersion", "2.0.0"
+VALUE "LegalCopyright", "Sassy Consulting LLC"
+VALUE "FileVersion", "2.0.0"
 }
 }
 BLOCK "VarFileInfo" {
