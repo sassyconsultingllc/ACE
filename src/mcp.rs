@@ -19,6 +19,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use chrono::{DateTime, Utc};
+use crate::mcp_api::McpApiClient;
 
 /// Hosting mode for MCP agents
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -565,6 +566,9 @@ pub struct FileInfo {
 
 /// The MCP Orchestrator - coordinates all agents
 pub struct McpOrchestrator {
+    /// API client for communicating with AI providers
+    pub api_client: McpApiClient,
+
     /// Agent configurations
     pub agents: HashMap<AgentRole, AgentConfig>,
     
@@ -607,6 +611,7 @@ impl McpOrchestrator {
         agents.insert(AgentRole::Auditor, AgentConfig::gemini_default());
         
         McpOrchestrator {
+            api_client: McpApiClient::new(),
             agents,
             conversation: VecDeque::new(),
             max_history: 100,
@@ -742,9 +747,27 @@ impl McpOrchestrator {
     
     /// Voice agent understands user intent
     fn voice_understand(&self, input: &str) -> UserIntent {
-        // In real implementation, this calls Grok API
-        // For now, parse intent locally
-        
+        // Try to use Grok API if configured
+        if self.api_client.is_ready(AgentRole::Voice) {
+            let messages = vec![crate::mcp_api::ChatMessage::user(input)];
+            let system = "You are a voice assistant. Understand the user's intent and extract key entities.";
+            if let Ok(response) = self.api_client.call(AgentRole::Voice, &messages, system) {
+                // Parse response into intent (simplified)
+                let summary = if response.content.is_empty() {
+                    input.to_string()
+                } else {
+                    response.content.clone()
+                };
+                return UserIntent {
+                    summary,
+                    intent_type: IntentType::General,
+                    entities: extract_entities(input),
+                    confidence: 0.9,
+                };
+            }
+        }
+
+        // Fallback: parse intent locally
         let input_lower = crate::fontcase::ascii_lower(input);
         
         let intent_type = if input_lower.contains("create") || input_lower.contains("new") || input_lower.contains("add") {
