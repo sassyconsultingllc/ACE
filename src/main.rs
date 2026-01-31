@@ -35,13 +35,12 @@ mod js;                     // SassyScript JavaScript interpreter
 mod dom;                    // DOM simulation
 mod style;                  // CSS engine
 mod layout;                 // Layout engine (flexbox, etc.)
-mod layout_engine;          // CSS layout engine (taffy-based)
+mod layout_engine;          // CSS layout engine (taffy - flexbox/grid)
 mod paint;                  // Painting/rendering
 mod renderer;               // HTML renderer
 mod engine;                 // Core browser engine
 mod script_engine;          // Script execution
 mod html_renderer;          // HTML to egui rendering
-mod layout_engine;          // CSS layout engine (taffy - flexbox/grid)
 
 // -------------------------------------------------------------------------------
 // SECURITY & SANDBOXING
@@ -233,13 +232,10 @@ fn run_pure_engine() {
     // Run the pure Rust engine directly (winit + softbuffer)
     // This bypasses egui and uses our custom rendering pipeline
     tracing::info!("Starting pure Rust engine (winit + softbuffer)");
-    
-    // TODO: Call engine::run() when fully integrated
-    // For now, fall back to egui app
-    if let Err(e) = app::run_browser() {
-        tracing::error!("Engine error: {}", e);
-        std::process::exit(1);
-    }
+    println!("Using pure Rust rendering: winit + softbuffer (no GPU, no WebKit, no Chrome)");
+
+    // Call the engine module's browser implementation
+    engine::run_browser(None);
 }
 
 fn serve_phone_app() {
