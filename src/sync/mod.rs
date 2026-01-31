@@ -1,4 +1,4 @@
-﻿//! Phone sync system - Secure, user-based sessions
+//! Phone sync system - Secure, user-based sessions
 //! 
 //! Connection model:
 //! 1. Phone connects via Tailscale (encrypted mesh)
@@ -8,7 +8,7 @@
 //! 5. Logout returns to user selection
 //!
 //! No ports visible to users. No IP addresses to remember.
-//! Just "I'm Shane" â†’ here are Shane's tabs.
+//! Just "I'm Shane" -> here are Shane's tabs.
 //!
 //! Family model:
 //! - First user becomes admin

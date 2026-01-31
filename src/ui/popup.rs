@@ -1,4 +1,4 @@
-﻿//! Smart Popup Handling
+//! Smart Popup Handling
 //!
 //! Blocks spam popups while allowing legitimate ones like captchas.
 //! Uses heuristics to distinguish between user-initiated and spam popups.

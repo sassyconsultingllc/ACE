@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_variables, unused_imports)]
+#![allow(dead_code, unused_variables, unused_imports)]
 //! Tab management - Represents browser tabs (web pages or file viewers)
 
 use crate::file_handler::{FileType, OpenFile};
@@ -158,11 +158,11 @@ impl Tab {
                 FileType::Ebook => "",
                 FileType::Unknown => "",
             },
-            TabContent::NewTab => "âž•",
-            TabContent::Settings => "âš™ï¸",
+            TabContent::NewTab => "",
+            TabContent::Settings => "(settings)",
             TabContent::History => "",
-                TabContent::Bookmarks => "🔖",
-            TabContent::Downloads => "â¬‡ï¸",
+                TabContent::Bookmarks => "",
+            TabContent::Downloads => "v",
         }
     }
     

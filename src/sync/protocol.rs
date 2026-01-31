@@ -1,4 +1,4 @@
-﻿//! Sync protocol definitions
+//! Sync protocol definitions
 //! JSON-based message format for browser <-> phone communication
 
 use serde::{Deserialize, Serialize};

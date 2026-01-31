@@ -1,4 +1,4 @@
-﻿//! Tab tile system - visual grid of tab previews
+//! Tab tile system - visual grid of tab previews
 //! Like Windows alt+tab but for browser tabs
 
 #![allow(unused_variables)]
@@ -130,8 +130,8 @@ impl TerminalState {
     /// Get the shell prompt
     pub fn prompt(&self) -> String {
         let exit_indicator = match self.last_exit_code {
-            Some(0) | None => "â¯",
-            Some(_) => "âœ—",
+            Some(0) | None => "[X]",
+            Some(_) => "[X]",
         };
         format!("{} {} ", self.short_cwd(), exit_indicator)
     }

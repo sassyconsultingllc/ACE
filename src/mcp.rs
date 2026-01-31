@@ -1,4 +1,4 @@
-﻿//! Model Context Protocol (MCP) - Multi-Agent AI Orchestration
+//! Model Context Protocol (MCP) - Multi-Agent AI Orchestration
 //!
 //! Built-in conversational code editing through coordinated AI agents:
 //! - **Grok**: Voice and logic - understands intent, speaks to user
@@ -108,7 +108,7 @@ impl AgentRole {
         match self {
             AgentRole::Voice => "",
             AgentRole::Orchestrator => "",
-            AgentRole::Coder => "âš¡",
+            AgentRole::Coder => "*",
             AgentRole::Auditor => "",
         }
     }
@@ -385,11 +385,11 @@ pub enum TaskStatus {
 impl TaskStatus {
     pub fn icon(&self) -> &'static str {
         match self {
-            TaskStatus::Pending => "â³",
+            TaskStatus::Pending => "...",
             TaskStatus::InProgress => "",
             TaskStatus::Review => "",
-            TaskStatus::Completed => "âœ…",
-            TaskStatus::Failed => "âŒ",
+            TaskStatus::Completed => "[OK]",
+            TaskStatus::Failed => "[X]",
             TaskStatus::Blocked => "",
         }
     }
@@ -424,10 +424,10 @@ pub enum AuditVerdict {
 impl AuditVerdict {
     pub fn icon(&self) -> &'static str {
         match self {
-            AuditVerdict::Approved => "âœ…",
-            AuditVerdict::ApprovedWithWarnings => "âš ï¸",
+            AuditVerdict::Approved => "[OK]",
+            AuditVerdict::ApprovedWithWarnings => "[!]",
             AuditVerdict::NeedsRevision => "",
-            AuditVerdict::Rejected => "âŒ",
+            AuditVerdict::Rejected => "[X]",
         }
     }
     
@@ -457,9 +457,9 @@ pub enum IssueSeverity {
 impl IssueSeverity {
     pub fn icon(&self) -> &'static str {
         match self {
-            IssueSeverity::Info => "â„¹ï¸",
-            IssueSeverity::Warning => "âš ï¸",
-            IssueSeverity::Error => "âŒ",
+            IssueSeverity::Info => "[i]",
+            IssueSeverity::Warning => "[!]",
+            IssueSeverity::Error => "[X]",
             IssueSeverity::Critical => "",
         }
     }
@@ -655,7 +655,7 @@ impl McpOrchestrator {
             "MCP Session started. Agents online:\n\
              Grok (Voice) - Ready to understand your intent\n\
              Manus (Orchestrator) - Ready to plan your workflow\n\
-             âš¡ Claude Opus 5 (Coder) - Ready to write code\n\
+             * Claude Opus 5 (Coder) - Ready to write code\n\
              Gemini (Auditor) - Ready to review feasibility"
         );
     }
@@ -696,7 +696,7 @@ impl McpOrchestrator {
                         &format!("I've prepared {} code changes for task '{}':\n{}",
                             edits.len(),
                             task.title,
-                            edits.iter().map(|e| format!("  â€¢ {} ({})", e.file_path, format_operation(&e.operation))).collect::<Vec<_>>().join("\n")
+                            edits.iter().map(|e| format!("  - {} ({})", e.file_path, format_operation(&e.operation))).collect::<Vec<_>>().join("\n")
                         )
                     ));
                 }

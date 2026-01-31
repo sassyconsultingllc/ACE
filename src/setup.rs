@@ -1,4 +1,4 @@
-﻿//! First-run setup wizard
+//! First-run setup wizard
 //!
 //! WHAT HAPPENS ON FIRST RUN:
 //! ==========================
@@ -35,22 +35,20 @@ pub fn run_setup() -> Option<SetupResult> {
     // Check Tailscale status
     let tailscale = TailscaleInfo::detect();
     
-    println!("\n");
-    println!("  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—");
-    println!("  â•‘       Sassy Browser Setup             â•‘");
-    println!("  â•‘  Secure â€¢ Private â€¢ Yours             â•‘");
-    println!("  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+    println!();
+    println!("  Sassy Browser Setup");
+    println!("  Secure - Private - Yours");
     println!();
     
     if tailscale.available {
         if let Some(ref hostname) = tailscale.hostname {
-            println!("  âœ“ Tailscale detected: {}", hostname);
+            println!("  [OK] Tailscale detected: {}", hostname);
         }
         if let Some(ref ip) = tailscale.ip {
-            println!("  âœ“ Tailscale IP: {}", ip);
+            println!("  [OK] Tailscale IP: {}", ip);
         }
     } else {
-        println!("  *‹ Tailscale not detected");
+        println!("  (web) Tailscale not detected");
         println!("    Phone sync requires Tailscale.");
         println!("    Get it at: https://tailscale.com/download");
     }
@@ -59,7 +57,7 @@ pub fn run_setup() -> Option<SetupResult> {
     
     // Get user name
     println!("\n  Create Your Profile");
-    println!("  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
+    println!();
     print!("  Your name: ");
     io::stdout().flush().ok();
     
@@ -125,30 +123,30 @@ pub fn run_setup() -> Option<SetupResult> {
     
     // CRITICAL: Display recovery key
     println!();
-    println!("  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—");
-    println!("  â•‘             RECOVERY KEY - SAVE THIS!               â•‘");
-    println!("  â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£");
-    println!("  â•‘                                                           â•‘");
-    println!("  â•‘  {}  â•‘", format_recovery_key(&recovery_key));
-    println!("  â•‘                                                           â•‘");
-    println!("  â•‘  This key can restore your profile if you forget your    â•‘");
-    println!("  â•‘  PIN. Write it down and store it somewhere safe.         â•‘");
-    println!("  â•‘                                                           â•‘");
-    println!("  â•‘  WITHOUT THIS KEY, A FORGOTTEN PIN = LOST DATA            â•‘");
-    println!("  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+    println!();
+    println!("  RECOVERY KEY - SAVE THIS!");
+    println!();
+    println!();
+    println!("  {}", format_recovery_key(&recovery_key));
+    println!();
+    println!("  This key can restore your profile if you forget your");
+    println!("  PIN. Write it down and store it somewhere safe.");
+    println!();
+    println!("  WITHOUT THIS KEY, A FORGOTTEN PIN = LOST DATA");
+    println!();
     println!();
     
     // Security summary
     println!("  Profile Created: {}", name);
-    println!("  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€");
+    println!();
     if pin.is_some() {
-        println!("  âœ“ PIN protection enabled");
+        println!("  [OK] PIN protection enabled");
     } else {
-        println!("  *‹ No PIN (anyone with computer access can use)");
+        println!("  (web) No PIN (anyone with computer access can use)");
     }
-    println!("  âœ“ Ed25519 identity key generated");
-    println!("  âœ“ Data encryption key derived");
-    println!("  âœ“ You are the admin");
+    println!("  [OK] Ed25519 identity key generated");
+    println!("  [OK] Data encryption key derived");
+    println!("  [OK] You are the admin");
     
     if tailscale.available {
         println!();

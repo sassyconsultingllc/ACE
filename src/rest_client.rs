@@ -1,4 +1,4 @@
-﻿//! Built-in REST Client
+//! Built-in REST Client
 //!
 //! Test APIs directly in the browser - like Postman built-in.
 //! The killer feature for developers.

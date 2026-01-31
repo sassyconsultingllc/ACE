@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! eBook Viewer - EPUB, MOBI reader with chapter navigation
 //! 
 //! Features:
@@ -100,7 +100,7 @@ impl EbookViewer {
             ui.horizontal(|ui| {
                 ui.heading(RichText::new("Contents").size(16.0));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.small_button("*€").on_hover_text("Hide sidebar").clicked() {
+                    if ui.small_button("<").on_hover_text("Hide sidebar").clicked() {
                         self.show_toc = false;
                     }
                 });
@@ -208,7 +208,7 @@ impl EbookViewer {
                 // Theme selector
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Theme:").size(11.0).color(Color32::GRAY));
-                    if ui.selectable_label(self.theme == ReadingTheme::Light, "â˜€ï¸").clicked() {
+                    if ui.selectable_label(self.theme == ReadingTheme::Light, "(sun)").clicked() {
                         self.theme = ReadingTheme::Light;
                     }
                     if ui.selectable_label(self.theme == ReadingTheme::Sepia, "").clicked() {
@@ -242,7 +242,7 @@ impl EbookViewer {
         // Show TOC button if hidden
         if !self.show_toc {
             ui.horizontal(|ui| {
-                if ui.button("â˜° Contents").clicked() {
+                if ui.button("= Contents").clicked() {
                     self.show_toc = true;
                 }
                 ui.separator();
@@ -257,7 +257,7 @@ impl EbookViewer {
                 let can_prev = self.current_chapter > 0;
                 let can_next = self.current_chapter < ebook.chapters.len().saturating_sub(1);
                 
-                if ui.add_enabled(can_prev, egui::Button::new("*€ Previous")).clicked() {
+                if ui.add_enabled(can_prev, egui::Button::new("< Previous")).clicked() {
                     self.current_chapter -= 1;
                     self.scroll_position = 0.0;
                 }
@@ -267,7 +267,7 @@ impl EbookViewer {
                     ebook.chapters.len()
                 ));
                 
-                if ui.add_enabled(can_next, egui::Button::new("Next â–¶")).clicked() {
+                if ui.add_enabled(can_next, egui::Button::new("Next >")).clicked() {
                     self.current_chapter += 1;
                     self.scroll_position = 0.0;
                 }
@@ -325,7 +325,7 @@ impl EbookViewer {
                         // End of chapter marker
                         ui.add_space(40.0);
                         ui.centered_and_justified(|ui| {
-                            ui.label(RichText::new("â€”  âœ¦  â€”")
+                            ui.label(RichText::new("--  *  --")
                                 .size(14.0)
                                 .color(Color32::GRAY));
                         });
@@ -334,7 +334,7 @@ impl EbookViewer {
                         if self.current_chapter < ebook.chapters.len() - 1 {
                             ui.add_space(20.0);
                             ui.centered_and_justified(|ui| {
-                                if ui.button(RichText::new("Continue to next chapter â†’")
+                                if ui.button(RichText::new("Continue to next chapter ->")
                                     .color(accent))
                                     .clicked()
                                 {
@@ -417,9 +417,9 @@ impl EbookViewer {
             .replace("&gt;", ">")
             .replace("&quot;", "\"")
             .replace("&#39;", "'")
-            .replace("&mdash;", "â€”")
-            .replace("&ndash;", "â€“")
-            .replace("&hellip;", "â€¦")
+            .replace("&mdash;", "--")
+            .replace("&ndash;", "-")
+            .replace("&hellip;", "...")
             .replace("&rsquo;", "'")
             .replace("&lsquo;", "'")
             .replace("&rdquo;", "\u{201D}")

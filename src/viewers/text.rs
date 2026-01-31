@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Text/Code Viewer - Syntax highlighting, line numbers, editing
 
 use crate::file_handler::{FileContent, OpenFile};
@@ -42,7 +42,7 @@ impl TextViewer {
             if ui.selectable_label(!self.is_editing, "View").clicked() {
                 self.is_editing = false;
             }
-            if ui.selectable_label(self.is_editing, "âœï¸ Edit").clicked() {
+            if ui.selectable_label(self.is_editing, " Edit").clicked() {
                 self.is_editing = true;
                 if let FileContent::Text { content, .. } = &file.content {
                     self.edit_buffer = content.clone();
@@ -52,7 +52,7 @@ impl TextViewer {
             ui.separator();
             
             ui.checkbox(&mut self.show_line_numbers, "123");
-            ui.checkbox(&mut self.word_wrap, "â†© Wrap");
+            ui.checkbox(&mut self.word_wrap, "<- Wrap");
             
             ui.separator();
             
@@ -74,7 +74,7 @@ impl TextViewer {
             ui.separator();
             
             // Font size
-            if ui.button("âˆ’").clicked() {
+            if ui.button("∑").clicked() {
                 self.font_size = (self.font_size - 1.0).max(8.0);
             }
             ui.label(format!("{:.0}px", self.font_size));

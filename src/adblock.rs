@@ -773,7 +773,7 @@ impl AdBlockerUI {
     pub fn render(&mut self, ui: &mut eframe::egui::Ui) {
         use eframe::egui;
         
-        ui.heading("🛡️ Ad Blocker");
+        ui.heading(" Ad Blocker");
         ui.separator();
         
         if let Ok(mut blocker) = self.blocker.write() {
@@ -792,14 +792,14 @@ impl AdBlockerUI {
             // Stats
             let stats = blocker.get_stats();
             ui.horizontal(|ui| {
-                ui.label(format!("🚫 Total blocked: {}", stats.total_blocked));
-                ui.label(format!("📊 Today: {}", stats.blocked_today));
+                ui.label(format!(" Total blocked: {}", stats.total_blocked));
+                ui.label(format!(" Today: {}", stats.blocked_today));
             });
             
             ui.separator();
             
             // Filter lists
-            ui.collapsing("📋 Filter Lists", |ui| {
+            ui.collapsing(" Filter Lists", |ui| {
                 let list_count = blocker.filter_lists.len();
                 for i in 0..list_count {
                     let list = &blocker.filter_lists[i];
@@ -825,7 +825,7 @@ impl AdBlockerUI {
             ui.separator();
             
             // Custom rules
-            ui.collapsing("✏️ Custom Rules", |ui| {
+            ui.collapsing(" Custom Rules", |ui| {
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut self.custom_rule_input);
                     if ui.button("Add").clicked() && !self.custom_rule_input.is_empty() {

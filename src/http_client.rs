@@ -1,4 +1,4 @@
-﻿use std::env;
+use std::env;
 
 /// Build a User-Agent string from environment variables:
 /// - SASSY_UA_PRESET: chrome|safari|edge|opera|firefox|sassy

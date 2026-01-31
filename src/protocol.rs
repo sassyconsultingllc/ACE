@@ -1,4 +1,4 @@
-﻿// Protocol - HTTP/HTTPS handling
+// Protocol - HTTP/HTTPS handling
 
 use url::Url;
 use std::collections::HashMap;

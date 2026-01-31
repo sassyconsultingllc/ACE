@@ -1,4 +1,4 @@
-﻿//! Download Quarantine System
+//! Download Quarantine System
 //!
 //! Files don't touch your filesystem until you EARN their release.
 //!

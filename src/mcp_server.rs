@@ -1,4 +1,4 @@
-﻿//! MCP Server - Expose Sassy Browser as an MCP Server
+//! MCP Server - Expose Sassy Browser as an MCP Server
 //!
 //! Allows external MCP clients (Claude Desktop, etc.) to control Sassy Browser
 //! via the Model Context Protocol (JSON-RPC 2.0 over stdio or socket).

@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Audio Player - MP3, WAV, FLAC, OGG playback with visualization
 
 use crate::file_handler::{AudioContent, FileContent, OpenFile};
@@ -206,7 +206,7 @@ impl AudioViewer {
             }
             
             // Play/Pause
-                let play_icon = if self.is_playing { "⏸" } else { "▶" };
+                let play_icon = if self.is_playing { "⏸" } else { ">" };
             if ui.add(egui::Button::new(RichText::new(play_icon).size(32.0))
                 .min_size(Vec2::splat(50.0))
             ).clicked() {

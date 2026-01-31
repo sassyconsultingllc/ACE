@@ -1,4 +1,4 @@
-﻿// DOM - Document Object Model representation
+// DOM - Document Object Model representation
  
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};

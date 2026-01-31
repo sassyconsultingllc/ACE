@@ -1,4 +1,4 @@
-﻿//! User-based sync sessions
+//! User-based sync sessions
 //! 
 //! Connection model:
 //! 1. Phone connects via Tailscale (encrypted mesh)

@@ -1,4 +1,4 @@
-﻿//! Paint - Rendering web content to pixel buffer
+//! Paint - Rendering web content to pixel buffer
 //!
 //! Production-ready painter with:
 //! - Hardware-accelerated alpha blending

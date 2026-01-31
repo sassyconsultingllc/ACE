@@ -1,4 +1,4 @@
-﻿//! UI Rendering - Production quality text, shapes, UI components
+//! UI Rendering - Production quality text, shapes, UI components
 //! Uses fontdue for real text rendering
 #![allow(unused_variables)]
 
@@ -325,20 +325,20 @@ impl UIRenderer {
         let back_color = if state.can_back { text_color } else { text_dim };
                         self.fill_rounded_rect(buffer, Rect { x, y: btn_y, width: btn_size, height: btn_size }, 
                                                 hex_to_u32(&theme.colors.surface_elevated), 4);
-        self.draw_text(buffer, "â†", (x + 8) as i32, (btn_y + 22) as i32, 16.0, back_color);
+        self.draw_text(buffer, "<-", (x + 8) as i32, (btn_y + 22) as i32, 16.0, back_color);
         x += btn_size + 4;
         
         // Forward button
         let fwd_color = if state.can_forward { text_color } else { text_dim };
                         self.fill_rounded_rect(buffer, Rect { x, y: btn_y, width: btn_size, height: btn_size },
                                                 hex_to_u32(&theme.colors.surface_elevated), 4);
-        self.draw_text(buffer, "â†’", (x + 8) as i32, (btn_y + 22) as i32, 16.0, fwd_color);
+        self.draw_text(buffer, "->", (x + 8) as i32, (btn_y + 22) as i32, 16.0, fwd_color);
         x += btn_size + 4;
         
         // Refresh button
         self.fill_rounded_rect(buffer, Rect { x, y: btn_y, width: btn_size, height: btn_size },
                     hex_to_u32(&theme.colors.surface_elevated), 4);
-        let refresh_char = if state.loading { "*Œ" } else { "â†»" };
+        let refresh_char = if state.loading { "(refresh)" } else { "<-»" };
         self.draw_text(buffer, refresh_char, (x + 8) as i32, (btn_y + 22) as i32, 16.0, text_color);
         x += btn_size + 12;
 
@@ -421,7 +421,7 @@ impl UIRenderer {
                     let spinner_color = if is_active { 0xffffffff } else { accent };
                 // Globe icon placeholder
                 let icon_color = if is_active { 0xffffffff } else { text_dim };
-                self.draw_text(buffer, "*‹", favicon_x as i32, (favicon_y + 14) as i32, 14.0, icon_color);
+                self.draw_text(buffer, "(web)", favicon_x as i32, (favicon_y + 14) as i32, 14.0, icon_color);
             }
                     let icon_color = if is_active { 0xffffffff } else { text_dim };
             // Title
@@ -565,9 +565,9 @@ impl UIRenderer {
                 let state_icon = match req.state {
                     RequestState::Connecting => "",
                     RequestState::Sending => "",
-                    RequestState::Waiting => "â³",
+                    RequestState::Waiting => "...",
                     RequestState::Receiving => "",
-                    _ => "âœ“",
+                    _ => "[OK]",
                 };
                 let line = format!("{} {}", state_icon, truncate_host(&req.host, 20));
                 self.draw_text(buffer, &line, (bounds.x + 8) as i32, y, 10.0, colors.text_dim);
@@ -627,11 +627,11 @@ impl UIRenderer {
         let hint_title = "What can I ask?";
         self.draw_text(buffer, hint_title, x, y, 13.0, text);
         y += 18;
-        self.draw_text(buffer, "â€¢ Explain the current page", x, y, 12.0, dim);
+        self.draw_text(buffer, "- Explain the current page", x, y, 12.0, dim);
         y += 16;
-        self.draw_text(buffer, "â€¢ Is this site safe?", x, y, 12.0, dim);
+        self.draw_text(buffer, "- Is this site safe?", x, y, 12.0, dim);
         y += 16;
-        self.draw_text(buffer, "â€¢ How do I do ...?", x, y, 12.0, dim);
+        self.draw_text(buffer, "- How do I do ...?", x, y, 12.0, dim);
         y += 24;
 
         let footer = "Configured in config/ai.toml";

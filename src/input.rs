@@ -1,4 +1,4 @@
-﻿//! Input handling - Address bar, text input, focus management
+//! Input handling - Address bar, text input, focus management
 //!
 //! Manages:
 //! - Which element has keyboard focus

@@ -1,4 +1,4 @@
-﻿//! MCP API Client - Communicates with AI Model Providers
+//! MCP API Client - Communicates with AI Model Providers
 //!
 //! Handles HTTP requests to:
 //! - xAI (Grok) for voice/intent understanding

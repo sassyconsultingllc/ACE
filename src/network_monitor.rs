@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // SASSY BROWSER - NETWORK ACTIVITY MONITOR
 // ============================================================================
 // Always-visible activity indicator showing all connections, downloads, traffic
@@ -50,15 +50,15 @@ impl ConnectionType {
     pub fn icon(&self) -> &'static str {
         match self {
             ConnectionType::Document => "",
-            ConnectionType::Download => "â¬‡ï¸",
-            ConnectionType::Script => "âš¡",
+            ConnectionType::Download => "v",
+            ConnectionType::Script => "*",
             ConnectionType::Stylesheet => "",
             ConnectionType::Image => "",
             ConnectionType::Font => "",
             ConnectionType::Xhr => "",
             ConnectionType::WebSocket => "",
             ConnectionType::Media => "",
-            ConnectionType::Other => "â“",
+            ConnectionType::Other => "[X]",
         }
     }
     

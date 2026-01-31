@@ -1,4 +1,4 @@
-﻿//! UI system for Sassy Browser
+//! UI system for Sassy Browser
 //! Modular, themeable, four-edge sidebar layout
 
 pub mod theme;

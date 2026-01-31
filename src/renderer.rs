@@ -1,4 +1,4 @@
-﻿// Renderer - Main renderer coordination
+// Renderer - Main renderer coordination
 
 use crate::dom::{Document, NodeRef, Node};
 use crate::style::{StyleEngine, ComputedStyle};

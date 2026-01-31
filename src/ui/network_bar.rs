@@ -1,4 +1,4 @@
-﻿//! Network Activity Bar - Always visible indicator
+//! Network Activity Bar - Always visible indicator
 //!
 //! Shows when the browser is doing network activity, so users know
 //! something is happening even when the page looks static.
@@ -434,10 +434,10 @@ impl NetworkBar {
             let state_icon = match req.state {
                 RequestState::Connecting => "",
                 RequestState::Sending => "",
-                RequestState::Waiting => "â³",
+                RequestState::Waiting => "...",
                 RequestState::Receiving => "",
-                RequestState::Complete => "âœ…",
-                RequestState::Failed => "âŒ",
+                RequestState::Complete => "[OK]",
+                RequestState::Failed => "[X]",
                 RequestState::Cancelled => "",
             };
             
@@ -462,7 +462,7 @@ impl NetworkBar {
             
             // Show full URL on second line if different from host
             if req.url.len() > req.host.len() + 10 {
-                lines.push(format!("   â””â”€ {}", truncate_url(&req.url, 50)));
+                lines.push(format!("   +- {}", truncate_url(&req.url, 50)));
             }
         }
         

@@ -1,4 +1,4 @@
-﻿//! MCP Git Integration - Version Control Awareness
+//! MCP Git Integration - Version Control Awareness
 //!
 //! Provides git repository information to AI agents:
 //! - Current branch, status, and history

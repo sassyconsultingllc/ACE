@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Chemical/Biological Viewer - PDB, MOL, SDF molecular structure viewer
 
 use crate::file_handler::{Atom, Bond, ChemicalContent, FileContent, OpenFile};
@@ -97,7 +97,7 @@ impl ChemicalViewer {
         ui.horizontal(|ui| {
             // Render mode
             ui.label("Render:");
-            if ui.selectable_label(self.render_mode == RenderMode::BallAndStick, "âš› Ball & Stick").clicked() {
+            if ui.selectable_label(self.render_mode == RenderMode::BallAndStick, " Ball & Stick").clicked() {
                 self.render_mode = RenderMode::BallAndStick;
             }
             if ui.selectable_label(self.render_mode == RenderMode::Wireframe, "Wireframe").clicked() {

@@ -1,4 +1,4 @@
-﻿//! Input Handling - Address bar, keyboard, text cursor
+//! Input Handling - Address bar, keyboard, text cursor
 //!
 //! All input routing and text editing in one place.
 

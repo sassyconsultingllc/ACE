@@ -1,4 +1,4 @@
-﻿//! Four-edge sidebar system
+//! Four-edge sidebar system
 //! Sidebars can be placed on any edge: top, right, bottom, left
 //! Each can be hidden, collapsed, or expanded
 
@@ -263,7 +263,7 @@ impl SidebarLayout {
         left.add_content(SidebarContent {
             id: "bookmarks".into(),
             title: "Bookmarks".into(),
-                icon: Some("🔖".into()),
+                icon: Some("".into()),
             widget: SidebarWidget::Bookmarks,
         });
         

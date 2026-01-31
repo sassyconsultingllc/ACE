@@ -1,4 +1,4 @@
-﻿//! AI Assistant Integration
+//! AI Assistant Integration
 //! 
 //! Off by default. When enabled, provides contextual help like Windows XP's "?" button.
 //! Easter eggs throughout encourage exploration and learning.
@@ -65,7 +65,7 @@ pub enum HelpQuery {
 /// Easter eggs - local food discounts + Foodie Finder promo
 pub const EASTER_EGGS: &[(&str, &str, &str)] = &[
     // (trigger, message, reward_code)
-    ("konami", "â†‘â†‘â†“â†“â†â†’â†â†’BA - Classic gamer! Here's 15% off at participating local restaurants.", "SASSY-KONAMI-15"),
+    ("konami", "->-><-<-<--><-->BA - Classic gamer! Here's 15% off at participating local restaurants.", "SASSY-KONAMI-15"),
     ("night_owl", "Browsing at 3am? Night owls get 10% off late-night eats.", "SASSY-NIGHTOWL-10"),
     ("first_block", "First popup blocked! Celebrate with $5 off your next local meal.", "SASSY-BLOCKED-5"),
     ("speed_reader", "500 pages today! Fuel up with 20% off local coffee shops.", "SASSY-READER-20"),
