@@ -18,8 +18,103 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use std::sync::mpsc::{Sender, Receiver, channel};
 use chrono::{DateTime, Utc};
 use crate::mcp_api::McpApiClient;
+
+// ============================================================================
+// BROWSER COMMAND INTERFACE
+// ============================================================================
+
+/// Commands that MCP can send to control the browser
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BrowserCommand {
+    // Navigation
+    Navigate { url: String },
+    GoBack,
+    GoForward,
+    Reload,
+    Stop,
+    GoHome,
+
+    // Tab management
+    NewTab { url: Option<String> },
+    CloseTab { index: Option<usize> },
+    SwitchTab { index: usize },
+    DuplicateTab,
+
+    // Dev tools
+    ToggleDevTools,
+    OpenConsole,
+    OpenNetwork,
+    OpenElements,
+    InspectElement { x: f32, y: f32 },
+    ExecuteJs { script: String },
+
+    // Settings
+    SetDarkMode { enabled: bool },
+    SetZoom { level: f32 },
+    ToggleBookmarksBar,
+    OpenSettings,
+
+    // Bookmarks
+    AddBookmark { url: String, title: String },
+    RemoveBookmark { url: String },
+    OpenBookmark { url: String },
+
+    // Downloads
+    DownloadFile { url: String },
+    CancelDownload { id: u64 },
+    OpenDownloads,
+
+    // History
+    ClearHistory,
+    OpenHistory,
+    SearchHistory { query: String },
+
+    // Passwords
+    OpenPasswordVault,
+    SaveCredential { url: String, username: String, password: String },
+    AutofillCredential { url: String },
+
+    // Network monitor
+    OpenNetworkMonitor,
+    GetActiveConnections,
+
+    // Screenshot/Capture
+    TakeScreenshot { full_page: bool },
+    CaptureElement { selector: String },
+
+    // Page interaction
+    Click { x: f32, y: f32 },
+    Type { text: String },
+    ScrollTo { x: f32, y: f32 },
+    FocusElement { selector: String },
+
+    // AI features
+    AnalyzePage,
+    SummarizePage,
+    TranslatePage { target_lang: String },
+    ExplainElement { selector: String },
+
+    // REST client
+    OpenRestClient,
+    SendRequest { method: String, url: String, body: Option<String> },
+
+    // Voice
+    StartVoiceInput,
+    StopVoiceInput,
+}
+
+/// Response from browser command execution
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BrowserResponse {
+    Success { message: String },
+    Error { message: String },
+    Data { json: serde_json::Value },
+    Screenshot { data: Vec<u8>, width: u32, height: u32 },
+    PageContent { html: String, text: String },
+}
 
 /// Hosting mode for MCP agents
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -569,34 +664,39 @@ pub struct McpOrchestrator {
     /// API client for communicating with AI providers
     pub api_client: McpApiClient,
 
+    /// Browser command channel - send commands to control the browser
+    pub browser_cmd_tx: Option<Sender<BrowserCommand>>,
+    /// Browser response channel - receive responses from commands
+    pub browser_resp_rx: Option<Receiver<BrowserResponse>>,
+
     /// Agent configurations
     pub agents: HashMap<AgentRole, AgentConfig>,
-    
+
     /// Conversation history
     pub conversation: VecDeque<McpMessage>,
     pub max_history: usize,
-    
+
     /// Active tasks
     pub tasks: HashMap<u64, Task>,
     pub task_queue: VecDeque<u64>,
     pub next_task_id: u64,
-    
+
     /// Project context
     pub context: Option<ProjectContext>,
-    
+
     /// Pending code edits awaiting approval
     pub pending_edits: Vec<CodeEdit>,
-    
+
     /// Audit results from Gemini
     pub audit_history: Vec<AuditResult>,
     pub last_audit: Option<AuditResult>,
     next_audit_id: u64,
-    
+
     /// Session state
     pub session_id: String,
     pub started_at: DateTime<Utc>,
     pub is_active: bool,
-    
+
     /// Message counter
     next_message_id: u64,
     next_artifact_id: u64,
@@ -612,6 +712,8 @@ impl McpOrchestrator {
         
         McpOrchestrator {
             api_client: McpApiClient::new(),
+            browser_cmd_tx: None,
+            browser_resp_rx: None,
             agents,
             conversation: VecDeque::new(),
             max_history: 100,
@@ -630,7 +732,91 @@ impl McpOrchestrator {
             next_artifact_id: 1,
         }
     }
-    
+
+    /// Create command channels for browser communication
+    /// Returns (command_receiver, response_sender) for the browser to use
+    pub fn create_browser_channels(&mut self) -> (Receiver<BrowserCommand>, Sender<BrowserResponse>) {
+        let (cmd_tx, cmd_rx) = channel();
+        let (resp_tx, resp_rx) = channel();
+        self.browser_cmd_tx = Some(cmd_tx);
+        self.browser_resp_rx = Some(resp_rx);
+        (cmd_rx, resp_tx)
+    }
+
+    /// Send a command to the browser
+    pub fn send_browser_command(&self, cmd: BrowserCommand) -> Result<BrowserResponse, String> {
+        if let Some(ref tx) = self.browser_cmd_tx {
+            tx.send(cmd).map_err(|e| format!("Failed to send command: {}", e))?;
+            if let Some(ref rx) = self.browser_resp_rx {
+                rx.recv_timeout(std::time::Duration::from_secs(5))
+                    .map_err(|e| format!("Timeout waiting for response: {}", e))
+            } else {
+                Err("Response channel not connected".to_string())
+            }
+        } else {
+            Err("Browser not connected".to_string())
+        }
+    }
+
+    /// Execute a browser action and return formatted response
+    pub fn execute_browser_action(&self, action: &str) -> String {
+        let cmd = match action.to_lowercase().as_str() {
+            "back" | "go back" => BrowserCommand::GoBack,
+            "forward" | "go forward" => BrowserCommand::GoForward,
+            "reload" | "refresh" => BrowserCommand::Reload,
+            "stop" => BrowserCommand::Stop,
+            "home" | "go home" => BrowserCommand::GoHome,
+            "new tab" => BrowserCommand::NewTab { url: None },
+            "close tab" => BrowserCommand::CloseTab { index: None },
+            "dev tools" | "devtools" | "developer tools" => BrowserCommand::ToggleDevTools,
+            "console" => BrowserCommand::OpenConsole,
+            "network" => BrowserCommand::OpenNetwork,
+            "elements" | "inspector" => BrowserCommand::OpenElements,
+            "settings" => BrowserCommand::OpenSettings,
+            "history" => BrowserCommand::OpenHistory,
+            "downloads" => BrowserCommand::OpenDownloads,
+            "bookmarks" => BrowserCommand::ToggleBookmarksBar,
+            "passwords" | "vault" => BrowserCommand::OpenPasswordVault,
+            "rest client" | "api client" => BrowserCommand::OpenRestClient,
+            "screenshot" => BrowserCommand::TakeScreenshot { full_page: false },
+            "full screenshot" => BrowserCommand::TakeScreenshot { full_page: true },
+            "dark mode" => BrowserCommand::SetDarkMode { enabled: true },
+            "light mode" => BrowserCommand::SetDarkMode { enabled: false },
+            "zoom in" => BrowserCommand::SetZoom { level: 1.25 },
+            "zoom out" => BrowserCommand::SetZoom { level: 0.8 },
+            "zoom reset" => BrowserCommand::SetZoom { level: 1.0 },
+            "analyze" | "analyze page" => BrowserCommand::AnalyzePage,
+            "summarize" | "summarize page" => BrowserCommand::SummarizePage,
+            "start voice" | "voice" => BrowserCommand::StartVoiceInput,
+            "stop voice" => BrowserCommand::StopVoiceInput,
+            _ => {
+                // Check for navigate command
+                if action.starts_with("go to ") || action.starts_with("navigate ") || action.starts_with("open ") {
+                    let url = action.split_whitespace().skip(2).collect::<Vec<_>>().join(" ");
+                    BrowserCommand::Navigate { url }
+                } else if action.starts_with("search ") {
+                    let query = action.strip_prefix("search ").unwrap_or("");
+                    BrowserCommand::Navigate { url: format!("https://duckduckgo.com/?q={}", urlencoding::encode(query)) }
+                } else if action.starts_with("run ") || action.starts_with("execute ") {
+                    let script = action.split_whitespace().skip(1).collect::<Vec<_>>().join(" ");
+                    BrowserCommand::ExecuteJs { script }
+                } else {
+                    return format!("Unknown action: {}", action);
+                }
+            }
+        };
+
+        match self.send_browser_command(cmd) {
+            Ok(response) => match response {
+                BrowserResponse::Success { message } => message,
+                BrowserResponse::Error { message } => format!("Error: {}", message),
+                BrowserResponse::Data { json } => serde_json::to_string_pretty(&json).unwrap_or_default(),
+                _ => "Action completed".to_string(),
+            },
+            Err(e) => format!("Failed: {}", e),
+        }
+    }
+
     /// Configure an agent
     pub fn configure_agent(&mut self, config: AgentConfig) {
         self.agents.insert(config.role, config);

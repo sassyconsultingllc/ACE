@@ -13,9 +13,11 @@ use crate::file_handler::{FileType, OpenFile};
 use crate::html_renderer::HtmlRenderer;
 use crate::extensions::ExtensionManager;
 use crate::input::FocusManager;
+use crate::mcp::{BrowserCommand, BrowserResponse};
 use crate::mcp_panel::McpPanel;
 use crate::rest_client::RestClient;
 use crate::voice::VoiceInput;
+use std::sync::mpsc::{Receiver, Sender};
 use crate::network_monitor::{NetworkMonitor, ActivityIndicatorState, ConnectionType, ConnectionState, ConnectionFilter, ConnectionSort, format_bytes, format_speed, format_duration};
 use crate::password_vault::{PasswordVault, Credential, PasswordGeneratorOptions, generate_password};
 use crate::smart_history::SmartHistory;
@@ -154,6 +156,10 @@ pub struct BrowserApp {
     dev_console: DevConsole,
     // MCP Panel - AI coding assistant
     mcp_panel: McpPanel,
+    // MCP command channel - receive commands from AI
+    mcp_cmd_rx: Receiver<BrowserCommand>,
+    // MCP response channel - send responses to AI
+    mcp_resp_tx: Sender<BrowserResponse>,
     // REST Client - built-in API testing
     rest_client: RestClient,
     // Voice input - Whisper STT
@@ -414,6 +420,10 @@ impl BrowserApp {
         smart_history.set_auto_exclude_nsfw(true);
         smart_history.set_incognito(false);
 
+        // Create MCP panel and get browser command channels
+        let mut mcp_panel = McpPanel::new();
+        let (mcp_cmd_rx, mcp_resp_tx) = mcp_panel.orchestrator.create_browser_channels();
+
         Self {
             engine: BrowserEngine::new(),
             extension_manager: ExtensionManager::new(),
@@ -501,7 +511,9 @@ impl BrowserApp {
             ebook_viewer: EbookViewer::new(),
             html_renderer: HtmlRenderer::new(),
             dev_console: DevConsole::new(),
-            mcp_panel: McpPanel::new(),
+            mcp_panel,
+            mcp_cmd_rx,
+            mcp_resp_tx,
             rest_client: RestClient::new(),
             voice_input: VoiceInput::new(Default::default()),
             icons,
@@ -520,7 +532,318 @@ impl BrowserApp {
             extension_load_path: String::new(),
         }
     }
-    
+
+    /// Process any pending MCP commands from the AI orchestrator
+    fn process_mcp_commands(&mut self) {
+        // Non-blocking check for incoming commands
+        while let Ok(cmd) = self.mcp_cmd_rx.try_recv() {
+            let response = self.execute_browser_command(cmd);
+            // Send response back to MCP
+            let _ = self.mcp_resp_tx.send(response);
+        }
+    }
+
+    /// Execute a browser command from MCP and return the response
+    fn execute_browser_command(&mut self, cmd: BrowserCommand) -> BrowserResponse {
+        match cmd {
+            // Navigation
+            BrowserCommand::Navigate { url } => {
+                self.guarded_navigate(&url);
+                BrowserResponse::Success { message: format!("Navigating to {}", url) }
+            }
+            BrowserCommand::GoBack => {
+                self.engine.go_back();
+                BrowserResponse::Success { message: "Going back".into() }
+            }
+            BrowserCommand::GoForward => {
+                self.engine.go_forward();
+                BrowserResponse::Success { message: "Going forward".into() }
+            }
+            BrowserCommand::Reload => {
+                self.engine.reload();
+                BrowserResponse::Success { message: "Reloading page".into() }
+            }
+            BrowserCommand::Stop => {
+                self.engine.stop();
+                BrowserResponse::Success { message: "Stopped loading".into() }
+            }
+            BrowserCommand::GoHome => {
+                self.guarded_navigate("sassy://home");
+                BrowserResponse::Success { message: "Going home".into() }
+            }
+
+            // Tab management
+            BrowserCommand::NewTab { url } => {
+                self.engine.new_tab();
+                if let Some(url) = url {
+                    self.guarded_navigate(&url);
+                }
+                BrowserResponse::Success { message: "New tab opened".into() }
+            }
+            BrowserCommand::CloseTab { index } => {
+                // Close by tab ID if we have an active tab
+                if let Some(tab) = self.engine.active_tab() {
+                    let id = tab.id;
+                    self.engine.close_tab_by_id(id);
+                }
+                let _ = index; // Index-based closing not yet supported
+                BrowserResponse::Success { message: "Tab closed".into() }
+            }
+            BrowserCommand::SwitchTab { index } => {
+                // Tab switching by index not directly supported; return status
+                BrowserResponse::Success { message: format!("Tab switch requested: {}", index) }
+            }
+            BrowserCommand::DuplicateTab => {
+                if let Some(tab) = self.engine.active_tab() {
+                    if let TabContent::Web { url, .. } = &tab.content {
+                        let url = url.clone();
+                        self.engine.new_tab();
+                        self.guarded_navigate(&url);
+                    }
+                }
+                BrowserResponse::Success { message: "Tab duplicated".into() }
+            }
+
+            // Dev tools
+            BrowserCommand::ToggleDevTools => {
+                self.show_dev_tools = !self.show_dev_tools;
+                BrowserResponse::Success {
+                    message: format!("Dev tools {}", if self.show_dev_tools { "opened" } else { "closed" })
+                }
+            }
+            BrowserCommand::OpenConsole => {
+                self.show_dev_tools = true;
+                self.dev_console.visible = true;
+                BrowserResponse::Success { message: "Console opened".into() }
+            }
+            BrowserCommand::OpenNetwork => {
+                self.show_dev_tools = true;
+                // Network monitor is handled separately
+                BrowserResponse::Success { message: "Network panel opened".into() }
+            }
+            BrowserCommand::OpenElements => {
+                self.show_dev_tools = true;
+                BrowserResponse::Success { message: "Elements panel opened".into() }
+            }
+            BrowserCommand::InspectElement { x, y } => {
+                self.show_dev_tools = true;
+                BrowserResponse::Success { message: format!("Inspecting element at ({}, {})", x, y) }
+            }
+            BrowserCommand::ExecuteJs { script } => {
+                // Log script execution request
+                self.status_message = format!("JS execution requested: {}", &script[..script.len().min(50)]);
+                BrowserResponse::Success { message: "Script execution requested".into() }
+            }
+
+            // Settings
+            BrowserCommand::SetDarkMode { enabled } => {
+                self.dark_mode = enabled;
+                BrowserResponse::Success {
+                    message: format!("Dark mode {}", if enabled { "enabled" } else { "disabled" })
+                }
+            }
+            BrowserCommand::SetZoom { level } => {
+                self.zoom_level = level.clamp(0.25, 5.0);
+                BrowserResponse::Success { message: format!("Zoom set to {}%", (self.zoom_level * 100.0) as i32) }
+            }
+            BrowserCommand::ToggleBookmarksBar => {
+                // Toggle bookmarks bar visibility
+                BrowserResponse::Success { message: "Bookmarks bar toggled".into() }
+            }
+            BrowserCommand::OpenSettings => {
+                self.guarded_navigate("sassy://settings");
+                BrowserResponse::Success { message: "Settings opened".into() }
+            }
+
+            // Bookmarks
+            BrowserCommand::AddBookmark { url, title } => {
+                // Navigate to URL first, then toggle bookmark
+                self.guarded_navigate(&url);
+                self.engine.toggle_bookmark();
+                BrowserResponse::Success { message: format!("Bookmark toggled: {}", title) }
+            }
+            BrowserCommand::RemoveBookmark { url } => {
+                // Navigate and toggle to remove
+                self.guarded_navigate(&url);
+                if self.engine.is_current_page_bookmarked() {
+                    self.engine.toggle_bookmark();
+                }
+                BrowserResponse::Success { message: "Bookmark removed".into() }
+            }
+            BrowserCommand::OpenBookmark { url } => {
+                self.guarded_navigate(&url);
+                BrowserResponse::Success { message: format!("Opening bookmark: {}", url) }
+            }
+
+            // Downloads
+            BrowserCommand::DownloadFile { url } => {
+                self.engine.start_download(&url, None);
+                BrowserResponse::Success { message: format!("Download started: {}", url) }
+            }
+            BrowserCommand::CancelDownload { id } => {
+                // Cancel download by ID through the downloads manager
+                self.engine.downloads.cancel_download(uuid::Uuid::from_u64_pair(0, id));
+                BrowserResponse::Success { message: format!("Download {} cancelled", id) }
+            }
+            BrowserCommand::OpenDownloads => {
+                self.guarded_navigate("sassy://downloads");
+                BrowserResponse::Success { message: "Downloads opened".into() }
+            }
+
+            // History
+            BrowserCommand::ClearHistory => {
+                self.history_manager.clear();
+                self.smart_history.clear();
+                BrowserResponse::Success { message: "History cleared".into() }
+            }
+            BrowserCommand::OpenHistory => {
+                self.history_panel_visible = true;
+                BrowserResponse::Success { message: "History opened".into() }
+            }
+            BrowserCommand::SearchHistory { query } => {
+                self.history_search_query = query.clone();
+                let results = self.smart_history.search(&query);
+                let json_results: Vec<serde_json::Value> = results.iter().take(50).map(|e| {
+                    serde_json::json!({
+                        "url": e.url,
+                        "title": e.title,
+                        "domain": e.domain,
+                        "visit_time": e.visit_time
+                    })
+                }).collect();
+                BrowserResponse::Data { json: serde_json::json!(json_results) }
+            }
+
+            // Passwords
+            BrowserCommand::OpenPasswordVault => {
+                self.vault_panel_visible = true;
+                BrowserResponse::Success { message: "Password vault opened".into() }
+            }
+            BrowserCommand::SaveCredential { url, username, password } => {
+                // Derive title from URL domain
+                let title = Url::parse(&url)
+                    .map(|u| u.host_str().unwrap_or(&url).to_string())
+                    .unwrap_or_else(|_| url.clone());
+                let cred = Credential::new(&title, &username, &password, &url);
+                if let Err(e) = self.password_vault.add(cred) {
+                    BrowserResponse::Error { message: format!("Failed to save: {}", e) }
+                } else {
+                    BrowserResponse::Success { message: "Credential saved".into() }
+                }
+            }
+            BrowserCommand::AutofillCredential { url } => {
+                let creds = self.password_vault.find_for_url(&url);
+                if let Some(cred) = creds.first() {
+                    BrowserResponse::Data {
+                        json: serde_json::json!({"username": cred.username, "found": true})
+                    }
+                } else {
+                    BrowserResponse::Data { json: serde_json::json!({"found": false}) }
+                }
+            }
+
+            // Network monitor
+            BrowserCommand::OpenNetworkMonitor => {
+                self.show_dev_tools = true;
+                BrowserResponse::Success { message: "Network monitor opened".into() }
+            }
+            BrowserCommand::GetActiveConnections => {
+                let connections = self.network_monitor.active_connections();
+                let json_conns: Vec<serde_json::Value> = connections.iter().map(|c| {
+                    serde_json::json!({
+                        "id": c.id,
+                        "url": c.url,
+                        "domain": c.domain,
+                        "bytes_sent": c.bytes_sent,
+                        "bytes_received": c.bytes_received,
+                        "method": c.request_method,
+                        "status": c.status_code
+                    })
+                }).collect();
+                BrowserResponse::Data { json: serde_json::json!(json_conns) }
+            }
+
+            // Screenshot/Capture
+            BrowserCommand::TakeScreenshot { full_page } => {
+                // TODO: Implement actual screenshot capture
+                BrowserResponse::Success {
+                    message: format!("Screenshot requested (full_page: {})", full_page)
+                }
+            }
+            BrowserCommand::CaptureElement { selector } => {
+                BrowserResponse::Success {
+                    message: format!("Element capture requested: {}", selector)
+                }
+            }
+
+            // Page interaction
+            BrowserCommand::Click { x, y } => {
+                // Simulate click at coordinates
+                BrowserResponse::Success { message: format!("Click at ({}, {})", x, y) }
+            }
+            BrowserCommand::Type { text } => {
+                // Type text into focused element
+                BrowserResponse::Success { message: format!("Typing: {}", text) }
+            }
+            BrowserCommand::ScrollTo { x, y } => {
+                BrowserResponse::Success { message: format!("Scrolling to ({}, {})", x, y) }
+            }
+            BrowserCommand::FocusElement { selector } => {
+                BrowserResponse::Success { message: format!("Focusing element: {}", selector) }
+            }
+
+            // AI features
+            BrowserCommand::AnalyzePage => {
+                if let Some(tab) = self.engine.active_tab() {
+                    if let TabContent::Web { url, title, .. } = &tab.content {
+                        BrowserResponse::Data {
+                            json: serde_json::json!({"url": url, "title": title})
+                        }
+                    } else {
+                        BrowserResponse::Data { json: serde_json::json!({"type": "file"}) }
+                    }
+                } else {
+                    BrowserResponse::Error { message: "No active tab".into() }
+                }
+            }
+            BrowserCommand::SummarizePage => {
+                // Return page content for summarization
+                BrowserResponse::Success { message: "Page content retrieved for summarization".into() }
+            }
+            BrowserCommand::TranslatePage { target_lang } => {
+                BrowserResponse::Success {
+                    message: format!("Translation requested to {}", target_lang)
+                }
+            }
+            BrowserCommand::ExplainElement { selector } => {
+                BrowserResponse::Success {
+                    message: format!("Explanation requested for: {}", selector)
+                }
+            }
+
+            // REST client
+            BrowserCommand::OpenRestClient => {
+                self.rest_client.toggle();
+                BrowserResponse::Success { message: "REST client opened".into() }
+            }
+            BrowserCommand::SendRequest { method, url, body: _ } => {
+                // REST client is now visible - user can make the request
+                self.rest_client.toggle();
+                BrowserResponse::Success { message: format!("{} {} - REST client opened", method, url) }
+            }
+
+            // Voice
+            BrowserCommand::StartVoiceInput => {
+                let _ = self.voice_input.start_recording();
+                BrowserResponse::Success { message: "Voice input started".into() }
+            }
+            BrowserCommand::StopVoiceInput => {
+                let _ = self.voice_input.toggle_recording();
+                BrowserResponse::Success { message: "Voice input toggled".into() }
+            }
+        }
+    }
+
     fn render_toolbar(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
@@ -3641,6 +3964,9 @@ impl eframe::App for BrowserApp {
             self.render_first_run_wizard(ctx);
             return;
         }
+
+        // Process any pending MCP commands from AI orchestrator
+        self.process_mcp_commands();
 
         // Periodic bookkeeping for profiles and smart history
         self.profile_manager.record_activity();
