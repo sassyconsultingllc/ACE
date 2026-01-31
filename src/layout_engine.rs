@@ -9,8 +9,11 @@
 //! The flow:
 //! HTML → DOM Tree → Style Resolution → Layout Tree (taffy) → Paint → egui
 
+#![allow(unused_imports)]
+
 use std::collections::HashMap;
 use taffy::prelude::*;
+use taffy::{Overflow, Point};
 use cssparser::{Parser, ParserInput, Token, ParseError};
 
 // ============================================================================
@@ -18,7 +21,7 @@ use cssparser::{Parser, ParserInput, Token, ParseError};
 // ============================================================================
 
 /// Computed styles for a DOM node
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ComputedStyle {
     // Display
     pub display: Display,
@@ -69,6 +72,67 @@ pub struct ComputedStyle {
     // Overflow
     pub overflow_x: Overflow,
     pub overflow_y: Overflow,
+}
+
+impl Default for ComputedStyle {
+    fn default() -> Self {
+        Self {
+            display: Display::Block,
+            flex_direction: FlexDirection::Row,
+            flex_wrap: FlexWrap::NoWrap,
+            justify_content: None,
+            align_items: None,
+            align_content: None,
+            align_self: None,
+            flex_grow: 0.0,
+            flex_shrink: 1.0,
+            flex_basis: Dimension::Auto,
+            grid_template_columns: Vec::new(),
+            grid_template_rows: Vec::new(),
+            grid_column: Line { start: GridPlacement::Auto, end: GridPlacement::Auto },
+            grid_row: Line { start: GridPlacement::Auto, end: GridPlacement::Auto },
+            gap: Size { width: LengthPercentage::Length(0.0), height: LengthPercentage::Length(0.0) },
+            width: Dimension::Auto,
+            height: Dimension::Auto,
+            min_width: Dimension::Auto,
+            min_height: Dimension::Auto,
+            max_width: Dimension::Auto,
+            max_height: Dimension::Auto,
+            margin: Rect {
+                top: LengthPercentageAuto::Length(0.0),
+                right: LengthPercentageAuto::Length(0.0),
+                bottom: LengthPercentageAuto::Length(0.0),
+                left: LengthPercentageAuto::Length(0.0),
+            },
+            padding: Rect {
+                top: LengthPercentage::Length(0.0),
+                right: LengthPercentage::Length(0.0),
+                bottom: LengthPercentage::Length(0.0),
+                left: LengthPercentage::Length(0.0),
+            },
+            border: Rect {
+                top: LengthPercentage::Length(0.0),
+                right: LengthPercentage::Length(0.0),
+                bottom: LengthPercentage::Length(0.0),
+                left: LengthPercentage::Length(0.0),
+            },
+            position: Position::Relative,
+            inset: Rect {
+                top: LengthPercentageAuto::Auto,
+                right: LengthPercentageAuto::Auto,
+                bottom: LengthPercentageAuto::Auto,
+                left: LengthPercentageAuto::Auto,
+            },
+            color: [0, 0, 0, 255],
+            background_color: [255, 255, 255, 255],
+            font_size: 16.0,
+            font_weight: 400,
+            text_align: TextAlign::Left,
+            line_height: 1.2,
+            overflow_x: Overflow::Visible,
+            overflow_y: Overflow::Visible,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -714,8 +778,8 @@ impl LayoutTree {
     /// Get all layouts as flat list (for rendering)
     pub fn flatten_layouts(&self) -> Vec<(usize, Layout, &LayoutNode)> {
         let mut result = Vec::new();
-        
-        fn walk(tree: &LayoutTree, idx: usize, result: &mut Vec<(usize, Layout, &LayoutNode)>) {
+
+        fn walk<'a>(tree: &'a LayoutTree, idx: usize, result: &mut Vec<(usize, Layout, &'a LayoutNode)>) {
             if let Some(node) = tree.nodes.get(idx) {
                 if let Some(layout) = tree.get_layout(idx) {
                     result.push((idx, *layout, node));
@@ -725,11 +789,11 @@ impl LayoutTree {
                 }
             }
         }
-        
+
         if !self.nodes.is_empty() {
             walk(self, 0, &mut result);
         }
-        
+
         result
     }
 }

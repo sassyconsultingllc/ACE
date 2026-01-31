@@ -50,6 +50,9 @@ egui_taffy = "0.10"              # egui + taffy integration
 parley = "0.2"                   # Text layout/shaping (Google's Rust text engine)
 vello = "0.3"                    # GPU 2D vector rendering (Google's Rust renderer)
 
+# Layout engine (Pure Rust flexbox/grid)
+taffy = "0.7"
+
 # Font rendering (Pure Rust, no FreeType, no HarfBuzz)
 fontdue = "0.9"
 
