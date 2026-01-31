@@ -1388,6 +1388,18 @@ impl VoiceInput {
         }
     }
     
+    /// Toggle recording on/off
+    pub fn toggle_recording(&mut self) -> Result<(), String> {
+        match self.session.state {
+            VoiceState::Idle => self.start_recording(),
+            VoiceState::Listening => {
+                let _ = self.stop_and_transcribe();
+                Ok(())
+            }
+            _ => Ok(()), // Ignore if already transcribing
+        }
+    }
+
     /// Cancel current recording
     pub fn cancel(&mut self) {
         if let Some(ref mic) = self.microphone {

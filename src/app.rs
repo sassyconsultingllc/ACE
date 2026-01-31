@@ -13,6 +13,9 @@ use crate::file_handler::{FileType, OpenFile};
 use crate::html_renderer::HtmlRenderer;
 use crate::extensions::ExtensionManager;
 use crate::input::FocusManager;
+use crate::mcp_panel::McpPanel;
+use crate::rest_client::RestClient;
+use crate::voice::VoiceInput;
 use crate::network_monitor::{NetworkMonitor, ActivityIndicatorState, ConnectionType, ConnectionState, ConnectionFilter, ConnectionSort, format_bytes, format_speed, format_duration};
 use crate::password_vault::{PasswordVault, Credential, PasswordGeneratorOptions, generate_password};
 use crate::smart_history::SmartHistory;
@@ -149,6 +152,12 @@ pub struct BrowserApp {
     html_renderer: HtmlRenderer,
     // Developer Console (F12)
     dev_console: DevConsole,
+    // MCP Panel - AI coding assistant
+    mcp_panel: McpPanel,
+    // REST Client - built-in API testing
+    rest_client: RestClient,
+    // Voice input - Whisper STT
+    voice_input: VoiceInput,
     // UI icon textures (loaded at startup)
     icons: std::collections::HashMap<String, TextureHandle>,
 
@@ -492,6 +501,9 @@ impl BrowserApp {
             ebook_viewer: EbookViewer::new(),
             html_renderer: HtmlRenderer::new(),
             dev_console: DevConsole::new(),
+            mcp_panel: McpPanel::new(),
+            rest_client: RestClient::new(),
+            voice_input: VoiceInput::new(Default::default()),
             icons,
             dark_mode: true,
             zoom_level: 1.0,
@@ -1959,6 +1971,24 @@ impl BrowserApp {
                 }
             }
             
+            // Ctrl+Shift shortcuts
+            if i.modifiers.ctrl && i.modifiers.shift {
+                if i.key_pressed(Key::I) {
+                    // Toggle MCP/AI panel
+                    self.mcp_panel.toggle();
+                }
+                if i.key_pressed(Key::R) {
+                    // Toggle REST client panel
+                    self.rest_client.toggle();
+                }
+                if i.key_pressed(Key::V) {
+                    // Toggle voice input
+                    if let Err(e) = self.voice_input.toggle_recording() {
+                        tracing::warn!("Voice input error: {}", e);
+                    }
+                }
+            }
+
             // Alt shortcuts
             if i.modifiers.alt {
                 if i.key_pressed(Key::ArrowLeft) {

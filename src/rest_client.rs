@@ -179,24 +179,27 @@ impl RestResponse {
 
 /// REST Client state
 pub struct RestClient {
+    /// Panel visibility
+    pub visible: bool,
+
     /// Current request being built
     pub method: Method,
     pub url: String,
     pub headers: Vec<(String, String, bool)>,  // name, value, enabled
     pub body: String,
     pub content_type: ContentType,
-    
+
     /// Response
     pub response: Option<RestResponse>,
     pub error: Option<String>,
     pub is_loading: bool,
-    
+
     /// Saved collections
     pub collections: Vec<RequestCollection>,
-    
+
     /// Environment variables
     pub environment: HashMap<String, String>,
-    
+
     /// History
     pub history: Vec<SavedRequest>,
     pub max_history: usize,
@@ -205,6 +208,7 @@ pub struct RestClient {
 impl RestClient {
     pub fn new() -> Self {
         RestClient {
+            visible: false,
             method: Method::Get,
             url: String::new(),
             headers: vec![
@@ -222,7 +226,12 @@ impl RestClient {
             max_history: 100,
         }
     }
-    
+
+    /// Toggle panel visibility
+    pub fn toggle(&mut self) {
+        self.visible = !self.visible;
+    }
+
     /// Substitute environment variables in a string
     pub fn substitute_vars(&self, text: &str) -> String {
         let mut result = text.to_string();
