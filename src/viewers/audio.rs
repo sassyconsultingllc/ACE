@@ -502,11 +502,7 @@ impl AudioViewer {
             }
 
             // Play/Pause
-<<<<<<< HEAD
-                let play_icon = if self.is_playing { "⏸" } else { ">" };
-=======
             let play_icon = if self.is_playing { "⏸" } else { "▶" };
->>>>>>> origin/claude/happy-torvalds
             if ui.add(egui::Button::new(RichText::new(play_icon).size(32.0))
                 .min_size(Vec2::splat(50.0))
             ).clicked() {
