@@ -25,7 +25,7 @@ impl FontViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
         if let FileContent::Font(font) = &file.content {
             self.render_toolbar(ui, font);
             ui.separator();

@@ -36,7 +36,7 @@ impl TextViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
         // Toolbar
         ui.horizontal(|ui| {
             if ui.selectable_label(!self.is_editing, "View").clicked() {
@@ -74,11 +74,11 @@ impl TextViewer {
             ui.separator();
             
             // Font size
-            if ui.button("Sum").clicked() {
+            if icons.button(ui, "minus", "Decrease font size").clicked() {
                 self.font_size = (self.font_size - 1.0).max(8.0);
             }
             ui.label(format!("{:.0}px", self.font_size));
-            if ui.button("+").clicked() {
+            if icons.button(ui, "plus", "Increase font size").clicked() {
                 self.font_size = (self.font_size + 1.0).min(32.0);
             }
             

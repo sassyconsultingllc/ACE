@@ -51,7 +51,7 @@ impl Model3DViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32, icons: &crate::icons::Icons) {
         if let FileContent::Model3D(model) = &file.content {
             self.render_toolbar(ui, model);
             ui.separator();

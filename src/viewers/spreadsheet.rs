@@ -37,10 +37,10 @@ impl SpreadsheetViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
         if let FileContent::Spreadsheet(spreadsheet) = &file.content {
             // Toolbar
-            self.render_toolbar(ui, spreadsheet, zoom);
+            self.render_toolbar(ui, spreadsheet, zoom, icons);
             
             ui.separator();
             
@@ -61,7 +61,7 @@ impl SpreadsheetViewer {
         }
     }
     
-    fn render_toolbar(&mut self, ui: &mut egui::Ui, _spreadsheet: &SpreadsheetContent, zoom: f32) {
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, _spreadsheet: &SpreadsheetContent, zoom: f32, icons: &crate::icons::Icons) {
         ui.horizontal(|ui| {
             if ui.selectable_label(!self.edit_mode, "View").clicked() {
                 self.edit_mode = false;
@@ -78,11 +78,11 @@ impl SpreadsheetViewer {
             
             // Column width
             ui.label("Col Width:");
-            if ui.button("Sum").clicked() {
+            if icons.button(ui, "minus", "Decrease column width").clicked() {
                 self.default_column_width = (self.default_column_width - 10.0).max(40.0);
             }
             ui.label(format!("{:.0}", self.default_column_width));
-            if ui.button("+").clicked() {
+            if icons.button(ui, "plus", "Increase column width").clicked() {
                 self.default_column_width = (self.default_column_width + 10.0).min(300.0);
             }
             

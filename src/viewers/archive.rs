@@ -513,9 +513,9 @@ impl ArchiveViewer {
     // UI RENDERING
     // ═══════════════════════════════════════════════════════════════════════════
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
         if let FileContent::Archive(archive) = &file.content {
-            self.render_toolbar(ui, archive, &file.path);
+            self.render_toolbar(ui, archive, &file.path, icons);
             ui.separator();
             self.render_info_bar(ui, archive);
             ui.separator();
@@ -539,15 +539,15 @@ impl ArchiveViewer {
         }
     }
     
-    fn render_toolbar(&mut self, ui: &mut egui::Ui, archive: &ArchiveContent, archive_path: &Path) {
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, archive: &ArchiveContent, archive_path: &Path, icons: &crate::icons::Icons) {
         ui.horizontal(|ui| {
             // Extract buttons
-            if ui.button("Extract All").clicked() {
+            if icons.text_button(ui, "extract", "Extract All", "Extract all files").clicked() {
                 self.show_extract_dialog = true;
             }
             
             ui.add_enabled_ui(!self.selected_entries.is_empty(), |ui| {
-                if ui.button("Extract Selected").clicked() {
+                if icons.text_button(ui, "extract", "Extract Selected", "Extract selected files").clicked() {
                     // Extract only selected entries
                     if let Some(dir) = native_dialog::FileDialog::new()
                         .show_open_single_dir()
@@ -562,14 +562,14 @@ impl ArchiveViewer {
             ui.separator();
             
             // Create new archive
-            if ui.button("New Archive").clicked() {
+            if icons.text_button(ui, "plus", "New Archive", "Create a new archive").clicked() {
                 self.show_create_dialog = true;
                 self.new_archive = NewArchive::default();
             }
             
             // Add to archive (if format supports it)
             if archive.format == ArchiveFormat::Zip
-                && ui.button("Add Files").clicked() {
+                && icons.text_button(ui, "add-file", "Add Files", "Add files to archive").clicked() {
                     if let Ok(files) = native_dialog::FileDialog::new()
                         .show_open_multiple_file()
                     {
@@ -583,10 +583,10 @@ impl ArchiveViewer {
             // View options
             ui.toggle_value(&mut self.tree_view, "Tree");
             ui.checkbox(&mut self.show_hidden, "Hidden");
-            
+
             // Search
             ui.separator();
-            ui.label("Search");
+            icons.inline(ui, "search");
             ui.add(egui::TextEdit::singleline(&mut self.filter_query)
                 .hint_text("Filter...")
                 .desired_width(150.0));

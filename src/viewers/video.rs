@@ -33,7 +33,7 @@ impl VideoViewer {
         }
     }
 
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
         if let FileContent::Video(video) = &file.content {
             egui::Frame::none()
                 .fill(Color32::from_rgb(0, 0, 0))
@@ -42,7 +42,7 @@ impl VideoViewer {
                     self.render_video_frame(ui, video, zoom);
 
                     if self.show_controls {
-                        self.render_controls_overlay(ui, video);
+                        self.render_controls_overlay(ui, video, icons);
                     }
 
                     if self.show_info_overlay {
@@ -188,7 +188,7 @@ impl VideoViewer {
         }
     }
 
-    fn render_controls_overlay(&mut self, ui: &mut egui::Ui, video: &VideoContent) {
+    fn render_controls_overlay(&mut self, ui: &mut egui::Ui, video: &VideoContent, icons: &crate::icons::Icons) {
         let rect = ui.available_rect_before_wrap();
         let controls_height = 70.0;
         let controls_rect = Rect::from_min_size(
@@ -233,8 +233,8 @@ impl VideoViewer {
 
             ui.horizontal(|ui| {
                 // Play/Pause button
-                let play_text = if self.is_playing { "||" } else { ">" };
-                if ui.button(RichText::new(play_text).size(20.0)).clicked() {
+                let play_icon_name = if self.is_playing { "pause" } else { "play" };
+                if icons.button_sized(ui, play_icon_name, if self.is_playing { "Pause" } else { "Play" }, 20.0).clicked() {
                     self.is_playing = !self.is_playing;
                 }
 
@@ -263,8 +263,8 @@ impl VideoViewer {
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Fullscreen toggle
-                    let fs_icon = if self.is_fullscreen { "[ ]" } else { "[#]" };
-                    if ui.button(RichText::new(fs_icon).size(16.0)).clicked() {
+                    let fs_icon_name = if self.is_fullscreen { "exit-fullscreen" } else { "fullscreen" };
+                    if icons.button(ui, fs_icon_name, if self.is_fullscreen { "Exit fullscreen" } else { "Fullscreen" }).clicked() {
                         self.is_fullscreen = !self.is_fullscreen;
                     }
 
@@ -274,13 +274,13 @@ impl VideoViewer {
                     } else {
                         Color32::from_rgb(180, 180, 200)
                     };
-                    if ui.button(RichText::new("i").size(16.0).color(info_color)).clicked() {
+                    if icons.button(ui, "info", "Video info").clicked() {
                         self.show_info_overlay = !self.show_info_overlay;
                     }
 
                     // Volume
-                    let vol_icon = if self.is_muted { "Mute" } else { "Vol" };
-                    if ui.button(vol_icon).clicked() {
+                    let vol_icon_name = if self.is_muted { "volume-mute" } else { "volume-high" };
+                    if icons.button(ui, vol_icon_name, if self.is_muted { "Unmute" } else { "Mute" }).clicked() {
                         self.is_muted = !self.is_muted;
                     }
                 });

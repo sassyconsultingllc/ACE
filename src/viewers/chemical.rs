@@ -71,7 +71,7 @@ impl ChemicalViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32, icons: &crate::icons::Icons) {
         if let FileContent::Chemical(chem) = &file.content {
             // Toolbar
             self.render_toolbar(ui, chem, global_zoom);

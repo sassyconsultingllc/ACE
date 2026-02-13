@@ -735,7 +735,7 @@ impl DocumentViewer {
     // UI RENDERING
     // ---------------------------------------------------------------------------
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
         // Load document if empty
         if self.paragraphs.is_empty() {
             if let FileContent::Document(content) = &file.content {

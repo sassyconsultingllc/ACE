@@ -575,40 +575,28 @@ impl BrowserApp {
                 _ => (false, false, false),
             };
             
-            // Navigation buttons (use loaded icons when available)
-            if let Some(tex) = self.legacy_icons.get("back") {
-                if ui.add_enabled(can_back, egui::ImageButton::new((tex.id(), Vec2::new(28.0, 24.0))))
-                    .on_hover_text("Back (Alt+Left)")
-                    .clicked() {
+            // Navigation buttons (SVG icons with text fallback)
+            ui.add_enabled_ui(can_back, |ui| {
+                if self.svg_icons.button(ui, "nav-back", "Back (Alt+Left)").clicked() {
                     self.engine.go_back();
                 }
-            } else if ui.add_enabled(can_back, egui::Button::new("Back").min_size(Vec2::new(28.0, 24.0)))
-                .on_hover_text("Back (Alt+Left)")
-                .clicked() {
-                self.engine.go_back();
-            }
+            });
 
-            if let Some(tex) = self.legacy_icons.get("forward") {
-                if ui.add_enabled(can_forward, egui::ImageButton::new((tex.id(), Vec2::new(28.0, 24.0))))
-                    .on_hover_text("Forward (Alt+Right)")
-                    .clicked() {
+            ui.add_enabled_ui(can_forward, |ui| {
+                if self.svg_icons.button(ui, "nav-forward", "Forward (Alt+Right)").clicked() {
                     self.engine.go_forward();
                 }
-            } else if ui.add_enabled(can_forward, egui::Button::new(">").min_size(Vec2::new(28.0, 24.0)))
-                .on_hover_text("Forward (Alt+Right)")
-                .clicked() {
-                self.engine.go_forward();
-            }
-            
+            });
+
             if is_loading {
-                if ui.button("X").on_hover_text("Stop").clicked() {
+                if self.svg_icons.button(ui, "close-x", "Stop").clicked() {
                     self.engine.stop();
                 }
-            } else if ui.button("R").on_hover_text("Reload (F5)").clicked() {
+            } else if self.svg_icons.button(ui, "reload", "Reload (F5)").clicked() {
                 self.engine.reload();
             }
-            
-            if ui.button("Home").on_hover_text("Home").clicked() {
+
+            if self.svg_icons.button(ui, "home", "Home").clicked() {
                 self.engine.go_home();
             }
             
@@ -662,10 +650,10 @@ impl BrowserApp {
             });
             
             // Sidebar toggles
-            if ui.button("\u{1F4DA}").on_hover_text("Toggle Sidebar").clicked() {
+            if self.svg_icons.button(ui, "books", "Toggle Sidebar").clicked() {
                 self.left_sidebar_visible = !self.left_sidebar_visible;
             }
-            if ui.button("\u{1F916}").on_hover_text("AI Assistant").clicked() {
+            if self.svg_icons.button(ui, "robot", "AI Assistant").clicked() {
                 self.ai_sidebar_visible = !self.ai_sidebar_visible;
             }
 
@@ -1197,7 +1185,7 @@ impl BrowserApp {
             }
             
             // New tab button
-            if ui.button("+").on_hover_text("New Tab (Ctrl+T)").clicked() {
+            if self.svg_icons.button(ui, "plus", "New Tab (Ctrl+T)").clicked() {
                 self.engine.new_tab();
             }
             
@@ -1354,22 +1342,23 @@ impl BrowserApp {
                         // Clone necessary data to avoid borrow issues
                         let file_clone = file.clone();
                         let _ = tab;
+                        let icons = &self.svg_icons;
                         match file_type {
                             FileType::Image | FileType::ImageRaw | FileType::ImagePsd => {
-                                self.image_viewer.render(ui, &file_clone, zoom)
+                                self.image_viewer.render(ui, &file_clone, zoom, icons)
                             }
-                            FileType::Pdf => self.pdf_viewer.render(ui, &file_clone, zoom),
-                            FileType::Document => self.document_viewer.render(ui, &file_clone, zoom),
-                            FileType::Spreadsheet => self.spreadsheet_viewer.render(ui, &file_clone, zoom),
-                            FileType::Chemical => self.chemical_viewer.render(ui, &file_clone, zoom),
-                            FileType::Archive => self.archive_viewer.render(ui, &file_clone, zoom),
-                            FileType::Model3D => self.model3d_viewer.render(ui, &file_clone, zoom),
-                            FileType::Font => self.font_viewer.render(ui, &file_clone, zoom),
-                            FileType::Audio => self.audio_viewer.render(ui, &file_clone, zoom),
-                            FileType::Video => self.video_viewer.render(ui, &file_clone, zoom),
-                            FileType::Ebook => self.ebook_viewer.render(ui, &file_clone, zoom),
-                            FileType::Markdown => self.text_viewer.render(ui, &file_clone, zoom),
-                            FileType::Text | FileType::Unknown => self.text_viewer.render(ui, &file_clone, zoom),
+                            FileType::Pdf => self.pdf_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Document => self.document_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Spreadsheet => self.spreadsheet_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Chemical => self.chemical_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Archive => self.archive_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Model3D => self.model3d_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Font => self.font_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Audio => self.audio_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Video => self.video_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Ebook => self.ebook_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Markdown => self.text_viewer.render(ui, &file_clone, zoom, icons),
+                            FileType::Text | FileType::Unknown => self.text_viewer.render(ui, &file_clone, zoom, icons),
                         }
                     }
                 }
@@ -1587,22 +1576,23 @@ impl BrowserApp {
     
     #[allow(dead_code)]
     fn render_file_content(&mut self, ui: &mut egui::Ui, file: &OpenFile) {
+        let icons = &self.svg_icons;
         match file.file_type {
             FileType::Image | FileType::ImageRaw | FileType::ImagePsd => {
-                self.image_viewer.render(ui, file, self.zoom_level)
+                self.image_viewer.render(ui, file, self.zoom_level, icons)
             }
-            FileType::Pdf => self.pdf_viewer.render(ui, file, self.zoom_level),
-            FileType::Document => self.document_viewer.render(ui, file, self.zoom_level),
-            FileType::Spreadsheet => self.spreadsheet_viewer.render(ui, file, self.zoom_level),
-            FileType::Chemical => self.chemical_viewer.render(ui, file, self.zoom_level),
-            FileType::Archive => self.archive_viewer.render(ui, file, self.zoom_level),
-            FileType::Model3D => self.model3d_viewer.render(ui, file, self.zoom_level),
-            FileType::Font => self.font_viewer.render(ui, file, self.zoom_level),
-            FileType::Audio => self.audio_viewer.render(ui, file, self.zoom_level),
-            FileType::Video => self.video_viewer.render(ui, file, self.zoom_level),
-            FileType::Ebook => self.ebook_viewer.render(ui, file, self.zoom_level),
-            FileType::Markdown => self.text_viewer.render(ui, file, self.zoom_level),
-            FileType::Text | FileType::Unknown => self.text_viewer.render(ui, file, self.zoom_level),
+            FileType::Pdf => self.pdf_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Document => self.document_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Spreadsheet => self.spreadsheet_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Chemical => self.chemical_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Archive => self.archive_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Model3D => self.model3d_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Font => self.font_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Audio => self.audio_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Video => self.video_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Ebook => self.ebook_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Markdown => self.text_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Text | FileType::Unknown => self.text_viewer.render(ui, file, self.zoom_level, icons),
         }
     }
     
@@ -1637,11 +1627,11 @@ impl BrowserApp {
             ui.add_space(10.0);
             ui.horizontal(|ui| {
                 ui.label("Zoom:");
-                if ui.button("-").clicked() {
+                if self.svg_icons.button(ui, "minus", "Zoom out").clicked() {
                     self.zoom_level = (self.zoom_level - 0.1).max(0.5);
                 }
                 ui.label(format!("{:.0}%", self.zoom_level * 100.0));
-                if ui.button("+").clicked() {
+                if self.svg_icons.button(ui, "plus", "Zoom in").clicked() {
                     self.zoom_level = (self.zoom_level + 0.1).min(2.0);
                 }
                 if ui.button("Reset").clicked() {
@@ -3388,7 +3378,7 @@ impl BrowserApp {
         
         ui.add_space(30.0);
         
-        if ui.button(RichText::new("Get Started ->").size(18.0)).clicked() {
+        if self.svg_icons.text_button(ui, "arrow-right", "Get Started", "Begin setup").clicked() {
             self.first_run.next_step();
         }
     }
@@ -3517,7 +3507,7 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("<- Back").clicked() {
+            if self.svg_icons.text_button(ui, "arrow-left", "Back", "Go back").clicked() {
                 self.first_run.prev_step();
             }
             
@@ -3525,7 +3515,7 @@ impl BrowserApp {
             
             let ready = self.auth.is_entropy_ready();
             let can_continue = ready && timer_done;
-            if ui.add_enabled(can_continue, egui::Button::new(RichText::new("Continue ->").size(18.0))).clicked() {
+            if ui.add_enabled(can_continue, egui::Button::new("Continue")).on_hover_text("Continue setup").clicked() {
                 self.first_run.next_step();
             }
             
@@ -3579,7 +3569,7 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("<- Back").clicked() {
+            if self.svg_icons.text_button(ui, "arrow-left", "Back", "Go back").clicked() {
                 self.first_run.prev_step();
             }
             
@@ -3690,7 +3680,7 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("<- Back").clicked() {
+            if self.svg_icons.text_button(ui, "arrow-left", "Back", "Go back").clicked() {
                 self.first_run.prev_step();
             }
             
@@ -3765,7 +3755,7 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("<- Back").clicked() {
+            if self.svg_icons.text_button(ui, "arrow-left", "Back", "Go back").clicked() {
                 self.first_run.prev_step();
             }
             

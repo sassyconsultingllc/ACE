@@ -869,7 +869,7 @@ impl PdfViewer {
     // RENDERING
     // ==============================================================================
 
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32, icons: &crate::icons::Icons) {
         // Load PDF if needed
         if self.pdf_data.is_none() || self.pages.is_empty() {
             if let FileContent::Binary(data) = &file.content {
@@ -878,7 +878,7 @@ impl PdfViewer {
         }
 
         // Toolbar
-        self.render_toolbar(ui);
+        self.render_toolbar(ui, icons);
         ui.separator();
 
         // Error message
@@ -909,7 +909,7 @@ impl PdfViewer {
         });
     }
 
-    fn render_toolbar(&mut self, ui: &mut egui::Ui) {
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, icons: &crate::icons::Icons) {
         ui.horizontal(|ui| {
             // Thumbnail toggle
             ui.toggle_value(&mut self.show_thumbnails, "Thumbnails");
@@ -918,10 +918,10 @@ impl PdfViewer {
             ui.separator();
 
             // Navigation
-            if ui.button("|<").on_hover_text("First page").clicked() {
+            if icons.button(ui, "skip-start", "First page").clicked() {
                 self.current_page = 0;
             }
-            if ui.button("<").on_hover_text("Previous page").clicked() {
+            if icons.button(ui, "arrow-left", "Previous page").clicked() {
                 self.current_page = self.current_page.saturating_sub(1);
             }
 
@@ -935,22 +935,22 @@ impl PdfViewer {
             }
             ui.label(format!("/ {}", self.total_pages));
 
-            if ui.button(">").on_hover_text("Next page").clicked()
+            if icons.button(ui, "arrow-right", "Next page").clicked()
                 && self.current_page + 1 < self.total_pages {
                 self.current_page += 1;
             }
-            if ui.button(">|").on_hover_text("Last page").clicked() {
+            if icons.button(ui, "skip-end", "Last page").clicked() {
                 self.current_page = self.total_pages.saturating_sub(1);
             }
 
             ui.separator();
 
             // Zoom
-            if ui.button("-").clicked() {
+            if icons.button(ui, "minus", "Zoom out").clicked() {
                 self.zoom = (self.zoom - 0.1).max(0.3);
             }
             ui.label(format!("{:.0}%", self.zoom * 100.0));
-            if ui.button("+").clicked() {
+            if icons.button(ui, "plus", "Zoom in").clicked() {
                 self.zoom = (self.zoom + 0.1).min(4.0);
             }
             if ui.button("Fit").on_hover_text("Fit to width").clicked() {
@@ -972,7 +972,7 @@ impl PdfViewer {
 
             // Search (right aligned)
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Search").clicked() {
+                if icons.button(ui, "search", "Search").clicked() {
                     let q = self.search_query.clone();
                     self.search(&q);
                 }
@@ -988,8 +988,8 @@ impl PdfViewer {
                 }
 
                 if !self.search_results.is_empty() {
-                    if ui.button("v").clicked() { self.next_search_result(); }
-                    if ui.button("^").clicked() { self.prev_search_result(); }
+                    if icons.button(ui, "arrow-down", "Next result").clicked() { self.next_search_result(); }
+                    if icons.button(ui, "arrow-up", "Previous result").clicked() { self.prev_search_result(); }
                     ui.label(format!("{}/{}", self.current_search_index + 1, self.search_results.len()));
                 }
             });

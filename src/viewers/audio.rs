@@ -219,7 +219,7 @@ impl AudioViewer {
         }
     }
 
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
         if let FileContent::Audio(audio) = &file.content {
             // Initialize playback if not done yet
             self.init_playback(&file.path);
@@ -273,9 +273,9 @@ impl AudioViewer {
                     let dur = audio.duration_secs;
                     self.render_progress(ui, audio, &path, dur);
                     ui.add_space(15.0);
-                    self.render_controls(ui, &file.path.clone(), audio.duration_secs);
+                    self.render_controls(ui, &file.path.clone(), audio.duration_secs, icons);
                     ui.add_space(15.0);
-                    self.render_volume(ui);
+                    self.render_volume(ui, icons);
 
                     // Playback error message
                     if let Some(err) = &self.playback_error {
@@ -469,7 +469,7 @@ impl AudioViewer {
         });
     }
 
-    fn render_controls(&mut self, ui: &mut egui::Ui, file_path: &std::path::Path, duration: f64) {
+    fn render_controls(&mut self, ui: &mut egui::Ui, file_path: &std::path::Path, duration: f64, icons: &crate::icons::Icons) {
         ui.horizontal(|ui| {
             ui.add_space((ui.available_width() - 250.0).max(0.0) / 2.0);
 
@@ -496,21 +496,19 @@ impl AudioViewer {
             ui.add_space(8.0);
 
             // Previous (restart)
-            if ui.button(RichText::new("|<").size(20.0)).clicked() {
+            if icons.button_sized(ui, "skip-start", "Restart", 20.0).clicked() {
                 let path = file_path.to_path_buf();
                 self.seek_to(0.0, &path, duration);
             }
 
             // Play/Pause
-            let play_icon = if self.is_playing { "||" } else { ">" };
-            if ui.add(egui::Button::new(RichText::new(play_icon).size(32.0))
-                .min_size(Vec2::splat(50.0))
-            ).clicked() {
+            let play_icon_name = if self.is_playing { "pause" } else { "play" };
+            if icons.button_sized(ui, play_icon_name, if self.is_playing { "Pause" } else { "Play" }, 32.0).clicked() {
                 self.toggle_play();
             }
 
             // Skip forward 10s
-            if ui.button(RichText::new(">|").size(20.0)).clicked() {
+            if icons.button_sized(ui, "skip-end", "Skip +10s", 20.0).clicked() {
                 let new_pos = (self.current_position + 10.0).min(duration);
                 let path = file_path.to_path_buf();
                 self.seek_to(new_pos, &path, duration);
@@ -519,31 +517,26 @@ impl AudioViewer {
             ui.add_space(8.0);
 
             // Waveform toggle
-            let wf_color = if self.show_waveform {
-                Color32::from_rgb(100, 180, 255)
-            } else {
-                Color32::GRAY
-            };
-            if ui.add(egui::Button::new(RichText::new("Wave").size(11.0).color(wf_color))).clicked() {
+            if icons.button_sized(ui, "music-note", "Toggle waveform", 16.0).clicked() {
                 self.show_waveform = !self.show_waveform;
             }
         });
     }
 
-    fn render_volume(&mut self, ui: &mut egui::Ui) {
+    fn render_volume(&mut self, ui: &mut egui::Ui, icons: &crate::icons::Icons) {
         ui.horizontal(|ui| {
             ui.add_space((ui.available_width() - 220.0).max(0.0) / 2.0);
 
             // Mute button
-            let volume_icon = if self.is_muted || self.volume == 0.0 {
-                "Mute"
+            let volume_icon_name = if self.is_muted || self.volume == 0.0 {
+                "volume-mute"
             } else if self.volume < 0.5 {
-                "Vol"
+                "volume-low"
             } else {
-                "Vol"
+                "volume-high"
             };
 
-            if ui.button(volume_icon).clicked() {
+            if icons.button_sized(ui, volume_icon_name, if self.is_muted { "Unmute" } else { "Mute" }, 16.0).clicked() {
                 self.is_muted = !self.is_muted;
                 self.update_volume();
             }

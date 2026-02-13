@@ -461,7 +461,7 @@ impl ImageViewer {
     // UI RENDERING
     // ---------------------------------------------------------------------------
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &crate::file_handler::OpenFile, zoom: f32) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &crate::file_handler::OpenFile, zoom: f32, icons: &crate::icons::Icons) {
         // Load image if not already loaded
         if self.working_image.is_none() {
             if let crate::file_handler::FileContent::Binary(data) = &file.content {
