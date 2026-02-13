@@ -1,7 +1,7 @@
 //! First-run setup wizard
 //!
 //! WHAT HAPPENS ON FIRST RUN:
-//! ==========================
+//! ==============================================================================
 //! 1. User enters their name
 //! 2. Optionally sets a PIN
 //! 3. Cryptographic keys generated:

@@ -813,8 +813,8 @@ impl DocumentViewer {
             ui.separator();
             
             // Styles toggle
-            ui.toggle_value(&mut self.show_styles, "Â¶ Styles");
-            ui.checkbox(&mut self.show_formatting, "Show Â¶");
+            ui.toggle_value(&mut self.show_styles, "¶ Styles");
+            ui.checkbox(&mut self.show_formatting, "Show ¶");
             
             // Stats
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1004,7 +1004,7 @@ impl DocumentViewer {
                                     
                                     // Show formatting marks
                                     if self.show_formatting {
-                                        ui.label(RichText::new("Â¶").color(Color32::LIGHT_GRAY).small());
+                                        ui.label(RichText::new("¶").color(Color32::LIGHT_GRAY).small());
                                     }
                                 });
                                 

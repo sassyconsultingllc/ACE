@@ -74,7 +74,7 @@ impl TextViewer {
             ui.separator();
             
             // Font size
-            if ui.button("∑").clicked() {
+            if ui.button("Sum").clicked() {
                 self.font_size = (self.font_size - 1.0).max(8.0);
             }
             ui.label(format!("{:.0}px", self.font_size));

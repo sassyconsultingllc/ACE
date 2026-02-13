@@ -3,7 +3,7 @@
 //! Files don't touch your filesystem until you EARN their release.
 //!
 //! FLOW:
-//! =====
+//! ==============================================================================
 //! 1. User clicks download link
 //! 2. File downloaded to encrypted memory vault (not disk)
 //! 3. Heuristics scan runs immediately
@@ -17,14 +17,14 @@
 //! 8. Still marked as "from internet" (OS protection)
 //!
 //! WHAT CHROME DOES WRONG:
-//! =======================
+//! ==============================================================================
 //! - Downloads immediately to disk
 //! - Single click to "Keep" dangerous file
 //! - Runs with full user permissions
 //! - "Are you sure?" dialogs are ignored by muscle memory
 //!
 //! WHAT WE DO RIGHT:
-//! =================
+//! ==============================================================================
 //! - File never touches disk until approved
 //! - Three DIFFERENT interactions (can't autopilot)
 //! - Forced wait time (breaks clickjacking)

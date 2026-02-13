@@ -280,7 +280,7 @@ impl AudioViewer {
                     // Playback error message
                     if let Some(err) = &self.playback_error {
                         ui.add_space(10.0);
-                        ui.label(RichText::new(format!("⚠ {}", err))
+                        ui.label(RichText::new(format!("! {}", err))
                             .color(Color32::from_rgb(255, 180, 80))
                             .small());
                     }
@@ -354,7 +354,7 @@ impl AudioViewer {
             .show(ui, |ui| {
                 ui.set_min_size(Vec2::splat(art_size));
                 ui.centered_and_justified(|ui| {
-                    ui.label(RichText::new("♫").size(80.0 * zoom).color(Color32::from_rgb(100, 110, 130)));
+                    ui.label(RichText::new("#").size(80.0 * zoom).color(Color32::from_rgb(100, 110, 130)));
                 });
             });
     }
@@ -496,13 +496,13 @@ impl AudioViewer {
             ui.add_space(8.0);
 
             // Previous (restart)
-            if ui.button(RichText::new("⏮").size(20.0)).clicked() {
+            if ui.button(RichText::new("|<").size(20.0)).clicked() {
                 let path = file_path.to_path_buf();
                 self.seek_to(0.0, &path, duration);
             }
 
             // Play/Pause
-            let play_icon = if self.is_playing { "⏸" } else { "▶" };
+            let play_icon = if self.is_playing { "||" } else { ">" };
             if ui.add(egui::Button::new(RichText::new(play_icon).size(32.0))
                 .min_size(Vec2::splat(50.0))
             ).clicked() {
@@ -510,7 +510,7 @@ impl AudioViewer {
             }
 
             // Skip forward 10s
-            if ui.button(RichText::new("⏭").size(20.0)).clicked() {
+            if ui.button(RichText::new(">|").size(20.0)).clicked() {
                 let new_pos = (self.current_position + 10.0).min(duration);
                 let path = file_path.to_path_buf();
                 self.seek_to(new_pos, &path, duration);
@@ -536,11 +536,11 @@ impl AudioViewer {
 
             // Mute button
             let volume_icon = if self.is_muted || self.volume == 0.0 {
-                "🔇"
+                "Mute"
             } else if self.volume < 0.5 {
-                "🔉"
+                "Vol"
             } else {
-                "🔊"
+                "Vol"
             };
 
             if ui.button(volume_icon).clicked() {
@@ -614,11 +614,11 @@ impl AudioViewer {
                 // Playback status
                 ui.label(RichText::new("Playback").small().color(Color32::GRAY));
                 let status = if self.playback.is_some() {
-                    if self.is_playing { "▶ Playing" } else { "⏸ Paused" }
+                    if self.is_playing { "> Playing" } else { "|| Paused" }
                 } else if self.playback_error.is_some() {
-                    "⚠ Error"
+                    "! Error"
                 } else {
-                    "⏹ Stopped"
+                    "Stop Stopped"
                 };
                 ui.label(RichText::new(status).color(
                     if self.is_playing { Color32::from_rgb(100, 255, 100) }

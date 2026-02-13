@@ -233,7 +233,7 @@ impl VideoViewer {
 
             ui.horizontal(|ui| {
                 // Play/Pause button
-                let play_text = if self.is_playing { "⏸" } else { "▶" };
+                let play_text = if self.is_playing { "||" } else { ">" };
                 if ui.button(RichText::new(play_text).size(20.0)).clicked() {
                     self.is_playing = !self.is_playing;
                 }
@@ -263,7 +263,7 @@ impl VideoViewer {
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Fullscreen toggle
-                    let fs_icon = if self.is_fullscreen { "⬜" } else { "⛶" };
+                    let fs_icon = if self.is_fullscreen { "[ ]" } else { "[#]" };
                     if ui.button(RichText::new(fs_icon).size(16.0)).clicked() {
                         self.is_fullscreen = !self.is_fullscreen;
                     }
@@ -274,12 +274,12 @@ impl VideoViewer {
                     } else {
                         Color32::from_rgb(180, 180, 200)
                     };
-                    if ui.button(RichText::new("ℹ").size(16.0).color(info_color)).clicked() {
+                    if ui.button(RichText::new("i").size(16.0).color(info_color)).clicked() {
                         self.show_info_overlay = !self.show_info_overlay;
                     }
 
                     // Volume
-                    let vol_icon = if self.is_muted { "🔇" } else { "🔊" };
+                    let vol_icon = if self.is_muted { "Mute" } else { "Vol" };
                     if ui.button(vol_icon).clicked() {
                         self.is_muted = !self.is_muted;
                     }

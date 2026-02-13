@@ -22,7 +22,7 @@
 //!    - Heuristic scanning
 //!
 //! WHY THIS MATTERS:
-//! =================
+//! ==============================================================================
 //! Chrome: "This page wants to send you notifications"
 //!         -> User clicks Allow (muscle memory)
 //!         -> Spam forever

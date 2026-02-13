@@ -1,7 +1,7 @@
 //! Cryptographic User Identity and Key Management
 //!
 //! SECURITY MODEL:
-//! ================
+//! ==============================================================================
 //! 1. Each user gets a unique Ed25519 key pair during onboarding
 //! 2. Private key encrypted with Argon2-derived key from PIN (if set)
 //! 3. Symmetric encryption uses ChaCha20-Poly1305 (AEAD)

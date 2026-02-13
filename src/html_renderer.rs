@@ -707,7 +707,7 @@ impl HtmlRenderer {
                     <html>
                     <head><title>Page Load Error</title></head>
                     <body style="font-family: sans-serif; padding: 40px; text-align: center;">
-                        <h1 style="color: #e74c3c;">⚠️ Failed to Load Page</h1>
+                        <h1 style="color: #e74c3c;">! Failed to Load Page</h1>
                         <p><strong>URL:</strong> {}</p>
                         <p><strong>Error:</strong> {}</p>
                         <hr style="margin: 30px 0;">

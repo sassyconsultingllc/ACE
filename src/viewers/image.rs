@@ -270,7 +270,7 @@ impl ImageViewer {
         if let Some(img) = &self.working_image {
             self.working_image = Some(img.rotate90());
             self.working_texture = None;
-            self.push_history("Rotate 90Â° CW");
+            self.push_history("Rotate 90° CW");
         }
     }
     
@@ -279,7 +279,7 @@ impl ImageViewer {
         if let Some(img) = &self.working_image {
             self.working_image = Some(img.rotate270());
             self.working_texture = None;
-            self.push_history("Rotate 90Â° CCW");
+            self.push_history("Rotate 90° CCW");
         }
     }
     
@@ -288,7 +288,7 @@ impl ImageViewer {
         if let Some(img) = &self.working_image {
             self.working_image = Some(img.rotate180());
             self.working_texture = None;
-            self.push_history("Rotate 180Â°");
+            self.push_history("Rotate 180°");
         }
     }
     
@@ -522,7 +522,7 @@ impl ImageViewer {
                     self.redo();
                 }
             });
-            if ui.button("(resize)„ Reset").clicked() {
+            if ui.button("Reset").clicked() {
                 self.reset();
             }
             

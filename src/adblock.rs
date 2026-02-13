@@ -14,9 +14,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use regex::Regex;
 
-// ============================================================================
+// ==============================================================================
 // FILTER RULE TYPES
-// ============================================================================
+// ==============================================================================
 
 #[derive(Debug, Clone)]
 pub enum FilterRule {
@@ -85,9 +85,9 @@ impl ResourceType {
     }
 }
 
-// ============================================================================
+// ==============================================================================
 // FILTER LIST
-// ============================================================================
+// ==============================================================================
 
 #[derive(Debug, Clone)]
 pub struct FilterList {
@@ -110,9 +110,9 @@ impl FilterList {
     }
 }
 
-// ============================================================================
+// ==============================================================================
 // BLOCK STATISTICS
-// ============================================================================
+// ==============================================================================
 
 #[derive(Debug, Clone, Default)]
 pub struct BlockStats {
@@ -131,9 +131,9 @@ impl BlockStats {
     }
 }
 
-// ============================================================================
+// ==============================================================================
 // AD BLOCKER ENGINE
-// ============================================================================
+// ==============================================================================
 
 pub struct AdBlocker {
     /// Active filter lists
@@ -220,9 +220,9 @@ impl AdBlocker {
         ));
     }
     
-    // ========================================================================
+    // ==============================================================================
     // FILTER PARSING
-    // ========================================================================
+    // ==============================================================================
     
     /// Parse an AdBlock Plus / uBlock Origin filter list
     pub fn parse_filter_list(&mut self, content: &str, list_index: usize) {
@@ -431,9 +431,9 @@ impl AdBlocker {
         Regex::new(&regex_str).ok()
     }
     
-    // ========================================================================
+    // ==============================================================================
     // RULE COMPILATION
-    // ========================================================================
+    // ==============================================================================
     
     fn compile_rules(&mut self) {
         self.block_patterns.clear();
@@ -495,9 +495,9 @@ impl AdBlocker {
         }
     }
     
-    // ========================================================================
+    // ==============================================================================
     // BLOCKING LOGIC
-    // ========================================================================
+    // ==============================================================================
     
     /// Check if a network request should be blocked
     pub fn should_block(
@@ -623,9 +623,9 @@ impl AdBlocker {
         self.get_cosmetic_filters(domain).join("\n")
     }
     
-    // ========================================================================
+    // ==============================================================================
     // MANAGEMENT
-    // ========================================================================
+    // ==============================================================================
     
     pub fn enable(&mut self) {
         self.enabled = true;
@@ -725,9 +725,9 @@ impl Default for AdBlocker {
     }
 }
 
-// ============================================================================
+// ==============================================================================
 // HELPER FUNCTIONS
-// ============================================================================
+// ==============================================================================
 
 fn extract_domain(url: &str) -> Option<String> {
     let url = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
@@ -749,9 +749,9 @@ fn domain_matches_any(domain: &str, patterns: &HashSet<String>) -> bool {
     false
 }
 
-// ============================================================================
+// ==============================================================================
 // UI COMPONENT
-// ============================================================================
+// ==============================================================================
 
 pub struct AdBlockerUI {
     blocker: Arc<RwLock<AdBlocker>>,
@@ -773,7 +773,7 @@ impl AdBlockerUI {
     pub fn render(&mut self, ui: &mut eframe::egui::Ui) {
         use eframe::egui;
         
-        ui.heading("🛡️ Ad Blocker");
+        ui.heading(" Ad Blocker");
         ui.separator();
         
         if let Ok(mut blocker) = self.blocker.write() {
@@ -792,8 +792,8 @@ impl AdBlockerUI {
             // Stats
             let stats = blocker.get_stats();
             ui.horizontal(|ui| {
-                ui.label(format!("🚫 Total blocked: {}", stats.total_blocked));
-                ui.label(format!("📊 Today: {}", stats.blocked_today));
+                ui.label(format!("[x] Total blocked: {}", stats.total_blocked));
+                ui.label(format!("XLS Today: {}", stats.blocked_today));
             });
             
             ui.separator();
@@ -806,7 +806,7 @@ impl AdBlockerUI {
             drop(blocker);
 
             let mut toggle_list: Option<(usize, bool)> = None;
-            ui.collapsing("📋 Filter Lists", |ui| {
+            ui.collapsing("DATA Filter Lists", |ui| {
                 for (i, (name, rule_count, enabled)) in list_info.iter().enumerate() {
                     ui.horizontal(|ui| {
                         let mut e = *enabled;
@@ -827,7 +827,7 @@ impl AdBlockerUI {
             ui.separator();
 
             // Custom rules
-            ui.collapsing("✏️ Custom Rules", |ui| {
+            ui.collapsing(" Custom Rules", |ui| {
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut self.custom_rule_input);
                     if ui.button("Add").clicked() && !self.custom_rule_input.is_empty() {

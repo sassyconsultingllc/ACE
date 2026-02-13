@@ -72,13 +72,13 @@ impl SpreadsheetViewer {
             
             ui.separator();
             
-            ui.checkbox(&mut self.show_gridlines, "⊞ Grid");
+            ui.checkbox(&mut self.show_gridlines, "# Grid");
             
             ui.separator();
             
             // Column width
             ui.label("Col Width:");
-            if ui.button("∑").clicked() {
+            if ui.button("Sum").clicked() {
                 self.default_column_width = (self.default_column_width - 10.0).max(40.0);
             }
             ui.label(format!("{:.0}", self.default_column_width));

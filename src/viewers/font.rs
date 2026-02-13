@@ -238,7 +238,7 @@ impl FontViewer {
                         let display = char_opt
                             .filter(|c| !c.is_control())
                             .map(|c| c.to_string())
-                            .unwrap_or_else(|| "Â·".into());
+                            .unwrap_or_else(|| "·".into());
                         
                         let response = ui.add_sized(
                             [cell_size, cell_size],

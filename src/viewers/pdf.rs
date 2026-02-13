@@ -16,9 +16,9 @@ use image::GenericImageView;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-// ============================================================================
+// ==============================================================================
 // POSITIONED TEXT ELEMENT — text with coordinates from content stream
-// ============================================================================
+// ==============================================================================
 
 #[derive(Debug, Clone)]
 struct TextElement {
@@ -38,9 +38,9 @@ struct TextElement {
     italic: bool,
 }
 
-// ============================================================================
+// ==============================================================================
 // EMBEDDED IMAGE — extracted from XObject resources
-// ============================================================================
+// ==============================================================================
 
 #[derive(Debug, Clone)]
 struct EmbeddedImage {
@@ -58,9 +58,9 @@ struct EmbeddedImage {
     display_height: f32,
 }
 
-// ============================================================================
+// ==============================================================================
 // GRAPHIC PRIMITIVE — lines, rects, fills from content stream
-// ============================================================================
+// ==============================================================================
 
 #[derive(Debug, Clone)]
 enum GraphicPrimitive {
@@ -72,9 +72,9 @@ enum GraphicPrimitive {
     Line { x1: f32, y1: f32, x2: f32, y2: f32, color: [f32; 3], width: f32 },
 }
 
-// ============================================================================
+// ==============================================================================
 // ENHANCED PAGE CONTENT
-// ============================================================================
+// ==============================================================================
 
 #[derive(Debug, Clone)]
 pub struct PdfPage {
@@ -93,9 +93,9 @@ pub struct PdfPage {
     graphics: Vec<GraphicPrimitive>,
 }
 
-// ============================================================================
+// ==============================================================================
 // ANNOTATIONS
-// ============================================================================
+// ==============================================================================
 
 #[derive(Debug, Clone)]
 pub enum Annotation {
@@ -110,9 +110,9 @@ pub enum PdfTool {
     Note,
 }
 
-// ============================================================================
+// ==============================================================================
 // SEARCH
-// ============================================================================
+// ==============================================================================
 
 #[derive(Clone)]
 pub struct SearchResult {
@@ -121,9 +121,9 @@ pub struct SearchResult {
     pub text: String,
 }
 
-// ============================================================================
+// ==============================================================================
 // PDF VIEWER
-// ============================================================================
+// ==============================================================================
 
 pub struct PdfViewer {
     // Content
@@ -193,9 +193,9 @@ impl PdfViewer {
         }
     }
 
-    // ========================================================================
+    // ==============================================================================
     // LOADING — extract positioned content from PDF
-    // ========================================================================
+    // ==============================================================================
 
     pub fn load_pdf(&mut self, data: &[u8]) {
         self.loading = true;
@@ -726,9 +726,9 @@ impl PdfViewer {
         }
     }
 
-    // ========================================================================
+    // ==============================================================================
     // HELPER METHODS
-    // ========================================================================
+    // ==============================================================================
 
     fn obj_to_f32(obj: &lopdf::Object) -> Option<f32> {
         match obj {
@@ -812,9 +812,9 @@ impl PdfViewer {
         });
     }
 
-    // ========================================================================
+    // ==============================================================================
     // SEARCH
-    // ========================================================================
+    // ==============================================================================
 
     fn search(&mut self, query: &str) {
         self.search_results.clear();
@@ -865,9 +865,9 @@ impl PdfViewer {
         }
     }
 
-    // ========================================================================
+    // ==============================================================================
     // RENDERING
-    // ========================================================================
+    // ==============================================================================
 
     pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32) {
         // Load PDF if needed
@@ -883,7 +883,7 @@ impl PdfViewer {
 
         // Error message
         if let Some(ref err) = self.error_message {
-            ui.colored_label(Color32::YELLOW, format!("⚠ {}", err));
+            ui.colored_label(Color32::YELLOW, format!("! {}", err));
             ui.separator();
         }
 
@@ -918,10 +918,10 @@ impl PdfViewer {
             ui.separator();
 
             // Navigation
-            if ui.button("⏮").on_hover_text("First page").clicked() {
+            if ui.button("|<").on_hover_text("First page").clicked() {
                 self.current_page = 0;
             }
-            if ui.button("◀").on_hover_text("Previous page").clicked() {
+            if ui.button("<").on_hover_text("Previous page").clicked() {
                 self.current_page = self.current_page.saturating_sub(1);
             }
 
@@ -935,22 +935,22 @@ impl PdfViewer {
             }
             ui.label(format!("/ {}", self.total_pages));
 
-            if ui.button("▶").on_hover_text("Next page").clicked()
+            if ui.button(">").on_hover_text("Next page").clicked()
                 && self.current_page + 1 < self.total_pages {
                 self.current_page += 1;
             }
-            if ui.button("⏭").on_hover_text("Last page").clicked() {
+            if ui.button(">|").on_hover_text("Last page").clicked() {
                 self.current_page = self.total_pages.saturating_sub(1);
             }
 
             ui.separator();
 
             // Zoom
-            if ui.button("➖").clicked() {
+            if ui.button("-").clicked() {
                 self.zoom = (self.zoom - 0.1).max(0.3);
             }
             ui.label(format!("{:.0}%", self.zoom * 100.0));
-            if ui.button("➕").clicked() {
+            if ui.button("+").clicked() {
                 self.zoom = (self.zoom + 0.1).min(4.0);
             }
             if ui.button("Fit").on_hover_text("Fit to width").clicked() {
@@ -960,7 +960,7 @@ impl PdfViewer {
             ui.separator();
 
             // Tools
-            ui.selectable_value(&mut self.current_tool, PdfTool::Select, "☛ Select");
+            ui.selectable_value(&mut self.current_tool, PdfTool::Select, "> Select");
             ui.selectable_value(&mut self.current_tool, PdfTool::Highlight, "Highlight");
             ui.selectable_value(&mut self.current_tool, PdfTool::Note, "Note");
 
@@ -972,7 +972,7 @@ impl PdfViewer {
 
             // Search (right aligned)
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("🔍").clicked() {
+                if ui.button("Search").clicked() {
                     let q = self.search_query.clone();
                     self.search(&q);
                 }
@@ -988,8 +988,8 @@ impl PdfViewer {
                 }
 
                 if !self.search_results.is_empty() {
-                    if ui.button("▼").clicked() { self.next_search_result(); }
-                    if ui.button("▲").clicked() { self.prev_search_result(); }
+                    if ui.button("v").clicked() { self.next_search_result(); }
+                    if ui.button("^").clicked() { self.prev_search_result(); }
                     ui.label(format!("{}/{}", self.current_search_index + 1, self.search_results.len()));
                 }
             });
@@ -1400,9 +1400,9 @@ impl PdfViewer {
         }
     }
 
-    // ========================================================================
+    // ==============================================================================
     // EXPORT
-    // ========================================================================
+    // ==============================================================================
 
     pub fn export_text(&self) -> String {
         self.pages.iter()
@@ -1415,9 +1415,9 @@ impl PdfViewer {
     }
 }
 
-// ============================================================================
+// ==============================================================================
 // TESTS
-// ============================================================================
+// ==============================================================================
 
 #[cfg(test)]
 mod tests {

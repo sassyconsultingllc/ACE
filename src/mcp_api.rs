@@ -139,9 +139,9 @@ impl McpApiClient {
             .unwrap_or(false)
     }
     
-    // =========================================================================
+    // ==============================================================================
     // Unified Call Interface
-    // =========================================================================
+    // ==============================================================================
     
     /// Universal call method - routes to correct provider based on config
     pub fn call(&self, role: AgentRole, messages: &[ChatMessage], system: &str) -> ApiResult<ChatResponse> {
@@ -292,9 +292,9 @@ impl McpApiClient {
         Ok(tags.models.into_iter().map(|m| m.name).collect())
     }
     
-    // =========================================================================
+    // ==============================================================================
     // Provider-Specific Call Methods (Legacy, still useful)
-    // =========================================================================
+    // ==============================================================================
     
     /// Send request to Grok (xAI)
     pub fn call_grok(&self, messages: &[ChatMessage], system: Option<&str>) -> ApiResult<ChatResponse> {

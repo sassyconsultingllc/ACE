@@ -11,6 +11,7 @@ use crate::browser::{BrowserEngine, DownloadState, Tab, TabContent, TabId, Histo
 use crate::file_handler::{FileType, OpenFile};
 use crate::html_renderer::HtmlRenderer;
 use crate::extensions::ExtensionManager;
+use crate::icons::Icons;
 use crate::input::FocusManager;
 use crate::network_monitor::{NetworkMonitor, ActivityIndicatorState, ConnectionType, ConnectionState, ConnectionFilter, ConnectionSort, format_bytes, format_speed, format_duration};
 use crate::password_vault::{PasswordVault, Credential, PasswordGeneratorOptions, generate_password};
@@ -67,9 +68,9 @@ pub struct BrowserApp {
     tailscale: TailscaleManager,
     first_run: FirstRunState,
     
-    // =========================================================================
+    // ==============================================================================
     // DISRUPTOR FEATURES - Kills paid software & Chrome bloat
-    // =========================================================================
+    // ==============================================================================
     
     // Network Activity Monitor - NO HIDDEN TRAFFIC
     network_monitor: NetworkMonitor,
@@ -110,7 +111,7 @@ pub struct BrowserApp {
     password_generator_opts: PasswordGeneratorOptions,
     generated_password: String,
     
-    // ⏱️ Smart History - 14.7s delay, NSFW detection
+    //  Smart History - 14.7s delay, NSFW detection
     history_manager: HistoryManager,
     smart_history: SmartHistory,
     smart_history_active_url: Option<String>,
@@ -158,8 +159,10 @@ pub struct BrowserApp {
     
     // HTML/JS renderer for web content
     html_renderer: HtmlRenderer,
-    // UI icon textures (loaded at startup)
-    icons: std::collections::HashMap<String, TextureHandle>,
+    // UI icon textures (loaded at startup from .ico files)
+    legacy_icons: std::collections::HashMap<String, TextureHandle>,
+    // SVG icon system (replaces all inline Unicode emoji)
+    svg_icons: Icons,
     
     // UI state
     dark_mode: bool,
@@ -402,8 +405,8 @@ impl BrowserApp {
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join("SassyBrowser");
         
-        // Load icon textures from assets/icons
-        let mut icons: std::collections::HashMap<String, TextureHandle> = std::collections::HashMap::new();
+        // Load legacy icon textures from assets/icons (ICO files)
+        let mut legacy_icons: std::collections::HashMap<String, TextureHandle> = std::collections::HashMap::new();
         let ctx = &cc.egui_ctx;
         let icon_files = [
             ("back", "assets/icons/backward.ico"),
@@ -421,17 +424,20 @@ impl BrowserApp {
                     let pixels: Vec<u8> = img.into_raw();
                     let color_image = ColorImage::from_rgba_unmultiplied(size, &pixels);
                     let handle = ctx.load_texture(*path, color_image, egui::TextureOptions::default());
-                    icons.insert((*key).to_string(), handle);
+                    legacy_icons.insert((*key).to_string(), handle);
                 }
             }
         }
+
+        // Load SVG icon system (replaces all inline Unicode emoji)
+        let svg_icons = Icons::load(ctx);
 
         let mut smart_history = SmartHistory::new();
         smart_history.set_intent_delay(1.5);
         smart_history.set_auto_exclude_nsfw(true);
         smart_history.set_incognito(false);
 
-        Self {
+        let mut app = Self {
             engine: BrowserEngine::new(),
             extension_manager: ExtensionManager::new(),
             auth,
@@ -517,7 +523,8 @@ impl BrowserApp {
             video_viewer: VideoViewer::new(),
             ebook_viewer: EbookViewer::new(),
             html_renderer: HtmlRenderer::new(),
-            icons,
+            legacy_icons,
+            svg_icons,
             dark_mode: true,
             theme_preset: ThemePreset::SassyRedesign,
             zoom_level: 1.0,
@@ -542,9 +549,20 @@ impl BrowserApp {
             clear_data_downloads: false,
             clear_data_cache: true,
             find_match_count: 0,
+        };
+
+        // Navigate to initial URL if passed via env var (from command-line file/URL arg)
+        if let Ok(initial_url) = std::env::var("SASSY_INITIAL_URL") {
+            if !initial_url.is_empty() {
+                app.engine.navigate(&initial_url);
+                // Clear so it doesn't re-trigger on subsequent app recreations
+                std::env::remove_var("SASSY_INITIAL_URL");
+            }
         }
+
+        app
     }
-    
+
     fn render_toolbar(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
@@ -558,35 +576,35 @@ impl BrowserApp {
             };
             
             // Navigation buttons (use loaded icons when available)
-            if let Some(tex) = self.icons.get("back") {
+            if let Some(tex) = self.legacy_icons.get("back") {
                 if ui.add_enabled(can_back, egui::ImageButton::new((tex.id(), Vec2::new(28.0, 24.0))))
                     .on_hover_text("Back (Alt+Left)")
                     .clicked() {
                     self.engine.go_back();
                 }
-            } else if ui.add_enabled(can_back, egui::Button::new("*�").min_size(Vec2::new(28.0, 24.0)))
+            } else if ui.add_enabled(can_back, egui::Button::new("Back").min_size(Vec2::new(28.0, 24.0)))
                 .on_hover_text("Back (Alt+Left)")
                 .clicked() {
                 self.engine.go_back();
             }
 
-            if let Some(tex) = self.icons.get("forward") {
+            if let Some(tex) = self.legacy_icons.get("forward") {
                 if ui.add_enabled(can_forward, egui::ImageButton::new((tex.id(), Vec2::new(28.0, 24.0))))
                     .on_hover_text("Forward (Alt+Right)")
                     .clicked() {
                     self.engine.go_forward();
                 }
-            } else if ui.add_enabled(can_forward, egui::Button::new("▶").min_size(Vec2::new(28.0, 24.0)))
+            } else if ui.add_enabled(can_forward, egui::Button::new(">").min_size(Vec2::new(28.0, 24.0)))
                 .on_hover_text("Forward (Alt+Right)")
                 .clicked() {
                 self.engine.go_forward();
             }
             
             if is_loading {
-                if ui.button("✕").on_hover_text("Stop").clicked() {
+                if ui.button("X").on_hover_text("Stop").clicked() {
                     self.engine.stop();
                 }
-            } else if ui.button("↻").on_hover_text("Reload (F5)").clicked() {
+            } else if ui.button("R").on_hover_text("Reload (F5)").clicked() {
                 self.engine.reload();
             }
             
@@ -676,7 +694,7 @@ impl BrowserApp {
                 }
                 ui.separator();
                 // Bookmarks menu button: prefer image icon if available
-                if let Some(tex) = self.icons.get("bookmarks") {
+                if let Some(tex) = self.legacy_icons.get("bookmarks") {
                     if ui.add(egui::ImageButton::new((tex.id(), Vec2::new(18.0,18.0))))
                         .on_hover_text("Bookmarks")
                         .clicked() {
@@ -751,11 +769,11 @@ impl BrowserApp {
         let active = self.network_monitor.active_count();
 
         ui.horizontal(|ui| {
-            let label = format!("Net {} ↓{} ↑{}", active, format_speed(down), format_speed(up));
+            let label = format!("Net {} v{} ^{}", active, format_speed(down), format_speed(up));
             if ui.selectable_label(self.activity_indicator.expanded, label).clicked() {
                 self.activity_indicator.expanded = !self.activity_indicator.expanded;
             }
-            ui.label(format!("Total ↓{} ↑{}", format_bytes(total_down), format_bytes(total_up)));
+            ui.label(format!("Total v{} ^{}", format_bytes(total_down), format_bytes(total_up)));
             if blocked > 0 {
                 ui.label(RichText::new(format!("Blocked {}", blocked)).color(Color32::RED));
             }
@@ -1179,7 +1197,7 @@ impl BrowserApp {
             }
             
             // New tab button
-            if ui.button("＋").on_hover_text("New Tab (Ctrl+T)").clicked() {
+            if ui.button("+").on_hover_text("New Tab (Ctrl+T)").clicked() {
                 self.engine.new_tab();
             }
             
@@ -1478,7 +1496,7 @@ impl BrowserApp {
                 });
                 
                 ui.add_space(20.0);
-                ui.label(RichText::new("Drag & drop any file or use File → Open").italics().color(Color32::GRAY));
+                ui.label(RichText::new("Drag & drop any file or use File -> Open").italics().color(Color32::GRAY));
             });
         });
     }
@@ -1590,7 +1608,7 @@ impl BrowserApp {
     
     fn render_settings_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading("⚙️ Settings");
+            ui.heading(" Settings");
             ui.separator();
             
             ui.add_space(20.0);
@@ -1750,7 +1768,7 @@ impl BrowserApp {
     
     fn render_bookmarks_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading("�\u{AD} Bookmarks");
+            ui.heading("Bookmarks");
             ui.separator();
             
             let bookmarks: Vec<_> = self.engine.bookmarks.all()
@@ -2600,7 +2618,7 @@ impl BrowserApp {
                         }
                         if let Some(r) = &profile.restrictions.bedtime_start {
                             if let Some(e) = &profile.restrictions.bedtime_end {
-                                ui.label(RichText::new(format!("Bedtime: {:02}:{:02}–{:02}:{:02}", r.0, r.1, e.0, e.1)).color(Color32::LIGHT_RED))
+                                ui.label(RichText::new(format!("Bedtime: {:02}:{:02}-{:02}:{:02}", r.0, r.1, e.0, e.1)).color(Color32::LIGHT_RED))
                                     .on_hover_text("No access allowed during bedtime hours. Ask a parent to adjust bedtime if needed.");
                             }
                         }
@@ -3274,9 +3292,9 @@ impl BrowserApp {
         }
     }
     
-    // =========================================================================
+    // ==============================================================================
     // FIRST RUN WIZARD
-    // =========================================================================
+    // ==============================================================================
     
     fn render_first_run_wizard(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -3286,7 +3304,7 @@ impl BrowserApp {
                 // Header
                 ui.heading(RichText::new("Sassy Browser").size(48.0).color(Color32::from_rgb(255, 140, 0)));
                 ui.add_space(10.0);
-                ui.label(RichText::new("Pure Rust • No Chrome • No Google • No Tracking").size(16.0).color(Color32::GRAY));
+                ui.label(RichText::new("Pure Rust * No Chrome * No Google * No Tracking").size(16.0).color(Color32::GRAY));
                 ui.add_space(40.0);
                 
                 // Progress indicator
@@ -3312,7 +3330,7 @@ impl BrowserApp {
                         
                         ui.label(RichText::new(format!("{}. {}", i + 1, step)).color(color));
                         if i < steps.len() - 1 {
-                            ui.label(RichText::new(" → ").color(Color32::DARK_GRAY));
+                            ui.label(RichText::new(" -> ").color(Color32::DARK_GRAY));
                         }
                     }
                 });
@@ -3370,7 +3388,7 @@ impl BrowserApp {
         
         ui.add_space(30.0);
         
-        if ui.button(RichText::new("Get Started →").size(18.0)).clicked() {
+        if ui.button(RichText::new("Get Started ->").size(18.0)).clicked() {
             self.first_run.next_step();
         }
     }
@@ -3499,7 +3517,7 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("← Back").clicked() {
+            if ui.button("<- Back").clicked() {
                 self.first_run.prev_step();
             }
             
@@ -3507,7 +3525,7 @@ impl BrowserApp {
             
             let ready = self.auth.is_entropy_ready();
             let can_continue = ready && timer_done;
-            if ui.add_enabled(can_continue, egui::Button::new(RichText::new("Continue →").size(18.0))).clicked() {
+            if ui.add_enabled(can_continue, egui::Button::new(RichText::new("Continue ->").size(18.0))).clicked() {
                 self.first_run.next_step();
             }
             
@@ -3561,13 +3579,13 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("← Back").clicked() {
+            if ui.button("<- Back").clicked() {
                 self.first_run.prev_step();
             }
             
             ui.add_space(20.0);
             
-            if ui.button(RichText::new("Create Device Key →").size(18.0)).clicked() {
+            if ui.button(RichText::new("Create Device Key ->").size(18.0)).clicked() {
                 match self.auth.complete_first_run(
                     &self.first_run.device_name,
                     self.first_run.device_type.clone()
@@ -3633,7 +3651,7 @@ impl BrowserApp {
                 }
             }
             crate::auth::TailscaleStatus::Running => {
-                ui.label(RichText::new("✅ Tailscale is connected!").color(Color32::from_rgb(0, 200, 100)));
+                ui.label(RichText::new("[ok] Tailscale is connected!").color(Color32::from_rgb(0, 200, 100)));
                 ui.add_space(10.0);
                 
                 if let Some(ref ip) = self.tailscale.ip_address {
@@ -3650,7 +3668,7 @@ impl BrowserApp {
                 if !peers.is_empty() {
                     ui.label(RichText::new("Devices on your network:").strong());
                     for peer in peers {
-                        let status = if peer.online { "" } else { "⚪" };
+                        let status = if peer.online { "" } else { "( )" };
                         ui.label(format!("{} {} ({})", status, peer.hostname, peer.ip_address));
                     }
                 }
@@ -3672,16 +3690,16 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("← Back").clicked() {
+            if ui.button("<- Back").clicked() {
                 self.first_run.prev_step();
             }
             
             ui.add_space(20.0);
             
             let label = if self.first_run.enable_phone_sync {
-                "Continue to Phone Setup →"
+                "Continue to Phone Setup ->"
             } else {
-                "Finish Setup →"
+                "Finish Setup ->"
             };
             
             if ui.button(RichText::new(label).size(18.0)).clicked() {
@@ -3747,13 +3765,13 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("← Back").clicked() {
+            if ui.button("<- Back").clicked() {
                 self.first_run.prev_step();
             }
             
             ui.add_space(20.0);
             
-            if ui.button(RichText::new("Finish Setup →").size(18.0)).clicked() {
+            if ui.button(RichText::new("Finish Setup ->").size(18.0)).clicked() {
                 self.first_run.next_step();
             }
             

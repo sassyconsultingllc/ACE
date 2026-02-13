@@ -1,7 +1,7 @@
 //! Page Sandbox - Every page starts untrusted
 //!
 //! SECURITY MODEL:
-//! ================
+//! ==============================================================================
 //! Every page load begins in a restricted sandbox.
 //! The page must EARN trust through meaningful user interaction.
 //!
