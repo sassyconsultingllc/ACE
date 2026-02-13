@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
 //! Archive Handler - Full ZIP, RAR, 7z, TAR support with creation
 //!
 //! Features:
@@ -113,9 +113,9 @@ impl ArchiveViewer {
         }
     }
     
-    // ---------------------------------------------------------------------------
+    // ═══════════════════════════════════════════════════════════════════════════
     // ARCHIVE CREATION
-    // ---------------------------------------------------------------------------
+    // ═══════════════════════════════════════════════════════════════════════════
     
     /// Create a new archive
     pub fn create_archive(
@@ -298,9 +298,9 @@ impl ArchiveViewer {
         Err("7z creation requires external tool".to_string())
     }
     
-    // ---------------------------------------------------------------------------
+    // ═══════════════════════════════════════════════════════════════════════════
     // EXTRACTION
-    // ---------------------------------------------------------------------------
+    // ═══════════════════════════════════════════════════════════════════════════
     
     /// Extract all files
     pub fn extract_all(archive_path: &Path, output_dir: &Path) -> Result<usize, String> {
@@ -408,9 +408,6 @@ impl ArchiveViewer {
         Ok(0)
     }
 
-<<<<<<< HEAD
-    // ---------------------------------------------------------------------------
-=======
     /// Extract only selected files from archive
     fn extract_selected(
         archive_path: &Path,
@@ -513,9 +510,8 @@ impl ArchiveViewer {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
->>>>>>> origin/claude/happy-torvalds
     // UI RENDERING
-    // ---------------------------------------------------------------------------
+    // ═══════════════════════════════════════════════════════════════════════════
     
     pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32) {
         if let FileContent::Archive(archive) = &file.content {
@@ -546,12 +542,12 @@ impl ArchiveViewer {
     fn render_toolbar(&mut self, ui: &mut egui::Ui, archive: &ArchiveContent, archive_path: &Path) {
         ui.horizontal(|ui| {
             // Extract buttons
-            if ui.button(" Extract All").clicked() {
+            if ui.button("📦 Extract All").clicked() {
                 self.show_extract_dialog = true;
             }
             
             ui.add_enabled_ui(!self.selected_entries.is_empty(), |ui| {
-                if ui.button(" Extract Selected").clicked() {
+                if ui.button("📄 Extract Selected").clicked() {
                     // Extract only selected entries
                     if let Some(dir) = native_dialog::FileDialog::new()
                         .show_open_single_dir()
@@ -566,14 +562,14 @@ impl ArchiveViewer {
             ui.separator();
             
             // Create new archive
-            if ui.button(" New Archive").clicked() {
+            if ui.button("➕ New Archive").clicked() {
                 self.show_create_dialog = true;
                 self.new_archive = NewArchive::default();
             }
             
             // Add to archive (if format supports it)
             if archive.format == ArchiveFormat::Zip
-                && ui.button(" Add Files").clicked() {
+                && ui.button("📁 Add Files").clicked() {
                     if let Ok(files) = native_dialog::FileDialog::new()
                         .show_open_multiple_file()
                     {
@@ -585,12 +581,12 @@ impl ArchiveViewer {
             ui.separator();
             
             // View options
-            ui.toggle_value(&mut self.tree_view, " Tree");
+            ui.toggle_value(&mut self.tree_view, "🌲 Tree");
             ui.checkbox(&mut self.show_hidden, "Hidden");
             
             // Search
             ui.separator();
-            ui.label("");
+            ui.label("🔍");
             ui.add(egui::TextEdit::singleline(&mut self.filter_query)
                 .hint_text("Filter...")
                 .desired_width(150.0));
@@ -750,7 +746,7 @@ impl ArchiveViewer {
                     
                     ui.horizontal(|ui| {
                         ui.label(&indent);
-                        let icon = if is_expanded { "" } else { "" };
+                        let icon = if is_expanded { "📂" } else { "📁" };
                         if ui.selectable_label(false, format!("{} {}", icon, folder_name)).clicked() {
                             if is_expanded {
                                 self.expanded_folders.remove(&full_path);
@@ -809,7 +805,7 @@ impl ArchiveViewer {
                     }
                 }
                 
-                let icon = if entry.is_dir { "" } else { Self::get_file_icon(&entry.path) };
+                let icon = if entry.is_dir { "📁" } else { Self::get_file_icon(&entry.path) };
                 
                 if ui.selectable_label(is_selected, format!("{} {}", icon, entry.path)).clicked() {
                     if !ui.input(|i| i.modifiers.ctrl) {
@@ -983,9 +979,9 @@ impl ArchiveViewer {
             });
     }
     
-    // ---------------------------------------------------------------------------
+    // ═══════════════════════════════════════════════════════════════════════════
     // HELPERS
-    // ---------------------------------------------------------------------------
+    // ═══════════════════════════════════════════════════════════════════════════
     
     fn format_size(bytes: u64) -> String {
         const KB: u64 = 1024;
@@ -1006,19 +1002,19 @@ impl ArchiveViewer {
     fn get_file_icon(path: &str) -> &'static str {
         let ext = crate::fontcase::ascii_lower(path.rsplit('.').next().unwrap_or(""));
         match ext.as_str() {
-            "txt" | "md" | "log" => "",
-            "rs" | "py" | "js" | "ts" | "c" | "cpp" | "h" | "java" | "go" => "",
-            "html" | "htm" | "css" => "(web)",
-            "json" | "xml" | "yaml" | "toml" => "",
-            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "svg" | "webp" => "",
-            "mp3" | "wav" | "flac" | "ogg" | "m4a" => "",
-            "mp4" | "mkv" | "avi" | "mov" | "webm" => "",
-            "pdf" => "",
-            "doc" | "docx" | "odt" | "rtf" => "",
-            "xls" | "xlsx" | "ods" | "csv" => "",
-            "zip" | "rar" | "7z" | "tar" | "gz" => "",
-            "exe" | "msi" | "dll" => "(settings)",
-            _ => "",
+            "txt" | "md" | "log" => "📝",
+            "rs" | "py" | "js" | "ts" | "c" | "cpp" | "h" | "java" | "go" => "💻",
+            "html" | "htm" | "css" => "🌐",
+            "json" | "xml" | "yaml" | "toml" => "📋",
+            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "svg" | "webp" => "🖼",
+            "mp3" | "wav" | "flac" | "ogg" | "m4a" => "🎵",
+            "mp4" | "mkv" | "avi" | "mov" | "webm" => "🎬",
+            "pdf" => "📕",
+            "doc" | "docx" | "odt" | "rtf" => "📄",
+            "xls" | "xlsx" | "ods" | "csv" => "📊",
+            "zip" | "rar" | "7z" | "tar" | "gz" => "📦",
+            "exe" | "msi" | "dll" => "⚙️",
+            _ => "📄",
         }
     }
 }
