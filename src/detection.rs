@@ -72,6 +72,17 @@ impl SuspicionLevel {
             Self::Critical => Some(ViolationSeverity::Critical),
         }
     }
+
+    /// Convert to u8 for wire transport
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Low => 1,
+            Self::Medium => 2,
+            Self::High => 3,
+            Self::Critical => 4,
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -203,6 +214,20 @@ pub enum DetectionAction {
     QuarantinePage,
     ResetTrust,
     NotifyMcp,
+}
+
+impl DetectionAction {
+    /// Convert to u8 for wire transport
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            Self::LogOnly => 0,
+            Self::WarnUser => 1,
+            Self::BlockResource => 2,
+            Self::QuarantinePage => 3,
+            Self::ResetTrust => 4,
+            Self::NotifyMcp => 5,
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

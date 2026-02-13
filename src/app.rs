@@ -25,7 +25,9 @@ use crate::family_profiles::{ProfileManager, ProfileType, Profile, Action};
 use crate::syntax::SyntaxHighlighter;
 use crate::detection::DetectionEngine;
 use crate::mcp_server_native::{McpNativeServer, NativeServerConfig, McpBridge};
+use crate::mcp_protocol::{McpCommand, McpResponse, ErrorCode};
 use crate::poisoning::{PoisoningEngine, PoisonMode};
+use crate::script_engine::ScriptEngine;
 use crate::viewers::{
     archive::ArchiveViewer,
     audio::AudioViewer,
@@ -191,6 +193,18 @@ pub struct BrowserApp {
     // Fingerprint poisoning engine
     poison_engine: PoisoningEngine,
     show_poisoning_popover: bool,
+    /// Dedicated script engine for poisoning injection (runs JS in isolated context)
+    poison_script_engine: ScriptEngine,
+
+    // Detection/poisoning integration state
+    /// Page context for current active tab — fed to detection engine each frame
+    detection_page_ctx: crate::detection::PageContext,
+    /// URL that was last analyzed by detection engine (to avoid re-analyzing same URL)
+    detection_last_analyzed_url: Option<String>,
+    /// URL that was last poisoned (to avoid re-poisoning same page)
+    poison_last_applied_url: Option<String>,
+    /// Whether the poisoning badge in the toolbar should pulse (recently applied)
+    poison_badge_pulse: bool,
 
     // UI state
     dark_mode: bool,
@@ -255,6 +269,29 @@ impl BrowserApp {
                 self.network_active_connection = Some(conn_id);
                 self.network_last_net_sample = Some(Instant::now());
                 self.smart_history.visit(url, url, None);
+
+                // Reset detection/poisoning state for new navigation
+                self.detection_last_analyzed_url = None;
+                self.poison_last_applied_url = None;
+                self.poison_badge_pulse = false;
+
+                // Build fresh page context for detection engine
+                let domain = extract_domain_from_url(url);
+                self.detection_page_ctx = crate::detection::PageContext {
+                    url: url.to_string(),
+                    domain: domain.clone(),
+                    trust_level: crate::sandbox::TrustLevel::Untrusted,
+                    ..Default::default()
+                };
+
+                // Set up honeypots for untrusted sites
+                if let Some(tab_id) = self.engine.active_tab_id() {
+                    self.detection_engine.setup_honeypots(
+                        tab_id.0,
+                        crate::sandbox::TrustLevel::Untrusted,
+                    );
+                }
+
                 self.engine.navigate(url);
             }
             Err(reason) => {
@@ -572,6 +609,14 @@ impl BrowserApp {
             // Fingerprint poisoning engine (conservative by default)
             poison_engine: PoisoningEngine::new(),
             show_poisoning_popover: false,
+            poison_script_engine: ScriptEngine::new(),
+
+            // Detection/poisoning integration state
+            detection_page_ctx: crate::detection::PageContext::default(),
+            detection_last_analyzed_url: None,
+            poison_last_applied_url: None,
+            poison_badge_pulse: false,
+
             dark_mode: true,
             theme_preset: ThemePreset::SassyRedesign,
             zoom_level: 1.0,
@@ -806,6 +851,8 @@ impl BrowserApp {
             ui.separator();
             self.render_network_indicator(ui);
             self.render_vault_autofill(ui);
+            ui.separator();
+            self.render_poisoning_badge(ui);
         });
     }
 
@@ -1388,6 +1435,8 @@ impl BrowserApp {
                         ui.label(RichText::new("Parents: Review requests in the Profiles panel.").italics().color(Color32::GRAY));
                     });
                 } else {
+                    // Detection alert banner above web content
+                    self.render_detection_alert_banner(ui);
                     self.render_web_content(ctx, ui, &url);
                     self.network_monitor.cleanup_old(Duration::from_secs(30));
                 }
@@ -2056,12 +2105,248 @@ impl BrowserApp {
             });
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MCP COMMAND HANDLER — Processes commands from native MCP server
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    fn handle_mcp_command(&mut self, cmd: McpCommand) -> McpResponse {
+        match cmd {
+            McpCommand::Ping { seq } => McpResponse::Pong { seq },
+
+            McpCommand::Navigate { url, .. } => {
+                self.guarded_navigate(&url);
+                McpResponse::Ok { message: format!("Navigating to {}", url) }
+            }
+
+            McpCommand::GoBack => {
+                self.engine.go_back();
+                McpResponse::Ok { message: "Navigated back".into() }
+            }
+
+            McpCommand::GoForward => {
+                self.engine.go_forward();
+                McpResponse::Ok { message: "Navigated forward".into() }
+            }
+
+            McpCommand::Reload => {
+                self.engine.reload();
+                McpResponse::Ok { message: "Reloading".into() }
+            }
+
+            McpCommand::ReadPage => {
+                if let Some(tab) = self.engine.active_tab() {
+                    match &tab.content {
+                        TabContent::Web { url, title, .. } => {
+                            McpResponse::PageContent {
+                                url: url.clone(),
+                                title: title.clone(),
+                                text_content: format!("Page: {} — {}", title, url),
+                                html_snippet: None,
+                                trust_level: 0, // TODO: wire to real trust level
+                            }
+                        }
+                        _ => McpResponse::Error {
+                            code: ErrorCode::NotAvailable,
+                            message: "Active tab is not a web page".into(),
+                        },
+                    }
+                } else {
+                    McpResponse::Error {
+                        code: ErrorCode::NotFound,
+                        message: "No active tab".into(),
+                    }
+                }
+            }
+
+            McpCommand::GetSecurityStatus => {
+                let (url, _domain) = if let Some(tab) = self.engine.active_tab() {
+                    if let TabContent::Web { url, .. } = &tab.content {
+                        (url.clone(), extract_domain_from_url(url))
+                    } else {
+                        (String::new(), String::new())
+                    }
+                } else {
+                    (String::new(), String::new())
+                };
+
+                McpResponse::SecurityStatus {
+                    url,
+                    trust_level: 0,
+                    trust_description: "Untrusted".into(),
+                    violation_count: 0,
+                    honeypots_active: self.detection_engine.enabled,
+                    detection_alerts: self.detection_engine.active_alert_count(),
+                    cumulative_score: self.detection_engine.cumulative_score(),
+                }
+            }
+
+            McpCommand::GetDetectionAlerts => {
+                let alerts: Vec<_> = self.detection_engine.recent_alerts(20)
+                    .iter()
+                    .map(|a| crate::mcp_protocol::DetectionAlertWire {
+                        rule_name: a.rule_name.clone(),
+                        level: a.level.to_u8(),
+                        description: a.description.clone(),
+                        url: a.url.clone(),
+                        domain: a.domain.clone(),
+                        score: a.score,
+                        honeypot_triggered: a.honeypot_triggered,
+                        action: a.action.to_u8(),
+                    })
+                    .collect();
+                McpResponse::DetectionAlerts {
+                    alerts,
+                    total_emitted: self.detection_engine.total_alerts(),
+                    cumulative_score: self.detection_engine.cumulative_score(),
+                }
+            }
+
+            McpCommand::ClearDetectionAlerts => {
+                self.detection_engine.clear();
+                McpResponse::Ok { message: "Detection alerts cleared".into() }
+            }
+
+            McpCommand::ListTabs => {
+                let tabs: Vec<_> = self.engine.tabs()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| crate::mcp_protocol::TabInfo {
+                        index: i,
+                        title: t.title(),
+                        url: match &t.content {
+                            TabContent::Web { url, .. } => url.clone(),
+                            _ => format!("sassy://{}", t.title().to_lowercase()),
+                        },
+                        loading: matches!(&t.content, TabContent::Web { loading: true, .. }),
+                        trust_level: 0,
+                    })
+                    .collect();
+                let active = self.engine.active_tab_index();
+                McpResponse::TabList { tabs, active_index: active }
+            }
+
+            McpCommand::NewTab { url } => {
+                self.engine.new_tab();
+                if let Some(u) = url {
+                    self.guarded_navigate(&u);
+                }
+                McpResponse::Ok { message: "New tab created".into() }
+            }
+
+            McpCommand::GetBrowserInfo => {
+                McpResponse::BrowserInfo {
+                    name: "Sassy Browser".into(),
+                    version: "2.1.0".into(),
+                    engine: "SassyEngine (Rust)".into(),
+                    features: vec![
+                        "fingerprint-poisoning".into(),
+                        "honeypot-detection".into(),
+                        "mcp-native-binary".into(),
+                        "4-layer-sandbox".into(),
+                        "password-vault".into(),
+                        "family-profiles".into(),
+                    ],
+                }
+            }
+
+            McpCommand::Goodbye => {
+                McpResponse::Ok { message: "Goodbye".into() }
+            }
+
+            // Commands not yet fully implemented
+            _ => McpResponse::Error {
+                code: ErrorCode::NotAvailable,
+                message: "Command not yet implemented".into(),
+            },
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // POISONING BADGE — Toolbar indicator for fingerprint poisoning status
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    fn render_poisoning_badge(&mut self, ui: &mut egui::Ui) {
+        let (badge_text, badge_color) = match self.poison_engine.mode {
+            PoisonMode::Off => ("FP: Off", Color32::GRAY),
+            PoisonMode::Conservative => ("FP: Conservative", Color32::from_rgb(100, 180, 255)),
+            PoisonMode::Aggressive => ("FP: Aggressive", Color32::from_rgb(255, 140, 60)),
+        };
+
+        let badge = egui::Button::new(
+            RichText::new(badge_text).small().color(badge_color)
+        ).frame(false);
+
+        let response = ui.add(badge)
+            .on_hover_text(format!(
+                "Fingerprint Poisoning: {}\nClick to change mode",
+                self.poison_engine.mode_description()
+            ));
+
+        if response.clicked() {
+            self.show_poisoning_popover = !self.show_poisoning_popover;
+        }
+
+        // Show popover when toggled
+        if self.show_poisoning_popover {
+            egui::Area::new(egui::Id::new("poison_popover"))
+                .fixed_pos(response.rect.left_bottom())
+                .order(egui::Order::Foreground)
+                .show(ui.ctx(), |ui| {
+                    egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        ui.set_min_width(200.0);
+                        ui.label(RichText::new("Fingerprint Poisoning").strong());
+                        ui.separator();
+
+                        if ui.radio(self.poison_engine.mode == PoisonMode::Off, "Off — Chrome spoof only").clicked() {
+                            self.poison_engine.mode = PoisonMode::Off;
+                            self.poison_last_applied_url = None; // Force re-apply
+                            self.show_poisoning_popover = false;
+                        }
+                        if ui.radio(self.poison_engine.mode == PoisonMode::Conservative, "Conservative — Light noise").clicked() {
+                            self.poison_engine.mode = PoisonMode::Conservative;
+                            self.poison_last_applied_url = None;
+                            self.show_poisoning_popover = false;
+                        }
+                        if ui.radio(self.poison_engine.mode == PoisonMode::Aggressive, "Aggressive — Maximum unlinkability").clicked() {
+                            self.poison_engine.mode = PoisonMode::Aggressive;
+                            self.poison_last_applied_url = None;
+                            self.show_poisoning_popover = false;
+                        }
+
+                        ui.separator();
+                        ui.label(RichText::new(self.poison_engine.mode_description()).small().color(Color32::GRAY));
+                    });
+                });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DETECTION ALERT BANNER — Shows above page content when threats detected
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    fn render_detection_alert_banner(&mut self, ui: &mut egui::Ui) {
+        // Delegate to the detection engine's built-in banner renderer
+        let _has_alerts = self.detection_engine.render_alert_banner(ui);
+    }
+
     fn render_status_bar(&self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("status_bar")
             .exact_height(22.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(&self.status_message);
+
+                    // Show detection alert count if any
+                    let alert_count = self.detection_engine.active_alert_count();
+                    if alert_count > 0 {
+                        ui.separator();
+                        ui.label(
+                            RichText::new(format!("{} alert{}", alert_count, if alert_count == 1 { "" } else { "s" }))
+                                .color(Color32::from_rgb(255, 100, 100))
+                                .small()
+                        );
+                    }
+
                     // Show time left for restricted profiles
                     if let Some(profile) = self.profile_manager.active_profile() {
                         if profile.is_restricted() {
@@ -2074,6 +2359,24 @@ impl BrowserApp {
                         ui.label(chrono::Local::now().format("%H:%M:%S").to_string());
                         ui.separator();
                         ui.label("v2.1.0");
+                        ui.separator();
+                        // Poisoning mode indicator in status bar
+                        let poison_label = match self.poison_engine.mode {
+                            PoisonMode::Off => "FP:Off",
+                            PoisonMode::Conservative => "FP:Con",
+                            PoisonMode::Aggressive => "FP:Agg",
+                        };
+                        let poison_color = match self.poison_engine.mode {
+                            PoisonMode::Off => Color32::GRAY,
+                            PoisonMode::Conservative => Color32::from_rgb(100, 180, 255),
+                            PoisonMode::Aggressive => Color32::from_rgb(255, 140, 60),
+                        };
+                        ui.label(RichText::new(poison_label).small().color(poison_color));
+                        ui.separator();
+                        // MCP server status
+                        if self.mcp_bridge.running.load(std::sync::atomic::Ordering::Relaxed) {
+                            ui.label(RichText::new("MCP").small().color(Color32::from_rgb(100, 200, 100)));
+                        }
                         ui.separator();
                         ui.label(format!("Zoom: {:.0}%", self.zoom_level * 100.0));
                         ui.separator();
@@ -3984,6 +4287,66 @@ impl eframe::App for BrowserApp {
         // Process any pending messages from webviews
         self.engine.process_messages();
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // DETECTION ENGINE — Analyze active page each frame on trust levels 0-1
+        // ═══════════════════════════════════════════════════════════════════════
+        if let Some(tab) = self.engine.active_tab() {
+            if let TabContent::Web { url, loading, .. } = &tab.content {
+                let url_owned = url.clone();
+                let is_loading = *loading;
+
+                // Only run detection on loaded pages we haven't analyzed yet
+                if !is_loading && self.detection_last_analyzed_url.as_deref() != Some(&url_owned) {
+                    // Update page context URL/domain
+                    self.detection_page_ctx.url = url_owned.clone();
+                    self.detection_page_ctx.domain = extract_domain_from_url(&url_owned);
+                    self.detection_page_ctx.last_updated = Instant::now();
+
+                    // Run detection analysis
+                    let _alerts = self.detection_engine.analyze(&self.detection_page_ctx);
+                    self.detection_last_analyzed_url = Some(url_owned.clone());
+
+                    // Apply fingerprint poisoning (once per page load)
+                    if self.poison_last_applied_url.as_deref() != Some(&url_owned) {
+                        if self.poison_engine.should_poison(&url_owned) {
+                            // Inject fingerprint poisoning via dedicated script engine
+                            let _result = self.poison_engine.poison_page(
+                                self.poison_script_engine.interpreter_mut(),
+                                &url_owned,
+                            );
+                            self.poison_badge_pulse = true;
+                            self.status_message = format!(
+                                "Fingerprint poisoning active: {}",
+                                self.poison_engine.mode_description()
+                            );
+                        } else {
+                            self.poison_badge_pulse = false;
+                        }
+                        self.poison_last_applied_url = Some(url_owned);
+                    }
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // MCP BRIDGE — Poll pending commands each frame
+        // ═══════════════════════════════════════════════════════════════════════
+        {
+            let commands = self.mcp_bridge.take_commands();
+            for (seq, cmd) in commands {
+                let response = self.handle_mcp_command(cmd);
+                self.mcp_bridge.push_response(seq, response);
+            }
+
+            // Forward detection alerts to MCP bridge for connected clients
+            if let Ok(mut shared) = self.detection_engine.shared_alerts().lock() {
+                if !shared.is_empty() {
+                    let alerts: Vec<_> = shared.drain(..).collect();
+                    self.mcp_bridge.push_detection_alerts(alerts);
+                }
+            }
+        }
+
         // Handle download requests after policy checks
         let pending_downloads = self.engine.take_pending_downloads();
         for (url, suggested) in pending_downloads {
@@ -4141,6 +4504,15 @@ impl eframe::App for BrowserApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.render_content(ctx, ui);
         });
+    }
+}
+
+/// Extract domain from a URL string (best-effort, no panic)
+fn extract_domain_from_url(url: &str) -> String {
+    if let Ok(parsed) = Url::parse(url) {
+        parsed.host_str().unwrap_or("unknown").to_string()
+    } else {
+        "unknown".to_string()
     }
 }
 
