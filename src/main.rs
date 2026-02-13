@@ -1,8 +1,8 @@
-//! Sassy Browser v2.0.0 - Pure Rust Web Browser & Universal File Viewer
+﻿//! Sassy Browser v2.0.0 - Pure Rust Web Browser & Universal File Viewer
 //!
-//! -------------------------------------------------------------------------------
+//! â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //! NO CHROME. NO GOOGLE. NO WEBKIT. NO WEBVIEW2. NO TELEMETRY. PURE RUST.
-//! -------------------------------------------------------------------------------
+//! â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //!
 //! SECURITY ARCHITECTURE - 4 SANDBOX LAYERS:
 //! ==========================================
@@ -21,55 +21,55 @@
 //!
 //! FILE FORMAT SUPPORT - 100+ formats (see viewers/)
 
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CORE MODULES
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 mod app;                    // Main application UI (egui)
 mod file_handler;           // Universal file type detection and loading
 mod viewers;                // File type viewers (PDF, images, etc.)
 
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // PURE RUST BROWSER ENGINE
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 mod js;                     // SassyScript JavaScript interpreter
 mod dom;                    // DOM simulation
 mod style;                  // CSS engine
 mod layout;                 // Layout engine (flexbox, etc.)
-mod layout_engine;          // CSS layout engine (taffy - flexbox/grid)
+mod layout_engine;          // CSS layout engine (taffy-based)
 mod paint;                  // Painting/rendering
 mod renderer;               // HTML renderer
 mod engine;                 // Core browser engine
 mod script_engine;          // Script execution
 mod html_renderer;          // HTML to egui rendering
 
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // SECURITY & SANDBOXING
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 mod sandbox;                // Page sandbox, popup blocker, download quarantine
 mod cookies;                // Cookie storage (local only, no tracking)
 mod crypto;                 // Cryptographic identity (local keys)
 mod auth;                   // Authentication, licensing, Tailscale, phone sync
 
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // DISRUPTOR FEATURES - Kills paid software
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 mod network_monitor;        // Always-visible activity indicator, NO hidden traffic
 mod password_vault;         // Built-in password manager (ChaCha20-Poly1305, Argon2id)
 mod smart_history;          // 14.7s delay history, NSFW auto-detection
 mod family_profiles;        // Adult/Teen/Kid profiles, time limits, parental controls
 
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // DEVELOPER TOOLS
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 mod console;                // Developer console
 mod rest_client;            // Built-in REST client
 mod json_viewer;            // JSON pretty-print and navigation
 mod syntax;                 // Syntax highlighting
 mod markdown;               // Markdown renderer
 
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MCP - MULTI-AGENT AI SYSTEM (Grok + Claude, NOT Google)
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 mod mcp;                    // Model Context Protocol orchestrator
 mod mcp_panel;              // MCP UI panel
 mod mcp_api;                // API clients (xAI Grok, Anthropic Claude - NO Google)
@@ -77,29 +77,29 @@ mod mcp_fs;                 // Sandboxed file system for AI
 mod mcp_git;                // Git integration
 mod mcp_server;             // MCP Server - expose browser as MCP server for Claude Desktop
 
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // NETWORKING & SYNC (NO GOOGLE CLOUD)
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 mod network;                // HTTP networking (ureq - no Google APIs)
 mod protocol;               // Protocol handling
 mod sync;                   // Phone sync via Tailscale (peer-to-peer, no cloud)
 
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // UI & INPUT
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 mod ui;                     // UI components
 mod input;                  // Input handling
 mod hittest;                // Hit testing
 mod imaging;                // Image loading/caching
 
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // PRINTING - Universal print system
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 mod print;                  // Cross-platform print dialog and preview
 
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // UTILITIES
-// -------------------------------------------------------------------------------
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 mod ai;                     // AI assistant (optional, prefers local/open models)
 mod data;                   // Data structures
 mod setup;                  // First-run setup
@@ -129,14 +129,14 @@ fn main() {
         .init();
 
     println!(r#"
-+-------------------------------------------------------------------------------+
-|                    Sassy Browser v2.0.0 - Pure Rust Edition                   |
-|                                                                               |
-|   No Chrome. No Google. No WebKit. No WebView2. No Telemetry. Just Freedom.   |
-|                                                                               |
-|   Built with 100% Rust: html5ever, cssparser, fontdue, softbuffer, egui       |
-|   Custom JS engine: SassyScript (no V8, no JIT exploits, no WASM vulns)       |
-+-------------------------------------------------------------------------------+
+â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+â•‘                    Sassy Browser v2.0.0 - Pure Rust Edition                   â•‘
+â•‘                                                                               â•‘
+â•‘   No Chrome. No Google. No WebKit. No WebView2. No Telemetry. Just Freedom.   â•‘
+â•‘                                                                               â•‘
+â•‘   Built with 100% Rust: html5ever, cssparser, fontdue, softbuffer, egui       â•‘
+â•‘   Custom JS engine: SassyScript (no V8, no JIT exploits, no WASM vulns)       â•‘
+â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 "#);
 
     tracing::info!("Starting Sassy Browser v2.0.0 - Pure Rust Edition");
@@ -185,18 +185,8 @@ fn main() {
                 return;
             }
             path if std::path::Path::new(path).exists() => {
-                // Open file directly - convert to absolute path for proper file:// URL
-                let abs_path = std::fs::canonicalize(path)
-                    .unwrap_or_else(|_| std::path::PathBuf::from(path));
-                // Create proper file:// URL (file:// + / + path for Unix, file:/// + C:/... for Windows)
-                let file_url = if cfg!(windows) {
-                    // Windows: convert backslashes to forward slashes
-                    format!("file:///{}", abs_path.display().to_string().replace('\\', "/"))
-                } else {
-                    // Unix: path already starts with /, so file:// + path = file:///path
-                    format!("file://{}", abs_path.display())
-                };
-                run_browser(Some(file_url));
+                // Open file directly
+                run_browser(Some(format!("file://{}", path)));
                 return;
             }
             _ => {
@@ -210,23 +200,18 @@ fn main() {
     run_browser(None);
 }
 
-fn run_browser(url: Option<String>) {
+fn run_browser(_url: Option<String>) {
     // Check first-run setup
     if setup::ensure_setup().is_none() {
         tracing::warn!("Setup cancelled by user");
         return;
     }
-
-    // Enable webview mode by default for full web browsing capability
-    if std::env::var("SASSY_ENABLE_WEBVIEW").is_err() {
-        std::env::set_var("SASSY_ENABLE_WEBVIEW", "1");
-    }
-
+    
     // Run the egui-based browser with pure Rust file viewers
     // Web content rendered by our custom engine (dom, style, layout, paint)
-    if let Err(e) = app::run_browser_with_url(url) {
+    if let Err(e) = app::run_browser() {
         tracing::error!("Browser error: {}", e);
-        eprintln!("[X] Fatal error: {}", e);
+        eprintln!("âŒ Fatal error: {}", e);
         std::process::exit(1);
     }
 }
@@ -235,14 +220,8 @@ fn run_pure_engine() {
     // Run the pure Rust engine directly (winit + softbuffer)
     // This bypasses egui and uses our custom rendering pipeline
     tracing::info!("Starting pure Rust engine (winit + softbuffer)");
-<<<<<<< HEAD
-    println!("Using pure Rust rendering: winit + softbuffer (no GPU, no WebKit, no Chrome)");
-
-    // Call the engine module's browser implementation
-=======
 
     // Use the pure Rust rendering engine (dom + style + layout + paint)
->>>>>>> origin/claude/happy-torvalds
     engine::run_browser(None);
 }
 
@@ -296,7 +275,7 @@ fn reset_data() {
             if let Err(e) = std::fs::remove_dir_all(&sassy_dir) {
                 eprintln!("Failed to remove data: {}", e);
             } else {
-                println!("[OK] Data reset complete");
+                println!("âœ… Data reset complete");
             }
         } else {
             println!("No data to reset");
@@ -382,13 +361,13 @@ SUPPORTED FILE FORMATS (100+):
     Code:        100+ languages with syntax highlighting
 
 PRIVACY PROMISE:
-    [OK] No telemetry
-    [OK] No analytics
-    [OK] No phone-home
-    [OK] No cloud sync (use Tailscale for peer-to-peer)
-    [OK] No Google anything
-    [OK] No Microsoft anything
-    [OK] 100% open source Rust
+    âœ“ No telemetry
+    âœ“ No analytics
+    âœ“ No phone-home
+    âœ“ No cloud sync (use Tailscale for peer-to-peer)
+    âœ“ No Google anything
+    âœ“ No Microsoft anything
+    âœ“ 100% open source Rust
 
 https://sassyconsultingllc.com/browser
 "#);
