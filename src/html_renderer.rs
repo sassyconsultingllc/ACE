@@ -1084,6 +1084,32 @@ impl HtmlRenderer {
     pub fn clear_cache(&mut self) {
         self.cached_doc = None;
     }
+
+    /// Search for text in cached document, return match count
+    pub fn find_text(&self, query: &str) -> usize {
+        if query.is_empty() {
+            return 0;
+        }
+        let Some(doc) = &self.cached_doc else { return 0 };
+        let query_lower = query.to_lowercase();
+        let mut count = 0;
+        fn count_in_nodes(nodes: &[HtmlNode], query: &str, count: &mut usize) {
+            for node in nodes {
+                match node {
+                    HtmlNode::Text(text) => {
+                        let text_lower = text.to_lowercase();
+                        *count += text_lower.matches(query).count();
+                    }
+                    HtmlNode::Element { children, .. } => {
+                        count_in_nodes(children, query, count);
+                    }
+                    HtmlNode::Script(_) => {}
+                }
+            }
+        }
+        count_in_nodes(&doc.nodes, &query_lower, &mut count);
+        count
+    }
 }
 
 impl Default for HtmlRenderer {

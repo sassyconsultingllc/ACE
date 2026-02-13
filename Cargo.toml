@@ -71,6 +71,7 @@ ring = "0.17"
 argon2 = "0.5"
 chacha20poly1305 = "0.10"
 zeroize = { version = "1.8", features = ["derive"] }
+regex = "1"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # IMAGE HANDLING - Every format, Pure Rust

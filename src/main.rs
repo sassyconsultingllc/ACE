@@ -116,6 +116,9 @@ mod browser;
 // Case normalization helpers (global rule for canonical comparisons)
 mod fontcase;
 
+// Ad blocking (EasyList/EasyPrivacy filter lists)
+mod adblock;
+
 use std::env;
 
 fn main() {
@@ -232,9 +235,14 @@ fn run_pure_engine() {
     // Run the pure Rust engine directly (winit + softbuffer)
     // This bypasses egui and uses our custom rendering pipeline
     tracing::info!("Starting pure Rust engine (winit + softbuffer)");
+<<<<<<< HEAD
     println!("Using pure Rust rendering: winit + softbuffer (no GPU, no WebKit, no Chrome)");
 
     // Call the engine module's browser implementation
+=======
+
+    // Use the pure Rust rendering engine (dom + style + layout + paint)
+>>>>>>> origin/claude/happy-torvalds
     engine::run_browser(None);
 }
 
@@ -242,7 +250,42 @@ fn serve_phone_app() {
     println!("Starting phone sync server...");
     println!("Uses Tailscale for peer-to-peer sync - NO cloud, NO Google, NO tracking");
     println!("Scan the QR code with your phone to connect.");
-    // TODO: Start phone sync server via sync module
+
+    // Detect Tailscale for secure peer-to-peer connectivity
+    let ts = sync::TailscaleInfo::detect();
+    if ts.available {
+        if let Some(ref ip) = ts.ip {
+            println!("Tailscale detected: {} ({})", ip, ts.hostname.as_deref().unwrap_or("unknown"));
+        }
+    } else {
+        println!("Tailscale not detected — falling back to localhost only.");
+    }
+
+    // Start the WebSocket sync server
+    let port = 8765u16;
+    let mut server = sync::SyncServer::new(port);
+    match server.start() {
+        Ok(()) => {
+            println!("Phone sync server listening on port {}", port);
+            if let Some(url) = ts.connection_url(port) {
+                println!("Connect URL: {}", url);
+            } else {
+                println!("Connect URL: ws://127.0.0.1:{}", port);
+            }
+            println!("Press Ctrl+C to stop.");
+            // Block the main thread — server runs on background threads
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                if !server.is_running() {
+                    break;
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to start sync server: {}", e);
+            std::process::exit(1);
+        }
+    }
 }
 
 fn reset_data() {

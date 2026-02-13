@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(timeout 120 cargo check:*)",
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Bash(done)",
+      "Bash(comm:*)",
+      "Bash(grep:*)",
+      "Bash(du:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo doc:*)"
+    ]
+  }
+}

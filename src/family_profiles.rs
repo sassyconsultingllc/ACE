@@ -839,16 +839,31 @@ fn generate_id() -> String {
 }
 
 fn hash_pin(pin: &str) -> String {
-    // Simple hash for demo - in production use Argon2
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut hasher = DefaultHasher::new();
-    pin.hash(&mut hasher);
-    format!("{:x}", hasher.finish())
+    use argon2::{Argon2, PasswordHasher};
+    use argon2::password_hash::SaltString;
+    use rand::rngs::OsRng;
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(pin.as_bytes(), &salt)
+        .expect("Argon2 hashing should not fail")
+        .to_string()
 }
 
 fn verify_pin(pin: &str, stored: &str) -> bool {
-    hash_pin(pin) == stored
+    use argon2::{Argon2, PasswordVerifier};
+    use argon2::PasswordHash;
+    // Support legacy DefaultHasher format (16-char hex) for migration
+    if stored.len() <= 16 && stored.chars().all(|c| c.is_ascii_hexdigit()) {
+        // Legacy hash — verify with old method, caller should re-hash on success
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        pin.hash(&mut hasher);
+        return format!("{:x}", hasher.finish()) == stored;
+    }
+    // Argon2 hash format: $argon2id$v=...
+    let Ok(parsed) = PasswordHash::new(stored) else { return false };
+    Argon2::default().verify_password(pin.as_bytes(), &parsed).is_ok()
 }
 
 pub fn extract_domain(url: &str) -> String {

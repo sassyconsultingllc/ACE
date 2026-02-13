@@ -8,7 +8,6 @@
 
 use crate::auth::{AuthManager, FirstRunState, FirstRunStep, DeviceType, TailscaleManager, PhoneSync, SyncType};
 use crate::browser::{BrowserEngine, DownloadState, Tab, TabContent, TabId, HistoryManager};
-use crate::console::DevConsole;
 use crate::file_handler::{FileType, OpenFile};
 use crate::html_renderer::HtmlRenderer;
 use crate::extensions::ExtensionManager;
@@ -44,6 +43,18 @@ struct TrackedDownload {
     conn_id: u64,
     last_bytes: u64,
     completed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ThemePreset {
+    SassyBrand,
+    SassyRedesign,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LeftSidebarMode {
+    Bookmarks,
+    History,
 }
 
 /// Browser application state
@@ -99,7 +110,7 @@ pub struct BrowserApp {
     password_generator_opts: PasswordGeneratorOptions,
     generated_password: String,
     
-    // ⏱ Smart History - 14.7s delay, NSFW detection
+    // ⏱️ Smart History - 14.7s delay, NSFW detection
     history_manager: HistoryManager,
     smart_history: SmartHistory,
     smart_history_active_url: Option<String>,
@@ -147,17 +158,23 @@ pub struct BrowserApp {
     
     // HTML/JS renderer for web content
     html_renderer: HtmlRenderer,
-    // Developer Console (F12)
-    dev_console: DevConsole,
     // UI icon textures (loaded at startup)
     icons: std::collections::HashMap<String, TextureHandle>,
-
+    
     // UI state
     dark_mode: bool,
+    theme_preset: ThemePreset,
     zoom_level: f32,
     show_dev_tools: bool,
     find_bar_visible: bool,
     find_query: String,
+    new_tab_search_query: String,
+
+    // Sidebar state
+    left_sidebar_visible: bool,
+    left_sidebar_mode: LeftSidebarMode,
+    ai_sidebar_visible: bool,
+    ai_query_input: String,
     
     // Context menu state
     #[allow(dead_code)]
@@ -176,6 +193,15 @@ pub struct BrowserApp {
     bookmark_export_buffer: String,
     download_url_input: String,
     extension_load_path: String,
+
+    // Clear data dialog state
+    show_clear_data_dialog: bool,
+    clear_data_history: bool,
+    clear_data_downloads: bool,
+    clear_data_cache: bool,
+
+    // Find bar match count
+    find_match_count: usize,
 }
 
 impl BrowserApp {
@@ -359,7 +385,7 @@ impl BrowserApp {
 
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         configure_fonts(&cc.egui_ctx);
-        configure_style(&cc.egui_ctx, true);
+        configure_style(&cc.egui_ctx, true, ThemePreset::SassyRedesign);
         
         let auth = AuthManager::new();
         let mut tailscale = TailscaleManager::new();
@@ -491,13 +517,18 @@ impl BrowserApp {
             video_viewer: VideoViewer::new(),
             ebook_viewer: EbookViewer::new(),
             html_renderer: HtmlRenderer::new(),
-            dev_console: DevConsole::new(),
             icons,
             dark_mode: true,
+            theme_preset: ThemePreset::SassyRedesign,
             zoom_level: 1.0,
             show_dev_tools: false,
             find_bar_visible: false,
             find_query: String::new(),
+            new_tab_search_query: String::new(),
+            left_sidebar_visible: false,
+            left_sidebar_mode: LeftSidebarMode::Bookmarks,
+            ai_sidebar_visible: false,
+            ai_query_input: String::new(),
             context_menu_pos: None,
             context_menu_link: None,
             status_message: "Ready".into(),
@@ -506,6 +537,11 @@ impl BrowserApp {
             bookmark_export_buffer: String::new(),
             download_url_input: String::new(),
             extension_load_path: String::new(),
+            show_clear_data_dialog: false,
+            clear_data_history: true,
+            clear_data_downloads: false,
+            clear_data_cache: true,
+            find_match_count: 0,
         }
     }
     
@@ -528,7 +564,7 @@ impl BrowserApp {
                     .clicked() {
                     self.engine.go_back();
                 }
-            } else if ui.add_enabled(can_back, egui::Button::new("<").min_size(Vec2::new(28.0, 24.0)))
+            } else if ui.add_enabled(can_back, egui::Button::new("*�").min_size(Vec2::new(28.0, 24.0)))
                 .on_hover_text("Back (Alt+Left)")
                 .clicked() {
                 self.engine.go_back();
@@ -540,17 +576,17 @@ impl BrowserApp {
                     .clicked() {
                     self.engine.go_forward();
                 }
-            } else if ui.add_enabled(can_forward, egui::Button::new(">").min_size(Vec2::new(28.0, 24.0)))
+            } else if ui.add_enabled(can_forward, egui::Button::new("▶").min_size(Vec2::new(28.0, 24.0)))
                 .on_hover_text("Forward (Alt+Right)")
                 .clicked() {
                 self.engine.go_forward();
             }
             
             if is_loading {
-                if ui.button("[X]").on_hover_text("Stop").clicked() {
+                if ui.button("✕").on_hover_text("Stop").clicked() {
                     self.engine.stop();
                 }
-            } else if ui.button("(refresh)").on_hover_text("Reload (F5)").clicked() {
+            } else if ui.button("↻").on_hover_text("Reload (F5)").clicked() {
                 self.engine.reload();
             }
             
@@ -607,6 +643,14 @@ impl BrowserApp {
                 }
             });
             
+            // Sidebar toggles
+            if ui.button("\u{1F4DA}").on_hover_text("Toggle Sidebar").clicked() {
+                self.left_sidebar_visible = !self.left_sidebar_visible;
+            }
+            if ui.button("\u{1F916}").on_hover_text("AI Assistant").clicked() {
+                self.ai_sidebar_visible = !self.ai_sidebar_visible;
+            }
+
             // Bookmark button (adds/removes on the bookmarks bar)
             let current_url = self.engine.address_bar_text().to_string();
             let is_bookmarked = self.engine.bookmarks.get_by_url(&current_url).is_some();
@@ -676,7 +720,7 @@ impl BrowserApp {
                     ui.close_menu();
                 }
                 if ui.checkbox(&mut self.dark_mode, "Dark Mode").clicked() {
-                    configure_style(ctx, self.dark_mode);
+                    configure_style(ctx, self.dark_mode, self.theme_preset);
                     ui.close_menu();
                 }
                 ui.separator();
@@ -707,11 +751,11 @@ impl BrowserApp {
         let active = self.network_monitor.active_count();
 
         ui.horizontal(|ui| {
-            let label = format!("Net {} <-{} ->{}", active, format_speed(down), format_speed(up));
+            let label = format!("Net {} ↓{} ↑{}", active, format_speed(down), format_speed(up));
             if ui.selectable_label(self.activity_indicator.expanded, label).clicked() {
                 self.activity_indicator.expanded = !self.activity_indicator.expanded;
             }
-            ui.label(format!("Total <-{} ->{}", format_bytes(total_down), format_bytes(total_up)));
+            ui.label(format!("Total ↓{} ↑{}", format_bytes(total_down), format_bytes(total_up)));
             if blocked > 0 {
                 ui.label(RichText::new(format!("Blocked {}", blocked)).color(Color32::RED));
             }
@@ -1191,13 +1235,18 @@ impl BrowserApp {
                 self.find_bar_visible = false;
             }
             
-            if ui.button("Find").clicked() || 
+            if ui.button("Find").clicked() ||
                (response.lost_focus() && ctx.input(|i| i.key_pressed(Key::Enter))) {
-                // TODO: Implement find in webview
+                self.find_match_count = self.html_renderer.find_text(&self.find_query);
             }
-            
+
+            if self.find_match_count > 0 || !self.find_query.is_empty() {
+                ui.label(format!("{} matches", self.find_match_count));
+            }
+
             if ui.button("x").clicked() {
                 self.find_bar_visible = false;
+                self.find_match_count = 0;
             }
         });
     }
@@ -1323,10 +1372,37 @@ impl BrowserApp {
                 // Logo
                 ui.heading(RichText::new("Sassy Browser").size(48.0));
                 ui.add_space(10.0);
-                ui.label(RichText::new("Fast - Free - Handles Everything").size(16.0).color(Color32::GRAY));
-                
+                ui.label(RichText::new("It's everything you love - from every browser you hate.").size(16.0).color(Color32::GRAY));
+
                 ui.add_space(40.0);
-                
+
+                // Centered search bar
+                ui.horizontal(|ui| {
+                    let quarter = ui.available_width() / 4.0;
+                    ui.add_space(quarter);
+                    let edit = ui.add(
+                        egui::TextEdit::singleline(&mut self.new_tab_search_query)
+                            .hint_text("Search with DuckDuckGo or enter URL")
+                            .desired_width(ui.available_width() - quarter)
+                    );
+                    if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        if !self.new_tab_search_query.is_empty() {
+                            let query = self.new_tab_search_query.clone();
+                            if query.contains('.') || query.starts_with("http") {
+                                self.guarded_navigate(&query);
+                            } else {
+                                let search_url = format!("{}{}",
+                                    self.engine.search_engine,
+                                    query.replace(' ', "+"));
+                                self.guarded_navigate(&search_url);
+                            }
+                            self.new_tab_search_query.clear();
+                        }
+                    }
+                });
+
+                ui.add_space(20.0);
+
                 // Quick access - Most visited
                 ui.heading("Most Visited");
                 ui.add_space(10.0);
@@ -1354,9 +1430,24 @@ impl BrowserApp {
                         }
                     }
                 });
-                
+
+                ui.add_space(20.0);
+                ui.heading("Quick Access");
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.button(RichText::new("GitHub").size(14.0)).clicked() {
+                        self.guarded_navigate("https://github.com");
+                    }
+                    if ui.button(RichText::new("DuckDuckGo").size(14.0)).clicked() {
+                        self.guarded_navigate("https://duckduckgo.com");
+                    }
+                    if ui.button(RichText::new("Tailscale").size(14.0)).clicked() {
+                        self.guarded_navigate("sassy://settings");
+                    }
+                });
+
                 ui.add_space(30.0);
-                
+
                 // Supported formats info
                 ui.heading("Native File Support - 100+ Formats");
                 ui.add_space(10.0);
@@ -1387,7 +1478,7 @@ impl BrowserApp {
                 });
                 
                 ui.add_space(20.0);
-                ui.label(RichText::new("Drag & drop any file or use File -> Open").italics().color(Color32::GRAY));
+                ui.label(RichText::new("Drag & drop any file or use File → Open").italics().color(Color32::GRAY));
             });
         });
     }
@@ -1499,7 +1590,7 @@ impl BrowserApp {
     
     fn render_settings_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading("(settings) Settings");
+            ui.heading("⚙️ Settings");
             ui.separator();
             
             ui.add_space(20.0);
@@ -1507,7 +1598,24 @@ impl BrowserApp {
             // Appearance
             ui.heading("Appearance");
             ui.checkbox(&mut self.dark_mode, "Dark Mode");
-            
+
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                ui.label("Theme Preset:");
+                let preset_label = match self.theme_preset {
+                    ThemePreset::SassyBrand => "Sassy Brand",
+                    ThemePreset::SassyRedesign => "Sassy Redesign",
+                };
+                egui::ComboBox::from_id_salt("theme_preset_combo")
+                    .selected_text(preset_label)
+                    .show_ui(ui, |ui| {
+                        if ui.selectable_value(&mut self.theme_preset, ThemePreset::SassyBrand, "Sassy Brand").changed() ||
+                           ui.selectable_value(&mut self.theme_preset, ThemePreset::SassyRedesign, "Sassy Redesign").changed() {
+                            // Theme will be applied on next frame via configure_style
+                        }
+                    });
+            });
+
             ui.add_space(10.0);
             ui.horizontal(|ui| {
                 ui.label("Zoom:");
@@ -1522,15 +1630,32 @@ impl BrowserApp {
                     self.zoom_level = 1.0;
                 }
             });
-            
+
             ui.add_space(20.0);
-            
+
             // Search
             ui.heading("Search");
             ui.horizontal(|ui| {
                 ui.label("Search Engine:");
-                // TODO: Dropdown with search engine options
-                ui.label(&self.engine.search_engine);
+                let search_options = [
+                    ("DuckDuckGo", "https://duckduckgo.com/?q="),
+                    ("Google", "https://www.google.com/search?q="),
+                    ("Bing", "https://www.bing.com/search?q="),
+                    ("Brave", "https://search.brave.com/search?q="),
+                ];
+                let current_label = search_options.iter()
+                    .find(|(_, url)| *url == self.engine.search_engine.as_str())
+                    .map(|(name, _)| *name)
+                    .unwrap_or("Custom");
+                egui::ComboBox::from_id_salt("search_engine_combo")
+                    .selected_text(current_label)
+                    .show_ui(ui, |ui| {
+                        for (name, url) in &search_options {
+                            if ui.selectable_label(self.engine.search_engine == *url, *name).clicked() {
+                                self.engine.set_search_engine(url.to_string());
+                            }
+                        }
+                    });
             });
             
             ui.add_space(20.0);
@@ -1554,7 +1679,7 @@ impl BrowserApp {
             // Privacy
             ui.heading("Privacy");
             if ui.button("Clear Browsing Data...").clicked() {
-                // TODO: Clear data dialog
+                self.show_clear_data_dialog = true;
             }
             
             ui.add_space(20.0);
@@ -1625,7 +1750,7 @@ impl BrowserApp {
     
     fn render_bookmarks_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading("* Bookmarks");
+            ui.heading("�\u{AD} Bookmarks");
             ui.separator();
             
             let bookmarks: Vec<_> = self.engine.bookmarks.all()
@@ -1879,6 +2004,10 @@ impl BrowserApp {
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(chrono::Local::now().format("%H:%M:%S").to_string());
+                        ui.separator();
+                        ui.label("v2.1.0");
+                        ui.separator();
                         ui.label(format!("Zoom: {:.0}%", self.zoom_level * 100.0));
                         ui.separator();
                         ui.label(format!("{} tabs", self.engine.tab_count()));
@@ -1977,11 +2106,11 @@ impl BrowserApp {
                 self.engine.reload();
             }
             if i.key_pressed(Key::F11) {
-                // TODO: Toggle fullscreen
+                let is_fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!is_fullscreen));
             }
             if i.key_pressed(Key::F12) {
                 self.show_dev_tools = !self.show_dev_tools;
-                self.dev_console.visible = self.show_dev_tools;
             }
             
             // Escape
@@ -2471,7 +2600,7 @@ impl BrowserApp {
                         }
                         if let Some(r) = &profile.restrictions.bedtime_start {
                             if let Some(e) = &profile.restrictions.bedtime_end {
-                                ui.label(RichText::new(format!("Bedtime: {:02}:{:02}-{:02}:{:02}", r.0, r.1, e.0, e.1)).color(Color32::LIGHT_RED))
+                                ui.label(RichText::new(format!("Bedtime: {:02}:{:02}–{:02}:{:02}", r.0, r.1, e.0, e.1)).color(Color32::LIGHT_RED))
                                     .on_hover_text("No access allowed during bedtime hours. Ask a parent to adjust bedtime if needed.");
                             }
                         }
@@ -3095,8 +3224,54 @@ impl BrowserApp {
     }
     
     fn print_current(&mut self) {
-        // TODO: Implement printing
-        self.status_message = "Print functionality coming soon".into();
+        // Get text content from the active tab for printing
+        let content = if let Some(tab) = self.engine.active_tab() {
+            match &tab.content {
+                TabContent::Web { url, title, .. } => {
+                    // Try to get rendered text from HTML renderer
+                    if let Some(doc) = &self.html_renderer.cached_doc {
+                        let mut text = String::new();
+                        fn extract_text(node: &crate::html_renderer::HtmlNode, out: &mut String) {
+                            match node {
+                                crate::html_renderer::HtmlNode::Text(t) => {
+                                    out.push_str(t);
+                                    out.push(' ');
+                                }
+                                crate::html_renderer::HtmlNode::Element { children, tag, .. } => {
+                                    for child in children {
+                                        extract_text(child, out);
+                                    }
+                                    if matches!(tag.as_str(), "p" | "div" | "br" | "h1" | "h2" | "h3" | "h4" | "li") {
+                                        out.push('\n');
+                                    }
+                                }
+                                crate::html_renderer::HtmlNode::Script(_) => {}
+                            }
+                        }
+                        for node in &doc.nodes {
+                            extract_text(node, &mut text);
+                        }
+                        if text.trim().is_empty() {
+                            format!("{}\n{}", title, url)
+                        } else {
+                            text
+                        }
+                    } else {
+                        format!("{}\n{}", title, url)
+                    }
+                }
+                TabContent::NewTab => "Sassy Browser - New Tab".to_string(),
+                _ => "No printable content".to_string(),
+            }
+        } else {
+            "No active tab".to_string()
+        };
+
+        let settings = crate::print::PrintSettings::default();
+        match crate::print::print_page(content.as_bytes(), &settings) {
+            Ok(()) => self.status_message = "Page sent to printer".into(),
+            Err(e) => self.status_message = format!("Print failed: {}", e),
+        }
     }
     
     // =========================================================================
@@ -3111,7 +3286,7 @@ impl BrowserApp {
                 // Header
                 ui.heading(RichText::new("Sassy Browser").size(48.0).color(Color32::from_rgb(255, 140, 0)));
                 ui.add_space(10.0);
-                ui.label(RichText::new("Pure Rust - No Chrome - No Google - No Tracking").size(16.0).color(Color32::GRAY));
+                ui.label(RichText::new("Pure Rust • No Chrome • No Google • No Tracking").size(16.0).color(Color32::GRAY));
                 ui.add_space(40.0);
                 
                 // Progress indicator
@@ -3137,7 +3312,7 @@ impl BrowserApp {
                         
                         ui.label(RichText::new(format!("{}. {}", i + 1, step)).color(color));
                         if i < steps.len() - 1 {
-                            ui.label(RichText::new(" -> ").color(Color32::DARK_GRAY));
+                            ui.label(RichText::new(" → ").color(Color32::DARK_GRAY));
                         }
                     }
                 });
@@ -3195,7 +3370,7 @@ impl BrowserApp {
         
         ui.add_space(30.0);
         
-        if ui.button(RichText::new("Get Started ->").size(18.0)).clicked() {
+        if ui.button(RichText::new("Get Started →").size(18.0)).clicked() {
             self.first_run.next_step();
         }
     }
@@ -3324,7 +3499,7 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("<- Back").clicked() {
+            if ui.button("← Back").clicked() {
                 self.first_run.prev_step();
             }
             
@@ -3332,7 +3507,7 @@ impl BrowserApp {
             
             let ready = self.auth.is_entropy_ready();
             let can_continue = ready && timer_done;
-            if ui.add_enabled(can_continue, egui::Button::new(RichText::new("Continue ->").size(18.0))).clicked() {
+            if ui.add_enabled(can_continue, egui::Button::new(RichText::new("Continue →").size(18.0))).clicked() {
                 self.first_run.next_step();
             }
             
@@ -3386,13 +3561,13 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("<- Back").clicked() {
+            if ui.button("← Back").clicked() {
                 self.first_run.prev_step();
             }
             
             ui.add_space(20.0);
             
-            if ui.button(RichText::new("Create Device Key ->").size(18.0)).clicked() {
+            if ui.button(RichText::new("Create Device Key →").size(18.0)).clicked() {
                 match self.auth.complete_first_run(
                     &self.first_run.device_name,
                     self.first_run.device_type.clone()
@@ -3458,7 +3633,7 @@ impl BrowserApp {
                 }
             }
             crate::auth::TailscaleStatus::Running => {
-                ui.label(RichText::new("[OK] Tailscale is connected!").color(Color32::from_rgb(0, 200, 100)));
+                ui.label(RichText::new("✅ Tailscale is connected!").color(Color32::from_rgb(0, 200, 100)));
                 ui.add_space(10.0);
                 
                 if let Some(ref ip) = self.tailscale.ip_address {
@@ -3475,7 +3650,7 @@ impl BrowserApp {
                 if !peers.is_empty() {
                     ui.label(RichText::new("Devices on your network:").strong());
                     for peer in peers {
-                        let status = if peer.online { "" } else { "o" };
+                        let status = if peer.online { "" } else { "⚪" };
                         ui.label(format!("{} {} ({})", status, peer.hostname, peer.ip_address));
                     }
                 }
@@ -3497,16 +3672,16 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("<- Back").clicked() {
+            if ui.button("← Back").clicked() {
                 self.first_run.prev_step();
             }
             
             ui.add_space(20.0);
             
             let label = if self.first_run.enable_phone_sync {
-                "Continue to Phone Setup ->"
+                "Continue to Phone Setup →"
             } else {
-                "Finish Setup ->"
+                "Finish Setup →"
             };
             
             if ui.button(RichText::new(label).size(18.0)).clicked() {
@@ -3572,13 +3747,13 @@ impl BrowserApp {
         ui.add_space(30.0);
         
         ui.horizontal(|ui| {
-            if ui.button("<- Back").clicked() {
+            if ui.button("← Back").clicked() {
                 self.first_run.prev_step();
             }
             
             ui.add_space(20.0);
             
-            if ui.button(RichText::new("Finish Setup ->").size(18.0)).clicked() {
+            if ui.button(RichText::new("Finish Setup →").size(18.0)).clicked() {
                 self.first_run.next_step();
             }
             
@@ -3589,6 +3764,102 @@ impl BrowserApp {
                 self.first_run.next_step();
             }
         });
+    }
+
+    fn render_left_sidebar(&mut self, ctx: &egui::Context) {
+        if !self.left_sidebar_visible { return; }
+
+        egui::SidePanel::left("left_sidebar")
+            .resizable(true)
+            .default_width(200.0)
+            .min_width(150.0)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    if ui.selectable_label(
+                        self.left_sidebar_mode == LeftSidebarMode::Bookmarks, "Bookmarks"
+                    ).clicked() {
+                        self.left_sidebar_mode = LeftSidebarMode::Bookmarks;
+                    }
+                    if ui.selectable_label(
+                        self.left_sidebar_mode == LeftSidebarMode::History, "History"
+                    ).clicked() {
+                        self.left_sidebar_mode = LeftSidebarMode::History;
+                    }
+                });
+                ui.separator();
+
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    match self.left_sidebar_mode {
+                        LeftSidebarMode::Bookmarks => {
+                            let bookmarks: Vec<(String, String)> = self.engine.bookmarks.all()
+                                .iter()
+                                .map(|b| (b.url.clone(), b.title.clone()))
+                                .collect();
+                            for (url, title) in bookmarks {
+                                let display = if title.is_empty() { &url } else { &title };
+                                if ui.add(egui::Label::new(display).sense(egui::Sense::click())).clicked() {
+                                    self.guarded_navigate(&url);
+                                }
+                            }
+                        }
+                        LeftSidebarMode::History => {
+                            let entries: Vec<(String, String)> = self.engine.history.all()
+                                .iter()
+                                .take(50)
+                                .map(|e| (e.url.clone(), e.title.clone()))
+                                .collect();
+                            for (url, title) in entries {
+                                let display = if title.is_empty() { &url } else { &title };
+                                if ui.add(egui::Label::new(display).sense(egui::Sense::click())).clicked() {
+                                    self.guarded_navigate(&url);
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+    }
+
+    fn render_ai_sidebar(&mut self, ctx: &egui::Context) {
+        if !self.ai_sidebar_visible { return; }
+
+        egui::SidePanel::right("ai_sidebar")
+            .resizable(true)
+            .default_width(250.0)
+            .min_width(200.0)
+            .show(ctx, |ui| {
+                ui.heading("Sassy AI Assistant");
+                ui.separator();
+                ui.label("How can I help you today?");
+                ui.add_space(10.0);
+
+                ui.add(egui::TextEdit::multiline(&mut self.ai_query_input)
+                    .hint_text("Ask me anything...")
+                    .desired_rows(3)
+                    .desired_width(f32::INFINITY));
+
+                if ui.button("Ask AI").clicked() && !self.ai_query_input.is_empty() {
+                    self.status_message = format!("AI query: {}", self.ai_query_input);
+                    self.ai_query_input.clear();
+                }
+
+                ui.add_space(20.0);
+                ui.separator();
+                ui.heading("Smart History");
+                ui.label("Recent activity related to this tab...");
+                ui.add_space(8.0);
+
+                // Show recent history entries
+                let recent: Vec<(String, String)> = self.engine.history.all()
+                    .iter()
+                    .take(5)
+                    .map(|e| (e.url.clone(), e.title.clone()))
+                    .collect();
+                for (_url, title) in recent {
+                    let label = if title.is_empty() { "(untitled)".to_string() } else { title };
+                    ui.label(format!("- {}", label));
+                }
+            });
     }
 }
 
@@ -3753,9 +4024,52 @@ impl eframe::App for BrowserApp {
         // Password vault panel
         self.render_vault_panel(ctx);
         
+        // Clear data confirmation dialog
+        if self.show_clear_data_dialog {
+            let mut open = true;
+            egui::Window::new("Clear Browsing Data")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    ui.label("Select which data to clear:");
+                    ui.add_space(10.0);
+                    ui.checkbox(&mut self.clear_data_history, "Browsing History");
+                    ui.checkbox(&mut self.clear_data_downloads, "Completed Downloads");
+                    ui.checkbox(&mut self.clear_data_cache, "Cached Data");
+                    ui.add_space(15.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Clear Selected").clicked() {
+                            if self.clear_data_history {
+                                self.engine.history.clear();
+                            }
+                            if self.clear_data_downloads {
+                                self.engine.downloads.clear_finished();
+                            }
+                            if self.clear_data_cache {
+                                self.html_renderer.clear_cache();
+                            }
+                            self.status_message = "Browsing data cleared".into();
+                            self.show_clear_data_dialog = false;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            self.show_clear_data_dialog = false;
+                        }
+                    });
+                });
+            if !open {
+                self.show_clear_data_dialog = false;
+            }
+        }
+
         // Status bar
         self.render_status_bar(ctx);
-        
+
+        // Sidebars (must be before CentralPanel)
+        self.render_left_sidebar(ctx);
+        self.render_ai_sidebar(ctx);
+
         // Main content area
         egui::CentralPanel::default().show(ctx, |ui| {
             self.render_content(ctx, ui);
@@ -3807,7 +4121,7 @@ fn configure_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-fn configure_style(ctx: &egui::Context, dark_mode: bool) {
+fn configure_style(ctx: &egui::Context, dark_mode: bool, preset: ThemePreset) {
     // Brand palette from style guide
     // Brand Purple: #6C63FF - Primary accent
     // Dark Blue: #101E32 - Primary background
@@ -3823,34 +4137,52 @@ fn configure_style(ctx: &egui::Context, dark_mode: bool) {
     let mut visuals = if dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
 
     if dark_mode {
-        // Dark Blue background (#101E32)
-        visuals.window_fill = Color32::from_rgb(0x10, 0x1E, 0x32);
-        // Dark Gray for panels (#2E384B)
-        visuals.panel_fill = Color32::from_rgb(0x2E, 0x38, 0x4B);
-        // Even darker for extreme backgrounds
-        visuals.extreme_bg_color = Color32::from_rgb(0x0A, 0x14, 0x24);
-        // Slightly lighter gray for faint backgrounds
-        visuals.faint_bg_color = Color32::from_rgb(0x38, 0x44, 0x58);
+        match preset {
+            ThemePreset::SassyRedesign => {
+                // Sassy Redesign dark theme (from sassy-redesign prototype)
+                visuals.window_fill = Color32::from_rgb(13, 17, 23);        // #0D1117
+                visuals.panel_fill = Color32::from_rgb(13, 17, 23);         // #0D1117
+                visuals.extreme_bg_color = Color32::from_rgb(8, 10, 15);
+                visuals.faint_bg_color = Color32::from_rgb(22, 27, 34);     // #161B22
 
-        visuals.widgets.noninteractive.bg_fill = visuals.panel_fill;
-        visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x38, 0x44, 0x58);
-        visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x44, 0x50, 0x66);
-        visuals.widgets.active.bg_fill = Color32::from_rgb(0x50, 0x5C, 0x74);
+                visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(13, 17, 23);
+                visuals.widgets.inactive.bg_fill = Color32::from_rgb(22, 27, 34);   // #161B22
+                visuals.widgets.hovered.bg_fill = Color32::from_rgb(48, 54, 61);    // #30363D
+                visuals.widgets.active.bg_fill = Color32::from_rgb(33, 38, 45);     // #21262D
 
-        // Light Gray text (#F6F6F6)
-        visuals.override_text_color = Some(Color32::from_rgb(0xF6, 0xF6, 0xF6));
+                visuals.override_text_color = Some(Color32::from_rgb(0xE6, 0xED, 0xF3));
+                visuals.selection.bg_fill = accent;
+                visuals.selection.stroke = egui::Stroke::new(1.5, accent_active);
+                visuals.hyperlink_color = yellow;
 
-        // Brand Purple selection
-        visuals.selection.bg_fill = accent;
-        visuals.selection.stroke = egui::Stroke::new(1.5, accent_active);
+                visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(0x8B, 0x94, 0x9E));
+                visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, accent_hover);
+                visuals.widgets.active.fg_stroke = egui::Stroke::new(2.0, accent);
+            }
+            ThemePreset::SassyBrand => {
+                // Original SassyBrand palette
+                // Dark Blue background (#101E32)
+                visuals.window_fill = Color32::from_rgb(0x10, 0x1E, 0x32);
+                // Dark Gray for panels (#2E384B)
+                visuals.panel_fill = Color32::from_rgb(0x2E, 0x38, 0x4B);
+                visuals.extreme_bg_color = Color32::from_rgb(0x0A, 0x14, 0x24);
+                visuals.faint_bg_color = Color32::from_rgb(0x38, 0x44, 0x58);
 
-        // Yellow for hyperlinks (stands out on dark)
-        visuals.hyperlink_color = yellow;
+                visuals.widgets.noninteractive.bg_fill = visuals.panel_fill;
+                visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x38, 0x44, 0x58);
+                visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x44, 0x50, 0x66);
+                visuals.widgets.active.bg_fill = Color32::from_rgb(0x50, 0x5C, 0x74);
 
-        // Widget strokes with brand purple accent
-        visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(0x80, 0x8A, 0x9E));
-        visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, accent_hover);
-        visuals.widgets.active.fg_stroke = egui::Stroke::new(2.0, accent);
+                visuals.override_text_color = Some(Color32::from_rgb(0xF6, 0xF6, 0xF6));
+                visuals.selection.bg_fill = accent;
+                visuals.selection.stroke = egui::Stroke::new(1.5, accent_active);
+                visuals.hyperlink_color = yellow;
+
+                visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(0x80, 0x8A, 0x9E));
+                visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, accent_hover);
+                visuals.widgets.active.fg_stroke = egui::Stroke::new(2.0, accent);
+            }
+        }
     } else {
         // Light mode with brand colors
         visuals.window_fill = Color32::from_rgb(0xF6, 0xF6, 0xF6); // Light Gray
@@ -3951,15 +4283,6 @@ fn configure_style(ctx: &egui::Context, dark_mode: bool) {
     ctx.set_style(style);
 }
 
-/// Initial URL to open (set before run_browser is called)
-static INITIAL_URL: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-
-/// Run the browser application with an optional initial URL
-pub fn run_browser_with_url(initial_url: Option<String>) -> Result<()> {
-    let _ = INITIAL_URL.set(initial_url);
-    run_browser()
-}
-
 /// Run the browser application
 pub fn run_browser() -> Result<()> {
     let native_options = eframe::NativeOptions {
@@ -3974,27 +4297,6 @@ pub fn run_browser() -> Result<()> {
     eframe::run_native(
         "Sassy Browser",
         native_options,
-        Box::new(|cc| {
-            let mut app = BrowserApp::new(cc);
-            // Open initial URL if provided
-            if let Some(Some(url)) = INITIAL_URL.get() {
-                if !url.is_empty() {
-                    if url.starts_with("file://") {
-                        // Handle file URL
-                        let path = url.strip_prefix("file://").unwrap_or(url);
-                        let path_buf = std::path::PathBuf::from(path);
-                        if path_buf.exists() {
-                            if let Ok(_) = app.engine.open_file(path_buf) {
-                                // File opened successfully
-                            }
-                        }
-                    } else {
-                        // Handle web URL
-                        app.engine.navigate(url);
-                    }
-                }
-            }
-            Ok(Box::new(app))
-        }),
+        Box::new(|cc| Ok(Box::new(BrowserApp::new(cc)))),
     ).map_err(|e| anyhow::anyhow!("Failed to run browser: {}", e))
 }

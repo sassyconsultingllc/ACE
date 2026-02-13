@@ -408,7 +408,112 @@ impl ArchiveViewer {
         Ok(0)
     }
 
+<<<<<<< HEAD
     // ---------------------------------------------------------------------------
+=======
+    /// Extract only selected files from archive
+    fn extract_selected(
+        archive_path: &Path,
+        output_dir: &Path,
+        archive: &ArchiveContent,
+        selected_indices: &HashSet<usize>,
+    ) -> Result<usize, String> {
+        let ext = archive_path.extension()
+            .and_then(|e| e.to_str())
+            .map(crate::fontcase::ascii_lower)
+            .unwrap_or_default();
+
+        match ext.as_str() {
+            "zip" => Self::extract_zip_selected(archive_path, output_dir, archive, selected_indices),
+            "tar" => Self::extract_tar_selected(archive_path, output_dir, archive, selected_indices),
+            _ => {
+                // For other formats, extract all (fallback)
+                Self::extract_all(archive_path, output_dir)
+            }
+        }
+    }
+
+    fn extract_zip_selected(
+        archive_path: &Path,
+        output_dir: &Path,
+        archive: &ArchiveContent,
+        selected_indices: &HashSet<usize>,
+    ) -> Result<usize, String> {
+        use std::fs::{self, File};
+        use std::io::Read;
+        use zip::ZipArchive;
+
+        let file = File::open(archive_path).map_err(|e| e.to_string())?;
+        let mut zip = ZipArchive::new(file).map_err(|e| e.to_string())?;
+        let mut count = 0;
+
+        for &idx in selected_indices {
+            if idx >= archive.entries.len() {
+                continue;
+            }
+
+            let entry_path = &archive.entries[idx].path;
+
+            // Find the matching entry in the zip by name
+            for i in 0..zip.len() {
+                let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
+                if entry.name() == entry_path {
+                    let out_path = output_dir.join(entry.name());
+
+                    if entry.is_dir() {
+                        fs::create_dir_all(&out_path).map_err(|e| e.to_string())?;
+                    } else {
+                        if let Some(parent) = out_path.parent() {
+                            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                        }
+                        let mut out_file = File::create(&out_path).map_err(|e| e.to_string())?;
+                        std::io::copy(&mut entry, &mut out_file).map_err(|e| e.to_string())?;
+                        count += 1;
+                    }
+                    break;
+                }
+            }
+        }
+
+        Ok(count)
+    }
+
+    fn extract_tar_selected(
+        archive_path: &Path,
+        output_dir: &Path,
+        archive: &ArchiveContent,
+        selected_indices: &HashSet<usize>,
+    ) -> Result<usize, String> {
+        use std::fs::File;
+        use tar::Archive;
+
+        let file = File::open(archive_path).map_err(|e| e.to_string())?;
+        let mut tar = Archive::new(file);
+        let mut count = 0;
+
+        // Collect selected paths
+        let selected_paths: HashSet<String> = selected_indices
+            .iter()
+            .filter_map(|&idx| archive.entries.get(idx).map(|e| e.path.clone()))
+            .collect();
+
+        // Extract entries that match selected paths
+        for entry in tar.entries().map_err(|e| e.to_string())? {
+            let mut entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path().map_err(|e| e.to_string())?;
+            let path_str = path.to_string_lossy().to_string();
+
+            if selected_paths.contains(&path_str) {
+                entry.unpack_in(output_dir).map_err(|e| e.to_string())?;
+                count += 1;
+            }
+        }
+
+        Ok(count)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+>>>>>>> origin/claude/happy-torvalds
     // UI RENDERING
     // ---------------------------------------------------------------------------
     
@@ -453,8 +558,7 @@ impl ArchiveViewer {
                         .ok()
                         .flatten()
                     {
-                        // TODO: Extract only selected files
-                        let _ = Self::extract_all(archive_path, &dir);
+                        let _ = Self::extract_selected(archive_path, &dir, archive, &self.selected_entries);
                     }
                 }
             });

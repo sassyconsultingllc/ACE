@@ -1756,73 +1756,175 @@ impl FileHandler {
     }
     
     fn load_audio(&self, path: &Path) -> Result<FileContent> {
+        use symphonia::core::audio::SampleBuffer;
+        use symphonia::core::codecs::DecoderOptions;
         use symphonia::core::formats::FormatOptions;
         use symphonia::core::io::MediaSourceStream;
         use symphonia::core::meta::MetadataOptions;
         use symphonia::core::probe::Hint;
-        
+
         let file = fs::File::open(path)?;
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
-        
+
         let mut hint = Hint::new();
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             hint.with_extension(ext);
         }
-        
+
         let format_opts = FormatOptions::default();
         let metadata_opts = MetadataOptions::default();
-        
-        let probed = symphonia::default::get_probe()
+
+        let mut probed = symphonia::default::get_probe()
             .format(&hint, mss, &format_opts, &metadata_opts)
             .map_err(|e| anyhow!("Audio probe error: {:?}", e))?;
-        
+
         let mut format = probed.format;
-        
+
         let mut audio = AudioContent::default();
-        
+
         // Get track info
-        if let Some(track) = format.tracks().first() {
+        let track_id = if let Some(track) = format.tracks().first() {
             audio.sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
             audio.channels = track.codec_params.channels.map(|c| c.count() as u8).unwrap_or(2);
             audio.bit_depth = track.codec_params.bits_per_sample.unwrap_or(16) as u8;
-            
+
             if let Some(n_frames) = track.codec_params.n_frames {
                 audio.duration_secs = n_frames as f64 / audio.sample_rate as f64;
             }
+
+            // Calculate bitrate from file size and duration
+            if audio.duration_secs > 0.0 {
+                if let Ok(meta) = fs::metadata(path) {
+                    audio.bitrate = Some((meta.len() as f64 * 8.0 / audio.duration_secs) as u32);
+                }
+            }
+
+            Some(track.id)
+        } else {
+            None
+        };
+
+        // Extract metadata from probed metadata (before format metadata)
+        if let Some(metadata_rev) = probed.metadata.get() {
+            if let Some(current) = metadata_rev.current() {
+                Self::extract_audio_metadata(&mut audio, current);
+            }
         }
-        
-        // Get metadata
+
+        // Get metadata from format container
         if let Some(metadata) = format.metadata().current() {
-            for tag in metadata.tags() {
-                match tag.std_key {
-                    Some(symphonia::core::meta::StandardTagKey::TrackTitle) => {
-                        audio.title = Some(tag.value.to_string());
+            Self::extract_audio_metadata(&mut audio, metadata);
+        }
+
+        // Decode waveform samples (downsample to ~200 points for visualization)
+        if let Some(tid) = track_id {
+            if let Some(track) = format.tracks().iter().find(|t| t.id == tid) {
+                let dec_opts = DecoderOptions::default();
+                if let Ok(mut decoder) = symphonia::default::get_codecs()
+                    .make(&track.codec_params, &dec_opts)
+                {
+                    let mut all_samples: Vec<f32> = Vec::new();
+                    let max_samples = audio.sample_rate as usize * 30; // max 30 seconds of samples
+
+                    loop {
+                        match format.next_packet() {
+                            Ok(packet) => {
+                                if packet.track_id() != tid { continue; }
+                                if let Ok(decoded) = decoder.decode(&packet) {
+                                    let spec = *decoded.spec();
+                                    let duration = decoded.capacity();
+                                    let mut sample_buf = SampleBuffer::<f32>::new(
+                                        duration as u64, spec,
+                                    );
+                                    sample_buf.copy_interleaved_ref(decoded);
+                                    let samples = sample_buf.samples();
+                                    let channels = spec.channels.count().max(1);
+
+                                    // Mono-mix: average channels
+                                    for chunk in samples.chunks(channels) {
+                                        let avg = chunk.iter().sum::<f32>() / channels as f32;
+                                        all_samples.push(avg);
+                                        if all_samples.len() >= max_samples { break; }
+                                    }
+                                    if all_samples.len() >= max_samples { break; }
+                                }
+                            }
+                            Err(_) => break,
+                        }
                     }
-                    Some(symphonia::core::meta::StandardTagKey::Artist) => {
-                        audio.artist = Some(tag.value.to_string());
+
+                    // Downsample to 200 waveform points (peak values per bucket)
+                    let target_points = 200usize;
+                    if !all_samples.is_empty() {
+                        let bucket_size = (all_samples.len() / target_points).max(1);
+                        audio.waveform_data = all_samples
+                            .chunks(bucket_size)
+                            .map(|chunk| {
+                                chunk.iter().fold(0.0f32, |acc, &s| acc.max(s.abs()))
+                            })
+                            .collect();
                     }
-                    Some(symphonia::core::meta::StandardTagKey::Album) => {
-                        audio.album = Some(tag.value.to_string());
-                    }
-                    Some(symphonia::core::meta::StandardTagKey::Genre) => {
-                        audio.genre = Some(tag.value.to_string());
-                    }
-                    _ => {}
                 }
             }
         }
-        
+
         audio.format = path.extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_uppercase())
             .unwrap_or_else(|| "AUDIO".into());
-        
+
         Ok(FileContent::Audio(Box::new(audio)))
+    }
+
+    /// Extract metadata tags and cover art from a symphonia MetadataRevision
+    fn extract_audio_metadata(audio: &mut AudioContent, metadata: &symphonia::core::meta::MetadataRevision) {
+        use symphonia::core::meta::StandardTagKey;
+
+        for tag in metadata.tags() {
+            match tag.std_key {
+                Some(StandardTagKey::TrackTitle) => {
+                    audio.title = Some(tag.value.to_string());
+                }
+                Some(StandardTagKey::Artist) | Some(StandardTagKey::AlbumArtist) => {
+                    if audio.artist.is_none() {
+                        audio.artist = Some(tag.value.to_string());
+                    }
+                }
+                Some(StandardTagKey::Album) => {
+                    audio.album = Some(tag.value.to_string());
+                }
+                Some(StandardTagKey::Genre) => {
+                    audio.genre = Some(tag.value.to_string());
+                }
+                Some(StandardTagKey::Date) | Some(StandardTagKey::OriginalDate) => {
+                    if audio.year.is_none() {
+                        // Parse year from date string (e.g. "2023" or "2023-01-15")
+                        let val = tag.value.to_string();
+                        if let Ok(y) = val.get(..4).unwrap_or(&val).parse::<u32>() {
+                            audio.year = Some(y);
+                        }
+                    }
+                }
+                Some(StandardTagKey::TrackNumber) => {
+                    if let Ok(n) = tag.value.to_string().parse::<u32>() {
+                        audio.track = Some(n);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Extract cover art from visuals
+        for visual in metadata.visuals() {
+            if audio.cover_art.is_none() {
+                audio.cover_art = Some(visual.data.to_vec());
+            }
+        }
     }
     
     fn load_video(&self, path: &Path) -> Result<FileContent> {
         let data = fs::read(path)?;
-        
+
         let mut video = VideoContent {
             format: path.extension()
                 .and_then(|e| e.to_str())
@@ -1830,23 +1932,107 @@ impl FileHandler {
                 .unwrap_or_else(|| "VIDEO".into()),
             ..Default::default()
         };
-        
+
+        // Calculate bitrate from file size if we get duration later
+        let file_size = data.len() as u64;
+
         // Try to parse MP4 metadata
         if let Ok(context) = mp4parse::read_mp4(&mut std::io::Cursor::new(&data)) {
+            // Video track info
             if let Some(track) = context.tracks.iter().find(|t| t.track_type == mp4parse::TrackType::Video) {
                 if let Some(tkhd) = &track.tkhd {
                     video.width = tkhd.width;
                     video.height = tkhd.height;
                 }
-                
+
                 if let Some(duration) = track.duration {
                     if let Some(timescale) = track.timescale {
                         video.duration = duration.0 as f64 / timescale.0 as f64;
                     }
                 }
+
+                // Extract video codec from stsd box
+                if let Some(stsd) = &track.stsd {
+                    for desc in &stsd.descriptions {
+                        if let mp4parse::SampleEntry::Video(entry) = desc {
+                            let codec_str = format!("{:?}", entry.codec_type);
+                            let codec_name = match codec_str.as_str() {
+                                s if s.contains("AVC") || s.contains("H264") => "H.264 / AVC".to_string(),
+                                s if s.contains("HEVC") || s.contains("H265") => "H.265 / HEVC".to_string(),
+                                s if s.contains("VP8") => "VP8".to_string(),
+                                s if s.contains("VP9") => "VP9".to_string(),
+                                s if s.contains("AV1") => "AV1".to_string(),
+                                _ => codec_str,
+                            };
+                            video.video_codec = Some(codec_name);
+                            break;
+                        }
+                    }
+                }
+
+                // Calculate frame rate from sample count and duration
+                if video.duration > 0.0 {
+                    if let Some(stts) = &track.stts {
+                        let total_samples: u64 = stts.samples.iter()
+                            .map(|s| s.sample_count as u64)
+                            .sum();
+                        if total_samples > 0 {
+                            video.frame_rate = (total_samples as f64 / video.duration) as f32;
+                        }
+                    }
+                }
+            }
+
+            // Audio track info (codec)
+            if let Some(audio_track) = context.tracks.iter().find(|t| t.track_type == mp4parse::TrackType::Audio) {
+                if let Some(stsd) = &audio_track.stsd {
+                    for desc in &stsd.descriptions {
+                        if let mp4parse::SampleEntry::Audio(entry) = desc {
+                            let codec_str = format!("{:?}", entry.codec_type);
+                            let acodec = match codec_str.as_str() {
+                                s if s.contains("AAC") => "AAC".to_string(),
+                                s if s.contains("MP3") => "MP3".to_string(),
+                                s if s.contains("Opus") => "Opus".to_string(),
+                                s if s.contains("Vorbis") => "Vorbis".to_string(),
+                                s if s.contains("FLAC") => "FLAC".to_string(),
+                                s if s.contains("AC3") => "AC-3".to_string(),
+                                _ => codec_str,
+                            };
+                            video.audio_codec = Some(acodec);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Extract title from metadata if available
+            // mp4parse doesn't directly expose udta/meta boxes, so skip for now
+        }
+
+        // Calculate bitrate
+        if video.duration > 0.0 {
+            video.bitrate = Some((file_size as f64 * 8.0 / video.duration) as u32);
+        }
+
+        // Provide sensible defaults for non-MP4 containers
+        if video.width == 0 && video.height == 0 {
+            // For non-MP4 formats (WebM, AVI, MKV), set placeholder dimensions
+            match video.format.as_str() {
+                "WEBM" => {
+                    video.video_codec = video.video_codec.or(Some("VP8/VP9".to_string()));
+                    video.audio_codec = video.audio_codec.or(Some("Vorbis/Opus".to_string()));
+                }
+                "AVI" => {
+                    video.video_codec = video.video_codec.or(Some("MPEG-4 / DivX".to_string()));
+                }
+                "MKV" => {
+                    video.video_codec = video.video_codec.or(Some("H.264/H.265".to_string()));
+                    video.audio_codec = video.audio_codec.or(Some("AAC/FLAC".to_string()));
+                }
+                _ => {}
             }
         }
-        
+
         Ok(FileContent::Video(Box::new(video)))
     }
     
