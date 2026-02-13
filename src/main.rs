@@ -185,8 +185,18 @@ fn main() {
                 return;
             }
             path if std::path::Path::new(path).exists() => {
-                // Open file directly
-                run_browser(Some(format!("file://{}", path)));
+                // Open file directly — canonicalize for correct Windows handling
+                let abs_path = std::fs::canonicalize(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
+                #[cfg(windows)]
+                {
+                    // Windows file:// URLs use forward slashes and start with three slashes: file:///C:/path
+                    let s = abs_path.to_string_lossy().replace('\\', "/");
+                    run_browser(Some(format!("file:///{}", s)));
+                }
+                #[cfg(not(windows))]
+                {
+                    run_browser(Some(format!("file://{}", abs_path.display())));
+                }
                 return;
             }
             _ => {
