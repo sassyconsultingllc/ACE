@@ -596,6 +596,9 @@ pub struct McpOrchestrator {
     /// Message counter
     next_message_id: u64,
     next_artifact_id: u64,
+
+    /// API client for real AI model calls
+    api_client: crate::mcp_api::McpApiClient,
 }
 
 impl McpOrchestrator {
@@ -623,6 +626,7 @@ impl McpOrchestrator {
             is_active: false,
             next_message_id: 1,
             next_artifact_id: 1,
+            api_client: crate::mcp_api::McpApiClient::new(),
         }
     }
     
@@ -742,11 +746,42 @@ impl McpOrchestrator {
     
     /// Voice agent understands user intent
     fn voice_understand(&self, input: &str) -> UserIntent {
-        // In real implementation, this calls Grok API
-        // For now, parse intent locally
-        
+        // Try Grok API first for better intent classification
+        if self.api_client.is_ready(AgentRole::Voice) {
+            let messages = vec![crate::mcp_api::ChatMessage {
+                role: "user".to_string(),
+                content: input.to_string(),
+            }];
+            let system = "You are an intent classifier for a code editor. Classify the user's request into one of: create, fix, refactor, explain, test, document, general. Respond with a brief JSON: {\"intent_type\": \"...\", \"summary\": \"brief summary\", \"confidence\": 0.95}";
+
+            if let Ok(response) = self.api_client.call_grok(&messages, Some(system)) {
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&response.content) {
+                    let intent_type_str = parsed["intent_type"].as_str().unwrap_or("general");
+                    let intent_type = match intent_type_str {
+                        "create" => IntentType::Create,
+                        "fix" => IntentType::Fix,
+                        "refactor" => IntentType::Refactor,
+                        "explain" => IntentType::Explain,
+                        "test" => IntentType::Test,
+                        "document" => IntentType::Document,
+                        _ => IntentType::General,
+                    };
+                    let summary = parsed["summary"].as_str().unwrap_or(input).to_string();
+                    let confidence = parsed["confidence"].as_f64().unwrap_or(0.85) as f32;
+
+                    return UserIntent {
+                        summary,
+                        intent_type,
+                        entities: extract_entities(input),
+                        confidence,
+                    };
+                }
+            }
+        }
+
+        // Fallback: local pattern matching
         let input_lower = crate::fontcase::ascii_lower(input);
-        
+
         let intent_type = if input_lower.contains("create") || input_lower.contains("new") || input_lower.contains("add") {
             IntentType::Create
         } else if input_lower.contains("fix") || input_lower.contains("bug") || input_lower.contains("error") {
@@ -762,7 +797,7 @@ impl McpOrchestrator {
         } else {
             IntentType::General
         };
-        
+
         UserIntent {
             summary: input.to_string(),
             intent_type,
@@ -773,11 +808,48 @@ impl McpOrchestrator {
     
     /// Orchestrator creates task plan
     fn orchestrator_plan(&mut self, intent: &UserIntent) -> Vec<Task> {
-        // In real implementation, this calls Manus API
-        // For now, create tasks based on intent
-        
+        // Try Manus API for task planning
+        if self.api_client.is_ready(AgentRole::Orchestrator) {
+            let entity_names: Vec<&str> = intent.entities.iter().map(|e| e.value.as_str()).collect();
+            let messages = vec![crate::mcp_api::ChatMessage {
+                role: "user".to_string(),
+                content: format!("Plan tasks for: {} (type: {:?}, entities: {:?})",
+                    intent.summary, intent.intent_type, entity_names),
+            }];
+            // Build a TaskContext from our ProjectContext if available
+            let task_context = self.context.as_ref().map(|c| crate::mcp_api::TaskContext {
+                project_root: c.root_path.clone(),
+                language: c.language.clone(),
+                framework: c.framework.clone(),
+                files: c.files.iter().map(|f| crate::mcp_api::FileContext {
+                    path: f.path.clone(),
+                    summary: f.summary.clone(),
+                    relevant_symbols: Vec::new(),
+                }).collect(),
+                current_task: Some(intent.summary.clone()),
+                completed_tasks: Vec::new(),
+            });
+            if let Ok(response) = self.api_client.call_manus(&messages, task_context.as_ref()) {
+                // Parse orchestration response into tasks
+                let tasks: Vec<Task> = response.plan.iter().filter_map(|tp| {
+                    let role = match tp.agent.as_str() {
+                        "voice" => AgentRole::Voice,
+                        "orchestrator" => AgentRole::Orchestrator,
+                        "coder" => AgentRole::Coder,
+                        "auditor" => AgentRole::Auditor,
+                        _ => AgentRole::Coder,
+                    };
+                    Some(self.create_task(&tp.title, &tp.description, role))
+                }).collect();
+                if !tasks.is_empty() {
+                    return tasks;
+                }
+            }
+        }
+
+        // Fallback: local task creation
         let mut tasks = Vec::new();
-        
+
         match intent.intent_type {
             IntentType::Create => {
                 tasks.push(self.create_task(
@@ -873,24 +945,66 @@ impl McpOrchestrator {
     
     /// Coder executes a task and produces code edits
     fn coder_execute(&mut self, task: &Task) -> Vec<CodeEdit> {
-        // In real implementation, this calls Claude API
-        // For now, return placeholder edits
-        
-        let artifact_id = self.next_artifact_id;
-        self.next_artifact_id += 1;
-        
+        // Try Claude API for code generation
+        if self.api_client.is_ready(AgentRole::Coder) {
+            let context_info = self.context.as_ref()
+                .map(|c| format!("Project: {}, Language: {}", c.root_path, c.language))
+                .unwrap_or_else(|| "No project context".to_string());
+            let system = format!(
+                "You are a code generation agent. {}\n\
+                Generate code changes as JSON array: [{{\"file_path\": \"...\", \"operation\": \"create\", \"new_content\": \"...code...\", \"description\": \"...\"}}]\n\
+                Only output valid JSON.",
+                context_info
+            );
+            let messages = vec![crate::mcp_api::ChatMessage {
+                role: "user".to_string(),
+                content: format!("Task: {} - {}", task.title, task.description),
+            }];
+            if let Ok(response) = self.api_client.call_claude(&messages, &system) {
+                // Try to parse as structured code edits
+                if let Ok(edits) = serde_json::from_str::<Vec<serde_json::Value>>(&response.content) {
+                    let code_edits: Vec<CodeEdit> = edits.iter().filter_map(|e| {
+                        Some(CodeEdit {
+                            file_path: e["file_path"].as_str()?.to_string(),
+                            operation: match e["operation"].as_str() {
+                                Some("replace") => EditOperation::Replace,
+                                Some("insert") => EditOperation::Insert,
+                                Some("delete") => EditOperation::Delete,
+                                Some("append") => EditOperation::Append,
+                                _ => EditOperation::Create,
+                            },
+                            old_content: e["old_content"].as_str().map(String::from),
+                            new_content: e["new_content"].as_str().unwrap_or("").to_string(),
+                            line_start: e["line_start"].as_u64().map(|n| n as u32),
+                            line_end: e["line_end"].as_u64().map(|n| n as u32),
+                            description: e["description"].as_str().unwrap_or("Generated by AI").to_string(),
+                        })
+                    }).collect();
+                    if !code_edits.is_empty() {
+                        return code_edits;
+                    }
+                }
+                // If JSON parsing failed, treat entire response as code for a single file
+                return vec![CodeEdit {
+                    file_path: format!("src/{}.rs", task.title.to_lowercase().replace(' ', "_")),
+                    operation: EditOperation::Create,
+                    old_content: None,
+                    new_content: response.content,
+                    line_start: None,
+                    line_end: None,
+                    description: task.description.clone(),
+                }];
+            }
+        }
+
+        // Fallback: generate template code (safe placeholder, no unimplemented!())
         vec![CodeEdit {
-            file_path: "src/new_feature.rs".to_string(),
+            file_path: format!("src/{}.rs", task.title.to_lowercase().replace(' ', "_")),
             operation: EditOperation::Create,
             old_content: None,
             new_content: format!(
-                "// Auto-generated for task: {}\n\
-                 // TODO: Implement {}\n\n\
-                 pub fn placeholder() {{\n    \
-                     unimplemented!(\"Generated by Claude Opus 5\")\n\
-                 }}\n",
-                task.title,
-                task.description
+                "// Task: {}\n// Description: {}\n// TODO: Implement this feature\n\npub fn placeholder() {{\n    // Implementation needed\n}}\n",
+                task.title, task.description
             ),
             line_start: None,
             line_end: None,
@@ -900,23 +1014,63 @@ impl McpOrchestrator {
     
     /// Auditor reviews proposed changes for feasibility and compatibility
     fn auditor_review(&mut self, edits: &[CodeEdit], tasks: &[Task]) -> AuditResult {
-        // In real implementation, this calls Gemini API with full project context
-        // For now, perform basic static analysis
-        
+        // Always perform local static analysis first
+        let mut result = self.local_audit(edits, tasks);
+
+        // Enhance with Gemini API if available
+        if self.api_client.is_ready(AgentRole::Auditor) {
+            let context = self.context.as_ref()
+                .map(|c| format!("Project: {}", c.root_path))
+                .unwrap_or_default();
+            let edits_summary: Vec<String> = edits.iter()
+                .map(|e| format!("File: {}, Op: {:?}, Lines: {:?}", e.file_path, e.operation, e.line_start))
+                .collect();
+            let messages = vec![crate::mcp_api::ChatMessage {
+                role: "user".to_string(),
+                content: format!(
+                    "Review these code changes for correctness, security, and best practices:\n{}",
+                    edits_summary.join("\n")
+                ),
+            }];
+            if let Ok(response) = self.api_client.call_gemini(&messages, &context) {
+                // Merge API audit insights with local analysis
+                // Average the feasibility score with the API's score
+                result.feasibility_score = (result.feasibility_score + response.feasibility_score) / 2.0;
+                // Add any issues from the API response
+                for issue_str in &response.issues {
+                    result.issues.push(AuditIssue {
+                        severity: IssueSeverity::Info,
+                        category: IssueCategory::Architecture,
+                        description: issue_str.clone(),
+                        file_path: None,
+                        line_number: None,
+                        suggestion: None,
+                    });
+                }
+                // Add API suggestions
+                result.suggestions.extend(response.suggestions.clone());
+            }
+        }
+
+        result
+    }
+
+    /// Local static analysis of code edits (fallback when API is unavailable)
+    fn local_audit(&mut self, edits: &[CodeEdit], tasks: &[Task]) -> AuditResult {
         let id = self.next_audit_id;
         self.next_audit_id += 1;
-        
+
         let mut issues = Vec::new();
         let mut feasibility_score = 1.0_f32;
         let mut compatibility_score = 1.0_f32;
         let mut affected_files: Vec<String> = Vec::new();
-        
+
         for edit in edits {
             affected_files.push(edit.file_path.clone());
-            
+
             // Check for potential issues
             let content = &edit.new_content;
-            
+
             // Check for unimplemented/todo markers
             if content.contains("unimplemented!") || content.contains("todo!") {
                 issues.push(AuditIssue {
@@ -929,7 +1083,7 @@ impl McpOrchestrator {
                 });
                 feasibility_score -= 0.1;
             }
-            
+
             // Check for unwrap() calls (potential panics)
             if content.contains(".unwrap()") {
                 issues.push(AuditIssue {
@@ -942,7 +1096,7 @@ impl McpOrchestrator {
                 });
                 compatibility_score -= 0.05;
             }
-            
+
             // Check for unsafe blocks
             if content.contains("unsafe {") || content.contains("unsafe{") {
                 issues.push(AuditIssue {
@@ -955,7 +1109,7 @@ impl McpOrchestrator {
                 });
                 compatibility_score -= 0.15;
             }
-            
+
             // Check for missing error handling patterns
             if content.contains("panic!") {
                 issues.push(AuditIssue {
@@ -968,7 +1122,7 @@ impl McpOrchestrator {
                 });
                 feasibility_score -= 0.1;
             }
-            
+
             // Check for very long functions (complexity)
             let line_count = content.lines().count();
             if line_count > 100 {
@@ -981,7 +1135,7 @@ impl McpOrchestrator {
                     suggestion: Some("Extract helper functions for better maintainability".to_string()),
                 });
             }
-            
+
             // Check for hardcoded secrets/credentials patterns
             let secrets_patterns = ["password", "secret", "api_key", "token", "credential"];
             for pattern in secrets_patterns {
@@ -998,12 +1152,12 @@ impl McpOrchestrator {
                 }
             }
         }
-        
+
         // Determine verdict based on scores and issues
         let has_critical = issues.iter().any(|i| i.severity == IssueSeverity::Critical);
         let has_errors = issues.iter().any(|i| i.severity == IssueSeverity::Error);
         let warning_count = issues.iter().filter(|i| i.severity == IssueSeverity::Warning).count();
-        
+
         let verdict = if has_critical {
             AuditVerdict::Rejected
         } else if has_errors || feasibility_score < 0.6 || compatibility_score < 0.6 {
@@ -1013,7 +1167,7 @@ impl McpOrchestrator {
         } else {
             AuditVerdict::Approved
         };
-        
+
         // Calculate impact level
         let impact = if affected_files.is_empty() {
             ImpactLevel::None
@@ -1026,7 +1180,7 @@ impl McpOrchestrator {
         } else {
             ImpactLevel::Significant
         };
-        
+
         // Generate suggestions
         let mut suggestions = Vec::new();
         if !issues.is_empty() {
@@ -1038,7 +1192,7 @@ impl McpOrchestrator {
         if affected_files.len() > 3 {
             suggestions.push("Multiple files affected - test thoroughly".to_string());
         }
-        
+
         AuditResult {
             id,
             verdict,

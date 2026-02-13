@@ -12,6 +12,10 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use rand::rngs::OsRng;
 use rand::{Rng, RngCore};
 use sha2::{Sha256, Digest};
+use chacha20poly1305::{
+    aead::{Aead, KeyInit},
+    ChaCha20Poly1305, Nonce,
+};
 use crate::fontcase;
 
 // ============================================================================
@@ -355,11 +359,21 @@ impl AuthManager {
     
     fn save_config(&self) -> Result<(), String> {
         let _ = fs::create_dir_all(&self.config_dir);
-        
-        // Save device key (encrypted in production)
+
+        // Save device key — encrypted with machine-derived key
         if let Some(ref key) = self.master_key {
             let key_path = self.config_dir.join("device.key");
-            fs::write(&key_path, hex::encode(key))
+            let protection_key = derive_machine_key();
+            let cipher = ChaCha20Poly1305::new(&protection_key.into());
+            let mut nonce_bytes = [0u8; 12];
+            OsRng.fill_bytes(&mut nonce_bytes);
+            let nonce = Nonce::from_slice(&nonce_bytes);
+            let ciphertext = cipher.encrypt(nonce, key.as_ref())
+                .map_err(|e| format!("Failed to encrypt device key: {}", e))?;
+            // Store as: nonce (12 bytes) || ciphertext
+            let mut blob = nonce_bytes.to_vec();
+            blob.extend_from_slice(&ciphertext);
+            fs::write(&key_path, hex::encode(&blob))
                 .map_err(|e| format!("Failed to save device key: {}", e))?;
         }
         
@@ -402,13 +416,27 @@ impl AuthManager {
     }
     
     fn load_config(&mut self) {
-        // Load device key
+        // Load device key — decrypt with machine-derived key
         let key_path = self.config_dir.join("device.key");
         if let Ok(key_hex) = fs::read_to_string(&key_path) {
-            if let Ok(key_bytes) = hex::decode(key_hex.trim()) {
-                if key_bytes.len() == 32 {
+            if let Ok(blob) = hex::decode(key_hex.trim()) {
+                if blob.len() > 12 {
+                    // Encrypted format: nonce (12 bytes) || ciphertext
+                    let (nonce_bytes, ciphertext) = blob.split_at(12);
+                    let protection_key = derive_machine_key();
+                    let cipher = ChaCha20Poly1305::new(&protection_key.into());
+                    let nonce = Nonce::from_slice(nonce_bytes);
+                    if let Ok(plaintext) = cipher.decrypt(nonce, ciphertext) {
+                        if plaintext.len() == 32 {
+                            let mut key = [0u8; 32];
+                            key.copy_from_slice(&plaintext);
+                            self.master_key = Some(key);
+                        }
+                    }
+                } else if blob.len() == 32 {
+                    // Legacy plaintext migration: read old key, will re-encrypt on next save
                     let mut key = [0u8; 32];
-                    key.copy_from_slice(&key_bytes);
+                    key.copy_from_slice(&blob);
                     self.master_key = Some(key);
                 }
             }
@@ -995,6 +1023,39 @@ impl FirstRunState {
             FirstRunStep::Complete => FirstRunStep::PhonePairing,
         };
     }
+}
+
+// ============================================================================
+// MACHINE-DERIVED KEY FOR AT-REST ENCRYPTION
+// ============================================================================
+
+/// Derive a deterministic 256-bit key from machine-specific attributes.
+/// This provides at-rest protection: the encrypted key file is useless on
+/// a different machine. The key is NOT a secret — it's a machine fingerprint
+/// used solely to bind the device.key file to *this* machine.
+fn derive_machine_key() -> [u8; 32] {
+    let mut hasher = Sha256::new();
+
+    // Mix hostname (unique per machine)
+    if let Ok(name) = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .or_else(|_| hostname::get().map(|s| s.to_string_lossy().into_owned()))
+    {
+        hasher.update(name.as_bytes());
+    }
+
+    // Mix user profile path (unique per user+machine)
+    if let Some(home) = dirs::home_dir() {
+        hasher.update(home.to_string_lossy().as_bytes());
+    }
+
+    // Static application salt (prevents cross-app collision)
+    hasher.update(b"sassy-browser-device-key-protection-v1");
+
+    let result = hasher.finalize();
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&result);
+    key
 }
 
 // ============================================================================

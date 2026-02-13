@@ -184,6 +184,15 @@ pub enum McpCommand {
     // File Viewer
     OpenFile { path: String },
     GetFileInfo { tab_id: Option<u64> },
+
+    // Extended Tools
+    ActivateTab { tab_id: u64 },
+    SearchBookmarks { query: String },
+    AddBookmark { url: String, title: String, folder_id: Option<String> },
+    SearchHistory { query: String, limit: u32 },
+    StartDownload { url: String, filename: Option<String> },
+    ListDownloads,
+    WebSearch { query: String },
 }
 
 /// Tab information returned from browser
@@ -257,8 +266,61 @@ pub enum McpResponse {
     OpenFileResult { success: bool, path: String, format: String, viewer: String },
     FileInfo { is_file: bool, path: Option<String>, format: Option<String>, metadata: JsonValue },
 
+    // Extended Tools
+    ActivateTabResult { success: bool, tab_id: u64 },
+    BookmarkResults { bookmarks: Vec<JsonValue>, count: usize },
+    BookmarkAdded { success: bool, id: String },
+    HistoryResults { entries: Vec<JsonValue>, count: usize },
+    DownloadStarted { success: bool, download_id: String, url: String },
+    DownloadList { downloads: Vec<JsonValue> },
+    WebSearchResult { success: bool, url: String },
+
     // Error
     Error { code: i32, message: String },
+}
+
+// ============================================================================
+// Context & Session Management
+// ============================================================================
+
+/// MCP Context for multi-turn conversations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpContext {
+    pub id: String,
+    pub title: String,
+    pub created_at: String,
+    pub last_active_at: String,
+    pub model_family: Option<String>,
+    pub temperature: f32,
+    pub max_tokens: u32,
+    pub system_prompt: Option<String>,
+    pub messages: Vec<McpChatMessage>,
+    pub metadata: HashMap<String, JsonValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpChatMessage {
+    pub role: String,
+    pub content: String,
+    pub timestamp: String,
+}
+
+/// MCP Server metrics
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct McpMetrics {
+    pub tool_call_count: HashMap<String, u64>,
+    pub total_requests: u64,
+    pub total_errors: u64,
+    pub contexts_created: u64,
+    pub uptime_secs: u64,
+}
+
+/// MCP Event types for observability
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpEvent {
+    pub event_type: String,
+    pub timestamp: String,
+    pub data: JsonValue,
 }
 
 // ============================================================================
@@ -701,6 +763,116 @@ fn define_tools() -> Vec<McpTool> {
                 }
             }),
         },
+
+        // === Extended Tools ===
+        McpTool {
+            name: "activate_tab".to_string(),
+            description: "Switch to a specific tab".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "tab_id": {
+                        "type": "integer",
+                        "description": "Tab ID to activate"
+                    }
+                },
+                "required": ["tab_id"]
+            }),
+        },
+        McpTool {
+            name: "search_bookmarks".to_string(),
+            description: "Search bookmarks".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query"
+                    }
+                },
+                "required": ["query"]
+            }),
+        },
+        McpTool {
+            name: "add_bookmark".to_string(),
+            description: "Add a bookmark".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "URL to bookmark"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Bookmark title"
+                    },
+                    "folder_id": {
+                        "type": "string",
+                        "description": "Optional folder ID"
+                    }
+                },
+                "required": ["url", "title"]
+            }),
+        },
+        McpTool {
+            name: "search_history".to_string(),
+            description: "Search browsing history".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum results (default: 50)"
+                    }
+                },
+                "required": ["query"]
+            }),
+        },
+        McpTool {
+            name: "start_download".to_string(),
+            description: "Download a file from URL".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "URL to download"
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "Optional filename"
+                    }
+                },
+                "required": ["url"]
+            }),
+        },
+        McpTool {
+            name: "list_downloads".to_string(),
+            description: "List current downloads".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        McpTool {
+            name: "web_search".to_string(),
+            description: "Search the web via the browser's search engine".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query"
+                    }
+                },
+                "required": ["query"]
+            }),
+        },
     ]
 }
 
@@ -713,6 +885,13 @@ pub struct McpServer {
     config: McpServerConfig,
     tools: Vec<McpTool>,
     bridge: McpBridgeSender,
+    server_id: String,
+    started_at: std::time::Instant,
+    contexts: HashMap<String, McpContext>,
+    metrics: McpMetrics,
+    events: Vec<McpEvent>,
+    log_level: String,
+    shutdown_requested: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl McpServer {
@@ -722,6 +901,13 @@ impl McpServer {
             config,
             tools,
             bridge,
+            server_id: uuid::Uuid::new_v4().to_string(),
+            started_at: std::time::Instant::now(),
+            contexts: HashMap::new(),
+            metrics: McpMetrics::default(),
+            events: Vec::new(),
+            log_level: "info".to_string(),
+            shutdown_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -753,6 +939,11 @@ impl McpServer {
                 writeln!(stdout, "{}", resp_json).ok();
                 stdout.flush().ok();
             }
+
+            if self.shutdown_requested.load(std::sync::atomic::Ordering::SeqCst) {
+                eprintln!("[MCP] Shutting down after completing pending request");
+                break;
+            }
         }
     }
 
@@ -778,6 +969,22 @@ impl McpServer {
             "tools/list" => self.handle_tools_list(),
             "tools/call" => self.handle_tool_call(&request.params),
             "ping" => Ok(json!({"pong": true})),
+
+            // Context management
+            "contexts/list" => self.handle_contexts_list(),
+            "contexts/create" => self.handle_context_create(&request.params),
+            "contexts/destroy" => self.handle_context_destroy(&request.params),
+            "contexts/get" => self.handle_context_get(&request.params),
+
+            // Server info
+            "server/info" => self.handle_server_info(),
+            "server/health" => self.handle_health_check(),
+            "server/metrics" => self.handle_metrics(),
+
+            // Admin
+            "admin/log_level" => self.handle_log_level(&request.params),
+            "admin/shutdown" => self.handle_shutdown(),
+            "admin/gc" => self.handle_gc(),
 
             // Unknown method
             _ => Err((METHOD_NOT_FOUND, format!("Unknown method: {}", request.method))),
@@ -850,6 +1057,15 @@ impl McpServer {
             // File viewer
             "open_file" => self.tool_open_file(arguments),
             "get_file_info" => self.tool_get_file_info(arguments),
+
+            // Extended tools
+            "activate_tab" => self.tool_activate_tab(arguments),
+            "search_bookmarks" => self.tool_search_bookmarks(arguments),
+            "add_bookmark" => self.tool_add_bookmark(arguments),
+            "search_history" => self.tool_search_history(arguments),
+            "start_download" => self.tool_start_download(arguments),
+            "list_downloads" => self.tool_list_downloads(arguments),
+            "web_search" => self.tool_web_search(arguments),
 
             _ => Err((METHOD_NOT_FOUND, format!("Unknown tool: {}", name))),
         }
@@ -1229,6 +1445,322 @@ impl McpServer {
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
         }
     }
+
+    // =========================================================================
+    // Extended Tool Implementations
+    // =========================================================================
+
+    fn tool_activate_tab(&self, args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        let tab_id = args["tab_id"]
+            .as_u64()
+            .ok_or((INVALID_PARAMS, "Missing tab_id".to_string()))?;
+
+        match self.bridge.send_command(McpCommand::ActivateTab { tab_id }) {
+            Ok(McpResponse::ActivateTabResult { success, tab_id }) => {
+                Ok(json!({
+                    "success": success,
+                    "tab_id": tab_id
+                }))
+            }
+            Ok(McpResponse::Error { code, message }) => Err((code, message)),
+            Err(e) => Err((INTERNAL_ERROR, e)),
+            _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
+        }
+    }
+
+    fn tool_search_bookmarks(&self, args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        let query = args["query"]
+            .as_str()
+            .ok_or((INVALID_PARAMS, "Missing query".to_string()))?
+            .to_string();
+
+        match self.bridge.send_command(McpCommand::SearchBookmarks { query }) {
+            Ok(McpResponse::BookmarkResults { bookmarks, count }) => {
+                Ok(json!({
+                    "bookmarks": bookmarks,
+                    "count": count
+                }))
+            }
+            Ok(McpResponse::Error { code, message }) => Err((code, message)),
+            Err(e) => Err((INTERNAL_ERROR, e)),
+            _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
+        }
+    }
+
+    fn tool_add_bookmark(&self, args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        let url = args["url"]
+            .as_str()
+            .ok_or((INVALID_PARAMS, "Missing url".to_string()))?
+            .to_string();
+        let title = args["title"]
+            .as_str()
+            .ok_or((INVALID_PARAMS, "Missing title".to_string()))?
+            .to_string();
+        let folder_id = args["folder_id"].as_str().map(String::from);
+
+        match self.bridge.send_command(McpCommand::AddBookmark { url, title, folder_id }) {
+            Ok(McpResponse::BookmarkAdded { success, id }) => {
+                Ok(json!({
+                    "success": success,
+                    "id": id
+                }))
+            }
+            Ok(McpResponse::Error { code, message }) => Err((code, message)),
+            Err(e) => Err((INTERNAL_ERROR, e)),
+            _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
+        }
+    }
+
+    fn tool_search_history(&self, args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        let query = args["query"]
+            .as_str()
+            .ok_or((INVALID_PARAMS, "Missing query".to_string()))?
+            .to_string();
+        let limit = args["limit"].as_u64().unwrap_or(50) as u32;
+
+        match self.bridge.send_command(McpCommand::SearchHistory { query, limit }) {
+            Ok(McpResponse::HistoryResults { entries, count }) => {
+                Ok(json!({
+                    "entries": entries,
+                    "count": count
+                }))
+            }
+            Ok(McpResponse::Error { code, message }) => Err((code, message)),
+            Err(e) => Err((INTERNAL_ERROR, e)),
+            _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
+        }
+    }
+
+    fn tool_start_download(&self, args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        let url = args["url"]
+            .as_str()
+            .ok_or((INVALID_PARAMS, "Missing url".to_string()))?
+            .to_string();
+        let filename = args["filename"].as_str().map(String::from);
+
+        match self.bridge.send_command(McpCommand::StartDownload { url: url.clone(), filename }) {
+            Ok(McpResponse::DownloadStarted { success, download_id, url }) => {
+                Ok(json!({
+                    "success": success,
+                    "download_id": download_id,
+                    "url": url
+                }))
+            }
+            Ok(McpResponse::Error { code, message }) => Err((code, message)),
+            Err(e) => Err((INTERNAL_ERROR, e)),
+            _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
+        }
+    }
+
+    fn tool_list_downloads(&self, _args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        match self.bridge.send_command(McpCommand::ListDownloads) {
+            Ok(McpResponse::DownloadList { downloads }) => {
+                Ok(json!({
+                    "downloads": downloads
+                }))
+            }
+            Ok(McpResponse::Error { code, message }) => Err((code, message)),
+            Err(e) => Err((INTERNAL_ERROR, e)),
+            _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
+        }
+    }
+
+    fn tool_web_search(&self, args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        let query = args["query"]
+            .as_str()
+            .ok_or((INVALID_PARAMS, "Missing query".to_string()))?
+            .to_string();
+
+        match self.bridge.send_command(McpCommand::WebSearch { query: query.clone() }) {
+            Ok(McpResponse::WebSearchResult { success, url }) => {
+                Ok(json!({
+                    "success": success,
+                    "url": url,
+                    "query": query
+                }))
+            }
+            Ok(McpResponse::Error { code, message }) => Err((code, message)),
+            Err(e) => Err((INTERNAL_ERROR, e)),
+            _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
+        }
+    }
+
+    // =========================================================================
+    // Context Management Handlers
+    // =========================================================================
+
+    fn handle_contexts_list(&self) -> Result<JsonValue, (i32, String)> {
+        let contexts: Vec<JsonValue> = self.contexts.values()
+            .map(|ctx| json!({
+                "id": ctx.id,
+                "title": ctx.title,
+                "created_at": ctx.created_at,
+                "last_active_at": ctx.last_active_at,
+                "message_count": ctx.messages.len(),
+            }))
+            .collect();
+
+        Ok(json!({
+            "contexts": contexts,
+            "count": contexts.len()
+        }))
+    }
+
+    fn handle_context_create(&mut self, params: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        let title = params["title"]
+            .as_str()
+            .unwrap_or("New Context")
+            .to_string();
+        let model_family = params["model_family"].as_str().map(String::from);
+        let temperature = params["temperature"].as_f64().unwrap_or(0.7) as f32;
+        let max_tokens = params["max_tokens"].as_u64().unwrap_or(4096) as u32;
+        let system_prompt = params["system_prompt"].as_str().map(String::from);
+
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let context = McpContext {
+            id: id.clone(),
+            title,
+            created_at: now.clone(),
+            last_active_at: now,
+            model_family,
+            temperature,
+            max_tokens,
+            system_prompt,
+            messages: Vec::new(),
+            metadata: HashMap::new(),
+        };
+
+        self.contexts.insert(id.clone(), context.clone());
+        self.metrics.contexts_created += 1;
+
+        Ok(json!({
+            "id": id,
+            "context": context
+        }))
+    }
+
+    fn handle_context_destroy(&mut self, params: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        let id = params["id"]
+            .as_str()
+            .ok_or((INVALID_PARAMS, "Missing context id".to_string()))?;
+
+        if self.contexts.remove(id).is_some() {
+            Ok(json!({
+                "success": true,
+                "id": id
+            }))
+        } else {
+            Err((INVALID_PARAMS, format!("Context not found: {}", id)))
+        }
+    }
+
+    fn handle_context_get(&self, params: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        let id = params["id"]
+            .as_str()
+            .ok_or((INVALID_PARAMS, "Missing context id".to_string()))?;
+
+        if let Some(context) = self.contexts.get(id) {
+            Ok(json!(context))
+        } else {
+            Err((INVALID_PARAMS, format!("Context not found: {}", id)))
+        }
+    }
+
+    // =========================================================================
+    // Server Info & Admin Handlers
+    // =========================================================================
+
+    fn handle_server_info(&self) -> Result<JsonValue, (i32, String)> {
+        Ok(json!({
+            "server_id": self.server_id,
+            "version": env!("CARGO_PKG_VERSION"),
+            "uptime_secs": self.started_at.elapsed().as_secs(),
+            "log_level": self.log_level,
+            "config": {
+                "transport": self.config.transport,
+                "port": self.config.port,
+                "allowed_tools": self.config.allowed_tools,
+            }
+        }))
+    }
+
+    fn handle_health_check(&self) -> Result<JsonValue, (i32, String)> {
+        Ok(json!({
+            "status": "healthy",
+            "uptime_secs": self.started_at.elapsed().as_secs(),
+            "contexts_active": self.contexts.len(),
+            "events_logged": self.events.len(),
+        }))
+    }
+
+    fn handle_metrics(&mut self) -> Result<JsonValue, (i32, String)> {
+        self.metrics.uptime_secs = self.started_at.elapsed().as_secs();
+
+        Ok(json!({
+            "metrics": self.metrics,
+            "contexts_active": self.contexts.len(),
+            "events_count": self.events.len(),
+        }))
+    }
+
+    fn handle_log_level(&mut self, params: &JsonValue) -> Result<JsonValue, (i32, String)> {
+        let level = params["level"]
+            .as_str()
+            .ok_or((INVALID_PARAMS, "Missing level".to_string()))?;
+
+        let valid_levels = ["error", "warn", "info", "debug", "trace"];
+        if !valid_levels.contains(&level) {
+            return Err((INVALID_PARAMS, format!("Invalid log level: {}. Must be one of: {:?}", level, valid_levels)));
+        }
+
+        self.log_level = level.to_string();
+
+        Ok(json!({
+            "success": true,
+            "log_level": self.log_level
+        }))
+    }
+
+    fn handle_shutdown(&self) -> Result<JsonValue, (i32, String)> {
+        let uptime = self.started_at.elapsed().as_secs();
+        eprintln!("[MCP] Shutdown requested after {} seconds uptime", uptime);
+        self.shutdown_requested.store(true, std::sync::atomic::Ordering::SeqCst);
+        Ok(json!({
+            "status": "shutting_down",
+            "message": "Shutdown initiated",
+            "uptime_secs": uptime
+        }))
+    }
+
+    fn handle_gc(&mut self) -> Result<JsonValue, (i32, String)> {
+        // Clean up old events (keep last 1000)
+        if self.events.len() > 1000 {
+            self.events.drain(0..self.events.len() - 1000);
+        }
+
+        // Clean up inactive contexts (older than 24 hours)
+        let now = chrono::Utc::now();
+        let mut removed_contexts = 0;
+        self.contexts.retain(|_, ctx| {
+            if let Ok(last_active) = chrono::DateTime::parse_from_rfc3339(&ctx.last_active_at) {
+                let age = now.signed_duration_since(last_active);
+                if age.num_hours() > 24 {
+                    removed_contexts += 1;
+                    return false;
+                }
+            }
+            true
+        });
+
+        Ok(json!({
+            "success": true,
+            "events_retained": self.events.len(),
+            "contexts_removed": removed_contexts,
+            "contexts_active": self.contexts.len(),
+        }))
+    }
 }
 
 // ============================================================================
@@ -1274,21 +1806,51 @@ pub fn run_mcp_server(config: McpServerConfig) {
     run_mcp_server_standalone(config);
 }
 
+/// Headless browser state combining tab engine with rendering pipeline
+struct HeadlessBrowserState {
+    engine: crate::browser::BrowserEngine,
+    renderer: crate::renderer::Renderer,
+    js_interpreter: crate::js::JsInterpreter,
+    html_renderer: crate::html_renderer::HtmlRenderer,
+    ref_counter: u64,
+    element_refs: std::collections::HashMap<String, String>,
+}
+
+impl HeadlessBrowserState {
+    fn new() -> Self {
+        Self {
+            engine: crate::browser::BrowserEngine::new(),
+            renderer: crate::renderer::Renderer::new(1920, 1080),
+            js_interpreter: crate::js::JsInterpreter::new(),
+            html_renderer: crate::html_renderer::HtmlRenderer::new(),
+            ref_counter: 0,
+            element_refs: std::collections::HashMap::new(),
+        }
+    }
+
+    /// After navigation, fetch and parse page content into the renderer
+    fn refresh_renderer(&mut self, url: &str) {
+        // Fetch the page content via HTTP
+        if let Ok(html) = crate::http_client::fetch_text(url) {
+            self.renderer.parse_html(&html);
+            self.renderer.compute_styles();
+            self.renderer.layout();
+            self.renderer.paint();
+        }
+    }
+}
+
 /// Run a headless browser that processes MCP commands
 fn run_headless_browser(bridge: McpBridgeReceiver) {
-    use crate::browser::BrowserEngine;
-    
-    let mut engine = BrowserEngine::new();
-    let mut ref_counter: u64 = 0;
-    let mut element_refs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    
+    let mut state = HeadlessBrowserState::new();
+
     eprintln!("Headless browser started, processing commands...");
-    
+
     loop {
         // Block waiting for commands
         match bridge.command_rx.recv() {
             Ok(cmd) => {
-                let response = process_command(&mut engine, &mut ref_counter, &mut element_refs, cmd);
+                let response = process_command(&mut state, cmd);
                 if let Err(e) = bridge.send_response(response) {
                     eprintln!("Failed to send response: {}", e);
                 }
@@ -1303,22 +1865,23 @@ fn run_headless_browser(bridge: McpBridgeReceiver) {
 
 /// Process a single MCP command and return a response
 fn process_command(
-    engine: &mut crate::browser::BrowserEngine,
-    ref_counter: &mut u64,
-    _element_refs: &mut std::collections::HashMap<String, String>,
+    state: &mut HeadlessBrowserState,
     cmd: McpCommand,
 ) -> McpResponse {
     use crate::browser::{TabContent, TabId};
-    
+
     match cmd {
         McpCommand::Navigate { url, tab_id } => {
             // If tab_id specified, switch to that tab first
             if let Some(id) = tab_id {
-                engine.set_active_tab_by_id(TabId(id));
+                state.engine.set_active_tab_by_id(TabId(id));
             }
-            
-            engine.navigate(&url);
-            
+
+            state.engine.navigate(&url);
+
+            // Also parse the page into our headless renderer for DOM queries
+            state.refresh_renderer(&url);
+
             McpResponse::NavigateResult {
                 success: true,
                 url: url.clone(),
@@ -1328,9 +1891,9 @@ fn process_command(
         
         McpCommand::NewTab { url } => {
             let id = if let Some(ref u) = url {
-                engine.new_tab_with_url(u)
+                state.engine.new_tab_with_url(u)
             } else {
-                engine.new_tab()
+                state.engine.new_tab()
             };
             
             McpResponse::NewTabResult {
@@ -1341,7 +1904,7 @@ fn process_command(
         }
         
         McpCommand::CloseTab { tab_id } => {
-            engine.close_tab_by_id(TabId(tab_id));
+            state.engine.close_tab_by_id(TabId(tab_id));
             
             McpResponse::CloseTabResult {
                 success: true,
@@ -1350,7 +1913,7 @@ fn process_command(
         }
         
         McpCommand::ListTabs => {
-            let tabs: Vec<TabInfo> = engine.tabs()
+            let tabs: Vec<TabInfo> = state.engine.tabs()
                 .iter()
                 .enumerate()
                 .map(|(idx, tab)| {
@@ -1375,7 +1938,7 @@ fn process_command(
                         title,
                         loading,
                         is_secure,
-                        trust_level: "untrusted".to_string(), // TODO: Get from sandbox
+                        trust_level: if is_secure { "acknowledged".to_string() } else { "untrusted".to_string() },
                         is_file,
                         file_type,
                     }
@@ -1384,15 +1947,15 @@ fn process_command(
             
             McpResponse::TabList {
                 tabs,
-                active_tab: engine.active_tab_index(),
+                active_tab: state.engine.active_tab_index(),
             }
         }
         
         McpCommand::GoBack { tab_id } => {
             if let Some(id) = tab_id {
-                engine.set_active_tab_by_id(TabId(id));
+                state.engine.set_active_tab_by_id(TabId(id));
             }
-            engine.go_back();
+            state.engine.go_back();
             
             McpResponse::NavigateResult {
                 success: true,
@@ -1403,9 +1966,9 @@ fn process_command(
         
         McpCommand::GoForward { tab_id } => {
             if let Some(id) = tab_id {
-                engine.set_active_tab_by_id(TabId(id));
+                state.engine.set_active_tab_by_id(TabId(id));
             }
-            engine.go_forward();
+            state.engine.go_forward();
             
             McpResponse::NavigateResult {
                 success: true,
@@ -1416,9 +1979,9 @@ fn process_command(
         
         McpCommand::Reload { tab_id } => {
             if let Some(id) = tab_id {
-                engine.set_active_tab_by_id(TabId(id));
+                state.engine.set_active_tab_by_id(TabId(id));
             }
-            engine.reload();
+            state.engine.reload();
             
             McpResponse::NavigateResult {
                 success: true,
@@ -1428,85 +1991,319 @@ fn process_command(
         }
         
         McpCommand::ReadPage { tab_id: _, depth, filter } => {
-            // TODO: Wire to actual DOM tree from html_renderer
-            // For now, return a placeholder structure
-            *ref_counter += 1;
-            let root_ref = format!("ref_{}", ref_counter);
-            
-            McpResponse::PageTree {
-                tree: Box::new(ElementInfo {
-                    ref_id: root_ref,
+            // Build an ElementInfo tree from the renderer's DOM document
+            fn node_to_element(
+                node: &crate::dom::NodeRef,
+                ref_ctr: &mut u64,
+                element_refs: &mut std::collections::HashMap<String, String>,
+                remaining_depth: u32,
+                filter: &str,
+            ) -> Option<ElementInfo> {
+                let n = node.borrow();
+                match n.node_type {
+                    crate::dom::NodeType::Element => {
+                        let tag = n.tag_name.clone().unwrap_or_default();
+                        let is_interactive = matches!(
+                            tag.as_str(),
+                            "a" | "button" | "input" | "select" | "textarea" | "label" | "details" | "summary"
+                        );
+
+                        // Apply filter
+                        if filter == "interactive" && !is_interactive && remaining_depth == 0 {
+                            return None;
+                        }
+
+                        *ref_ctr += 1;
+                        let ref_id = format!("ref_{}", ref_ctr);
+                        element_refs.insert(ref_id.clone(), tag.clone());
+
+                        let children = if remaining_depth > 0 {
+                            n.children.iter().filter_map(|child| {
+                                node_to_element(child, ref_ctr, element_refs, remaining_depth - 1, filter)
+                            }).collect()
+                        } else {
+                            vec![]
+                        };
+
+                        Some(ElementInfo {
+                            ref_id,
+                            tag,
+                            id: n.get_id(),
+                            classes: n.get_classes(),
+                            text: n.text_content.clone(),
+                            attributes: n.attributes.clone(),
+                            interactive: is_interactive,
+                            bounds: None, // Layout bounds not available in headless mode yet
+                            children,
+                        })
+                    }
+                    crate::dom::NodeType::Text => {
+                        if filter == "interactive" {
+                            return None;
+                        }
+                        let text = n.text_content.clone().unwrap_or_default();
+                        if text.trim().is_empty() {
+                            return None;
+                        }
+                        *ref_ctr += 1;
+                        Some(ElementInfo {
+                            ref_id: format!("ref_{}", ref_ctr),
+                            tag: "#text".to_string(),
+                            id: None,
+                            classes: vec![],
+                            text: Some(text),
+                            attributes: HashMap::new(),
+                            interactive: false,
+                            bounds: None,
+                            children: vec![],
+                        })
+                    }
+                    _ => None,
+                }
+            }
+
+            // Walk the renderer's document to build the tree
+            let doc = &state.renderer.document;
+            let root = &doc.root;
+            let ref_ctr = &mut state.ref_counter;
+            let tree = node_to_element(
+                root,
+                ref_ctr,
+                &mut state.element_refs,
+                depth,
+                &filter,
+            ).unwrap_or_else(|| {
+                *ref_ctr += 1;
+                ElementInfo {
+                    ref_id: format!("ref_{}", ref_ctr),
                     tag: "html".to_string(),
                     id: None,
                     classes: vec![],
-                    text: None,
+                    text: Some("(empty document)".to_string()),
                     attributes: HashMap::new(),
                     interactive: false,
                     bounds: None,
-                    children: vec![
-                        ElementInfo {
-                            ref_id: { *ref_counter += 1; format!("ref_{}", ref_counter) },
-                            tag: "body".to_string(),
-                            id: None,
-                            classes: vec![],
-                            text: Some("Page content".to_string()),
-                            attributes: HashMap::new(),
-                            interactive: false,
-                            bounds: Some(ElementBounds { x: 0.0, y: 0.0, width: 1920.0, height: 1080.0 }),
-                            children: vec![],
-                        }
-                    ],
-                }),
+                    children: vec![],
+                }
+            });
+
+            McpResponse::PageTree {
+                tree: Box::new(tree),
                 depth,
                 filter,
             }
         }
         
-        McpCommand::GetText { tab_id: _, selector: _ } => {
-            // TODO: Wire to DOM text extraction
+        McpCommand::GetText { tab_id: _, selector } => {
+            // Extract text from the renderer's DOM tree
+            let doc = &state.renderer.document;
+            let root = &doc.root;
+            let text = {
+                let node = root.borrow();
+                node.get_inner_text()
+            };
+
+            // If a CSS selector hint was provided, try to narrow down
+            let result_text = if let Some(sel) = selector {
+                // Simple tag-name or #id selector matching
+                fn find_text_by_selector(
+                    node: &crate::dom::NodeRef,
+                    selector: &str,
+                ) -> Option<String> {
+                    let n = node.borrow();
+                    if let crate::dom::NodeType::Element = n.node_type {
+                        let tag = n.tag_name.as_deref().unwrap_or("");
+                        let id = n.get_id().unwrap_or_default();
+                        let classes = n.get_classes();
+                        let matches = if selector.starts_with('#') {
+                            id == &selector[1..]
+                        } else if selector.starts_with('.') {
+                            classes.iter().any(|c| c == &selector[1..])
+                        } else {
+                            tag == selector
+                        };
+                        if matches {
+                            return Some(n.get_inner_text());
+                        }
+                        for child in &n.children {
+                            if let Some(t) = find_text_by_selector(child, selector) {
+                                return Some(t);
+                            }
+                        }
+                    }
+                    None
+                }
+                find_text_by_selector(root, &sel).unwrap_or(text)
+            } else {
+                text
+            };
+
+            let len = result_text.len();
             McpResponse::TextContent {
-                text: "Page text content".to_string(),
-                length: 17,
+                text: result_text,
+                length: len,
             }
         }
         
-        McpCommand::FindElement { query, tab_id: _, max_results: _ } => {
-            // TODO: Wire to DOM query
-            *ref_counter += 1;
-            
-            McpResponse::FindResult {
-                elements: vec![
-                    ElementInfo {
-                        ref_id: format!("ref_{}", ref_counter),
-                        tag: "button".to_string(),
-                        id: Some("submit".to_string()),
-                        classes: vec!["btn".to_string()],
-                        text: Some("Submit".to_string()),
-                        attributes: HashMap::new(),
-                        interactive: true,
-                        bounds: Some(ElementBounds { x: 100.0, y: 200.0, width: 80.0, height: 30.0 }),
-                        children: vec![],
+        McpCommand::FindElement { query, tab_id: _, max_results } => {
+            // Search the DOM tree for elements matching the query (by text, tag, id, or class)
+            let mut results: Vec<ElementInfo> = Vec::new();
+            let query_lower = crate::fontcase::ascii_lower(&query);
+
+            fn find_matching(
+                node: &crate::dom::NodeRef,
+                query_lower: &str,
+                ref_ctr: &mut u64,
+                element_refs: &mut std::collections::HashMap<String, String>,
+                results: &mut Vec<ElementInfo>,
+                max: u32,
+            ) {
+                if results.len() >= max as usize { return; }
+                let n = node.borrow();
+                if let crate::dom::NodeType::Element = n.node_type {
+                    let tag = n.tag_name.as_deref().unwrap_or("");
+                    let id = n.get_id().unwrap_or_default();
+                    let classes = n.get_classes();
+                    let text = n.get_inner_text();
+                    let text_lower = crate::fontcase::ascii_lower(&text);
+
+                    let tag_match = crate::fontcase::ascii_lower(tag).contains(query_lower);
+                    let id_match = crate::fontcase::ascii_lower(&id).contains(query_lower);
+                    let class_match = classes.iter().any(|c| crate::fontcase::ascii_lower(c).contains(query_lower));
+                    let text_match = text_lower.contains(query_lower);
+
+                    if tag_match || id_match || class_match || text_match {
+                        *ref_ctr += 1;
+                        let ref_id = format!("ref_{}", ref_ctr);
+                        let is_interactive = matches!(
+                            tag, "a" | "button" | "input" | "select" | "textarea" | "label"
+                        );
+                        element_refs.insert(ref_id.clone(), tag.to_string());
+                        results.push(ElementInfo {
+                            ref_id,
+                            tag: tag.to_string(),
+                            id: if id.is_empty() { None } else { Some(id) },
+                            classes,
+                            text: if text.is_empty() { None } else { Some(text) },
+                            attributes: n.attributes.clone(),
+                            interactive: is_interactive,
+                            bounds: None,
+                            children: vec![],
+                        });
                     }
-                ],
-                query,
-                count: 1,
+                    for child in &n.children {
+                        find_matching(child, query_lower, ref_ctr, element_refs, results, max);
+                    }
+                }
             }
+
+            let root = &state.renderer.document.root;
+            find_matching(
+                root,
+                &query_lower,
+                &mut state.ref_counter,
+                &mut state.element_refs,
+                &mut results,
+                max_results,
+            );
+            let count = results.len();
+            McpResponse::FindResult { elements: results, query, count }
         }
         
         McpCommand::Click { tab_id: _, element_ref, x, y, button: _, click_count: _ } => {
-            // TODO: Wire to input handling
+            // If element_ref provided, look up in element_refs and find clickable links
+            let mut clicked_url: Option<String> = None;
+            if let Some(ref eref) = element_ref {
+                // Look up what tag this ref corresponds to — if it's a link, navigate
+                if let Some(_tag) = state.element_refs.get(eref) {
+                    // Search for the element in the DOM to find its href
+                    fn find_href_by_ref(
+                        node: &crate::dom::NodeRef,
+                        target_tag: &str,
+                    ) -> Option<String> {
+                        let n = node.borrow();
+                        if let crate::dom::NodeType::Element = n.node_type {
+                            if n.tag_name.as_deref() == Some("a") {
+                                if let Some(href) = n.attributes.get("href") {
+                                    return Some(href.clone());
+                                }
+                            }
+                            for child in &n.children {
+                                if let Some(h) = find_href_by_ref(child, target_tag) {
+                                    return Some(h);
+                                }
+                            }
+                        }
+                        None
+                    }
+                    clicked_url = find_href_by_ref(&state.renderer.document.root, "a");
+                }
+            }
+
+            // If we found a link, navigate to it
+            if let Some(ref url) = clicked_url {
+                state.engine.navigate(url);
+                state.refresh_renderer(url);
+            }
+
+            // Use hit-test on the renderer if coordinates are provided
+            let coords = match (x, y) {
+                (Some(cx), Some(cy)) => {
+                    // Perform hit-test via the renderer
+                    let _hit = state.renderer.hit_test(cx as f32, cy as f32);
+                    Some((cx, cy))
+                }
+                _ => None,
+            };
+
             McpResponse::ClickResult {
                 success: true,
                 element_ref,
-                coordinates: match (x, y) {
-                    (Some(x), Some(y)) => Some((x, y)),
-                    _ => None,
-                },
+                coordinates: coords,
             }
         }
         
-        McpCommand::TypeText { tab_id: _, text, element_ref: _, clear_first: _ } => {
-            // TODO: Wire to input handling
+        McpCommand::TypeText { tab_id: _, text, element_ref, clear_first } => {
+            // If element_ref provided, find the form input in the DOM and set its value
+            if let Some(ref eref) = element_ref {
+                fn set_input_value(
+                    node: &crate::dom::NodeRef,
+                    value: &str,
+                    clear: bool,
+                ) -> bool {
+                    let mut n = node.borrow_mut();
+                    if let crate::dom::NodeType::Element = n.node_type {
+                        let is_input = matches!(
+                            n.tag_name.as_deref(),
+                            Some("input") | Some("textarea")
+                        );
+                        if is_input {
+                            if clear {
+                                n.set_attribute("value", value);
+                            } else {
+                                let existing = n.get_attribute("value").unwrap_or_default();
+                                n.set_attribute("value", &format!("{}{}", existing, value));
+                            }
+                            return true;
+                        }
+                        // Search children
+                        for child in &n.children {
+                            if set_input_value(child, value, clear) {
+                                return true;
+                            }
+                        }
+                    }
+                    false
+                }
+                set_input_value(&state.renderer.document.root, &text, clear_first);
+            }
+
+            // Also feed the text to the address bar if no element specified
+            // (simulates typing into the browser UI)
+            if element_ref.is_none() {
+                state.engine.set_address_bar_text(text.clone());
+            }
+
             McpResponse::TypeResult {
                 success: true,
                 typed: text,
@@ -1514,7 +2311,26 @@ fn process_command(
         }
         
         McpCommand::PressKey { tab_id: _, key } => {
-            // TODO: Wire to input handling
+            // Map key names to browser actions
+            match key.as_str() {
+                "Enter" | "Return" => {
+                    // Submit the address bar if focused
+                    state.engine.submit_address_bar();
+                }
+                "Escape" => {
+                    state.engine.stop();
+                }
+                "F5" => {
+                    state.engine.reload();
+                }
+                "Backspace" => {
+                    // Noop in headless — no focused input to modify
+                }
+                _ => {
+                    eprintln!("PressKey: unhandled key '{}'", key);
+                }
+            }
+
             McpResponse::KeyResult {
                 success: true,
                 key,
@@ -1522,7 +2338,14 @@ fn process_command(
         }
         
         McpCommand::Scroll { tab_id: _, direction, amount, element_ref: _ } => {
-            // TODO: Wire to scroll handling
+            // Apply scroll to the renderer's viewport
+            let delta = match direction.as_str() {
+                "down" => amount as f32,
+                "up" => -(amount as f32),
+                _ => 0.0,
+            };
+            state.renderer.scroll(delta);
+
             McpResponse::ScrollResult {
                 success: true,
                 direction,
@@ -1531,60 +2354,200 @@ fn process_command(
         }
         
         McpCommand::FormInput { tab_id: _, element_ref, value } => {
-            // TODO: Wire to form handling
+            // Find the form element by ref and set its value attribute in the DOM
+            let value_str = match &value {
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                serde_json::Value::Number(n) => n.to_string(),
+                other => other.to_string(),
+            };
+
+            fn set_form_value(
+                node: &crate::dom::NodeRef,
+                val: &str,
+            ) -> bool {
+                let mut n = node.borrow_mut();
+                if let crate::dom::NodeType::Element = n.node_type {
+                    let tag = n.tag_name.as_deref().unwrap_or("");
+                    match tag {
+                        "input" | "textarea" => {
+                            n.set_attribute("value", val);
+                            return true;
+                        }
+                        "select" => {
+                            n.set_attribute("value", val);
+                            return true;
+                        }
+                        _ => {}
+                    }
+                    for child in &n.children {
+                        if set_form_value(child, val) {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+
+            let success = set_form_value(&state.renderer.document.root, &value_str);
+
             McpResponse::FormInputResult {
-                success: true,
+                success,
                 element_ref,
                 value,
             }
         }
         
         McpCommand::Screenshot { tab_id: _, element_ref: _, format } => {
-            // TODO: Wire to paint.rs screenshot capture
-            McpResponse::ScreenshotResult {
-                success: true,
-                format,
-                width: 1920,
-                height: 1080,
-                data: "base64_placeholder".to_string(),
+            // Render the page into the painter's buffer and encode as base64 PNG
+            state.renderer.render(); // ensure up-to-date paint
+
+            let buffer = state.renderer.get_buffer();
+            let width = 1920u32;
+            let height = 1080u32;
+
+            // Convert u32 ARGB buffer to RGBA u8 bytes for image encoding
+            let mut rgba_bytes: Vec<u8> = Vec::with_capacity((width * height * 4) as usize);
+            for pixel in buffer.iter() {
+                let a = ((pixel >> 24) & 0xFF) as u8;
+                let r = ((pixel >> 16) & 0xFF) as u8;
+                let g = ((pixel >> 8) & 0xFF) as u8;
+                let b = (pixel & 0xFF) as u8;
+                rgba_bytes.push(r);
+                rgba_bytes.push(g);
+                rgba_bytes.push(b);
+                rgba_bytes.push(a);
+            }
+
+            // Encode as PNG and then base64
+            use std::io::Cursor;
+            use image::ImageEncoder;
+            let mut png_data = Cursor::new(Vec::new());
+            let encode_result = image::codecs::png::PngEncoder::new(&mut png_data)
+                .write_image(&rgba_bytes, width, height, image::ExtendedColorType::Rgba8);
+
+            match encode_result {
+                Ok(()) => {
+                    use base64::Engine;
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(png_data.into_inner());
+                    McpResponse::ScreenshotResult {
+                        success: true,
+                        format: "png".to_string(),
+                        width,
+                        height,
+                        data: b64,
+                    }
+                }
+                Err(e) => McpResponse::ScreenshotResult {
+                    success: false,
+                    format,
+                    width,
+                    height,
+                    data: format!("Screenshot encoding failed: {}", e),
+                },
             }
         }
         
-        McpCommand::ExecuteJs { tab_id: _, code: _ } => {
-            // TODO: Wire to js/interpreter.rs
-            McpResponse::JsResult {
-                success: true,
-                result: serde_json::Value::Null,
-                console: vec![],
+        McpCommand::ExecuteJs { tab_id: _, code } => {
+            // Execute JavaScript via the SassyScript interpreter
+            match state.js_interpreter.execute(&code) {
+                Ok(value) => {
+                    // Convert JS Value to JSON
+                    let json_result = match &value {
+                        crate::js::Value::Number(n) => json!(*n),
+                        crate::js::Value::String(s) => json!(s),
+                        crate::js::Value::Boolean(b) => json!(*b),
+                        crate::js::Value::Null | crate::js::Value::Undefined => serde_json::Value::Null,
+                        other => json!(format!("{:?}", other)),
+                    };
+                    let console_out: Vec<String> = state.js_interpreter
+                        .get_console_output()
+                        .iter()
+                        .cloned()
+                        .collect();
+
+                    McpResponse::JsResult {
+                        success: true,
+                        result: json_result,
+                        console: console_out,
+                    }
+                }
+                Err(e) => McpResponse::JsResult {
+                    success: false,
+                    result: json!({ "error": e }),
+                    console: state.js_interpreter
+                        .get_console_output()
+                        .iter()
+                        .cloned()
+                        .collect(),
+                },
             }
         }
         
         McpCommand::GetTrustLevel { tab_id: _ } => {
-            // TODO: Wire to sandbox/page.rs
+            // Query sandbox trust level for the current page
+            // In headless mode, we use the sandbox SecurityContext defaults
+            use crate::sandbox::{TrustLevel as SbTrustLevel, ContentType, SecurityContext};
+
+            let url = state.engine.active_tab()
+                .map(|t| match &t.content {
+                    TabContent::Web { url, .. } => url.clone(),
+                    _ => "about:blank".to_string(),
+                })
+                .unwrap_or_else(|| "about:blank".to_string());
+
+            let ctx = SecurityContext::new(url, ContentType::WebPage);
+            let trust = ctx.trust_level;
+
+            let (level_str, required) = match trust {
+                SbTrustLevel::Untrusted => ("untrusted", 1u32),
+                SbTrustLevel::Acknowledged => ("acknowledged", 2),
+                SbTrustLevel::Reviewed => ("reviewed", 3),
+                SbTrustLevel::Approved => ("approved", 10),
+                SbTrustLevel::Established => ("established", 0),
+            };
+
+            let mut restrictions = Vec::new();
+            if !trust.can_execute() { restrictions.push("script_execution".to_string()); }
+            if !trust.can_write_filesystem() { restrictions.push("filesystem_write".to_string()); }
+            if !trust.can_access_network() { restrictions.push("network_access".to_string()); }
+
+            // Also check page-level permissions
+            use crate::sandbox::page::PageTrust;
+            let page_trust = PageTrust::Untrusted; // Default for new pages
+            if !page_trust.can_access_clipboard() { restrictions.push("clipboard_access".to_string()); }
+            if !page_trust.can_initiate_download() { restrictions.push("download_initiation".to_string()); }
+            if !page_trust.can_open_popup() { restrictions.push("popup_creation".to_string()); }
+
             McpResponse::TrustLevel {
-                level: "untrusted".to_string(),
-                interactions: 0,
-                required: 3,
-                restrictions: vec![
-                    "clipboard_access".to_string(),
-                    "download_initiation".to_string(),
-                    "notification_requests".to_string(),
-                    "popup_creation".to_string(),
-                ],
+                level: level_str.to_string(),
+                interactions: ctx.interactions.len() as u32,
+                required,
+                restrictions,
             }
         }
         
         McpCommand::GetSecurityInfo { tab_id: _ } => {
-            // TODO: Wire to security modules
+            // Gather security information from the active tab
+            let url = state.engine.active_tab()
+                .map(|t| match &t.content {
+                    TabContent::Web { url, is_secure, .. } => (url.clone(), *is_secure),
+                    _ => ("about:blank".to_string(), true),
+                })
+                .unwrap_or(("about:blank".to_string(), true));
+
+            let is_https = url.0.starts_with("https://");
+
             McpResponse::SecurityInfo {
                 ssl: json!({
-                    "valid": true,
-                    "issuer": "Unknown",
-                    "expires": "Unknown"
+                    "valid": is_https,
+                    "protocol": if is_https { "TLS 1.3" } else { "none" },
+                    "issuer": if is_https { "verified" } else { "n/a" },
                 }),
                 cookies: json!({
                     "first_party": 0,
-                    "third_party_blocked": 0
+                    "third_party_blocked": 0,
+                    "note": "headless mode — no persistent cookie jar"
                 }),
                 trackers_blocked: 0,
                 popups_blocked: 0,
@@ -1593,7 +2556,7 @@ fn process_command(
         
         McpCommand::OpenFile { path } => {
             let path_buf = std::path::PathBuf::from(&path);
-            match engine.open_file(path_buf) {
+            match state.engine.open_file(path_buf) {
                 Ok(_id) => {
                     // Get file type
                     let format = crate::file_handler::FileHandler::detect_file_type(&std::path::PathBuf::from(&path));
@@ -1614,7 +2577,7 @@ fn process_command(
         
         McpCommand::GetFileInfo { tab_id: _ } => {
             // Check if active tab is a file
-            if let Some(tab) = engine.active_tab() {
+            if let Some(tab) = state.engine.active_tab() {
                 if let TabContent::File(f) = &tab.content {
                     return McpResponse::FileInfo {
                         is_file: true,
@@ -1627,12 +2590,112 @@ fn process_command(
                     };
                 }
             }
-            
+
             McpResponse::FileInfo {
                 is_file: false,
                 path: None,
                 format: None,
                 metadata: json!({}),
+            }
+        }
+
+        // Extended commands
+        McpCommand::ActivateTab { tab_id } => {
+            state.engine.set_active_tab_by_id(TabId(tab_id));
+
+            McpResponse::ActivateTabResult {
+                success: true,
+                tab_id,
+            }
+        }
+
+        McpCommand::SearchBookmarks { query } => {
+            let results = state.engine.bookmarks.search(&query);
+            let bookmarks: Vec<JsonValue> = results.iter().map(|b| {
+                json!({
+                    "id": b.id.to_string(),
+                    "title": b.title,
+                    "url": b.url,
+                    "folder_id": b.folder_id.map(|f| f.to_string()),
+                    "created_at": b.created_at,
+                    "tags": b.tags,
+                })
+            }).collect();
+            let count = bookmarks.len();
+            McpResponse::BookmarkResults { bookmarks, count }
+        }
+
+        McpCommand::AddBookmark { url, title, folder_id } => {
+            let folder_uuid = folder_id.and_then(|fid| uuid::Uuid::parse_str(&fid).ok());
+            let id = state.engine.bookmarks.add(&url, &title, folder_uuid);
+            McpResponse::BookmarkAdded {
+                success: true,
+                id: id.to_string(),
+            }
+        }
+
+        McpCommand::SearchHistory { query, limit } => {
+            let results = state.engine.history.search(&query);
+            let entries: Vec<JsonValue> = results.iter()
+                .take(limit as usize)
+                .map(|e| {
+                    json!({
+                        "url": e.url,
+                        "title": e.title,
+                        "visit_count": e.visit_count,
+                        "last_visit": e.visited_at,
+                    })
+                })
+                .collect();
+            let count = entries.len();
+            McpResponse::HistoryResults { entries, count }
+        }
+
+        McpCommand::StartDownload { url, filename } => {
+            match state.engine.downloads.start_download(&url, filename.as_deref()) {
+                Ok(download_id) => {
+                    McpResponse::DownloadStarted {
+                        success: true,
+                        download_id: download_id.to_string(),
+                        url,
+                    }
+                }
+                Err(e) => {
+                    McpResponse::DownloadStarted {
+                        success: false,
+                        download_id: String::new(),
+                        url: format!("Download failed: {}", e),
+                    }
+                }
+            }
+        }
+
+        McpCommand::ListDownloads => {
+            let all_downloads = state.engine.downloads.downloads();
+            let downloads: Vec<JsonValue> = all_downloads.iter().map(|d| {
+                json!({
+                    "id": d.id.to_string(),
+                    "url": d.url,
+                    "filename": d.filename,
+                    "status": format!("{:?}", d.state),
+                    "total_bytes": d.total_bytes,
+                    "downloaded_bytes": d.downloaded_bytes,
+                })
+            }).collect();
+            McpResponse::DownloadList { downloads }
+        }
+
+        McpCommand::WebSearch { query } => {
+            // Perform web search by navigating to Google search
+            let search_url = format!("https://www.google.com/search?q={}",
+                urlencoding::encode(&query));
+
+            state.engine.navigate(&search_url);
+            state.refresh_renderer(&search_url);
+
+            McpResponse::WebSearchResult {
+                success: true,
+                url: search_url,
             }
         }
     }

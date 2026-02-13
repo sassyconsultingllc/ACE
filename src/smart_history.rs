@@ -181,6 +181,8 @@ pub struct SmartHistory {
     max_entries: usize,
     auto_exclude_nsfw: bool,
     incognito_mode: bool,
+    /// Auto-expire committed entries older than this (None = keep forever)
+    retention_days: Option<u64>,
     // Stats
     total_visits: u64,
     nsfw_blocked: u64,
@@ -198,6 +200,7 @@ impl SmartHistory {
             max_entries: 100_000,
             auto_exclude_nsfw: true,
             incognito_mode: false,
+            retention_days: None,
             total_visits: 0,
             nsfw_blocked: 0,
             entries_pruned: 0,
@@ -328,6 +331,21 @@ impl SmartHistory {
             }
         }
         
+        // Sweep committed entries past retention policy
+        if let Some(days) = self.retention_days {
+            let retention_secs = days * 86400;
+            let now_epoch = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let before = self.entries.len();
+            self.entries.retain(|e| {
+                now_epoch.saturating_sub(e.visit_time) < retention_secs
+            });
+            let removed = before - self.entries.len();
+            self.entries_pruned += removed as u64;
+        }
+
         // Clean up old recent navigations
         let cutoff = now - Duration::from_secs(60);
         self.recent_navigations.retain(|(_, t)| *t > cutoff);
@@ -482,6 +500,16 @@ impl SmartHistory {
         if enabled {
             self.pending.clear();
         }
+    }
+
+    /// Set retention policy: entries older than `days` are auto-expired on tick().
+    /// Pass `None` to keep entries forever (default).
+    pub fn set_retention_policy(&mut self, days: Option<u64>) {
+        self.retention_days = days;
+    }
+
+    pub fn retention_days(&self) -> Option<u64> {
+        self.retention_days
     }
     
     pub fn is_incognito(&self) -> bool {

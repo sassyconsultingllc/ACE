@@ -642,9 +642,93 @@ impl DocumentViewer {
         std::fs::write(path, md).map_err(|e| e.to_string())
     }
     
-    fn save_pdf(&self, _path: &Path) -> Result<(), String> {
-        // Would use printpdf crate
-        Err("PDF export not yet implemented".to_string())
+    fn save_pdf(&self, path: &Path) -> Result<(), String> {
+        use printpdf::*;
+        use std::io::BufWriter;
+
+        // A4 page dimensions
+        let page_width_mm = 210.0_f32;
+        let page_height_mm = 297.0_f32;
+        let margin = 25.0_f32; // 25mm margins
+
+        let (doc, page1, layer1) =
+            PdfDocument::new("Document Export", Mm(page_width_mm), Mm(page_height_mm), "Layer 1");
+
+        let font_regular = doc.add_builtin_font(BuiltinFont::Helvetica)
+            .map_err(|e| format!("Font error: {}", e))?;
+        let font_bold = doc.add_builtin_font(BuiltinFont::HelveticaBold)
+            .map_err(|e| format!("Font error: {}", e))?;
+
+        let printable_width = page_width_mm - (margin * 2.0);
+        let mut y_pos = page_height_mm - margin;
+        let mut current_page = page1;
+        let mut current_layer_idx = layer1;
+
+        for para in &self.paragraphs {
+            // Determine font size based on style
+            let (font_size, use_bold, extra_spacing) = if para.style == "Heading 1" {
+                (18.0_f32, true, 8.0_f32)
+            } else if para.style == "Heading 2" {
+                (14.0_f32, true, 6.0_f32)
+            } else if para.style == "Heading 3" {
+                (12.0_f32, true, 4.0_f32)
+            } else {
+                (11.0_f32, para.format.bold, 2.0_f32)
+            };
+
+            let line_height = font_size * 1.4;
+            let chars_per_line = (printable_width / (font_size * 0.5)) as usize;
+
+            // Wrap text
+            let text = &para.text;
+            let lines: Vec<&str> = if text.len() > chars_per_line && chars_per_line > 0 {
+                text.as_bytes()
+                    .chunks(chars_per_line)
+                    .map(|chunk| std::str::from_utf8(chunk).unwrap_or(""))
+                    .collect()
+            } else {
+                vec![text.as_str()]
+            };
+
+            let font_ref = if use_bold { &font_bold } else { &font_regular };
+
+            for line in &lines {
+                // Check if we need a new page
+                if y_pos < margin + line_height {
+                    let (new_page, new_layer) = doc.add_page(
+                        Mm(page_width_mm), Mm(page_height_mm), "Layer 1"
+                    );
+                    current_page = new_page;
+                    current_layer_idx = new_layer;
+                    y_pos = page_height_mm - margin;
+                }
+
+                let layer = doc.get_page(current_page).get_layer(current_layer_idx);
+                layer.use_text(*line, font_size, Mm(margin), Mm(y_pos), font_ref);
+                y_pos -= line_height;
+            }
+
+            y_pos -= extra_spacing; // Extra spacing after paragraph
+        }
+
+        let file = std::fs::File::create(path).map_err(|e| format!("File error: {}", e))?;
+        doc.save(&mut BufWriter::new(file)).map_err(|e| format!("Save error: {}", e))?;
+        Ok(())
+    }
+
+    /// Print the document
+    fn print_document(&self) {
+        // Convert document content to plain text for printing
+        let text: String = self.paragraphs.iter()
+            .map(|p| p.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        // Use default print settings
+        let settings = crate::print::PrintSettings::default();
+
+        // Print via the print module
+        let _ = crate::print::print_page(text.as_bytes(), &settings);
     }
 
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -701,7 +785,8 @@ impl DocumentViewer {
                 self.show_export = true;
             }
             if ui.button("Print").clicked() {
-                // TODO: Print
+                // Print the document
+                self.print_document();
             }
             
             ui.separator();
