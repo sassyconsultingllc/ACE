@@ -233,7 +233,7 @@ impl VideoViewer {
 
             ui.horizontal(|ui| {
                 // Play/Pause button
-                let play_text = if self.is_playing { "⏸" } else { ">" };
+                let play_text = if self.is_playing { "⏸" } else { "▶" };
                 if ui.button(RichText::new(play_text).size(20.0)).clicked() {
                     self.is_playing = !self.is_playing;
                 }
@@ -263,12 +263,8 @@ impl VideoViewer {
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Fullscreen toggle
-<<<<<<< HEAD
-                    if ui.button("").clicked() {
-=======
                     let fs_icon = if self.is_fullscreen { "⬜" } else { "⛶" };
                     if ui.button(RichText::new(fs_icon).size(16.0)).clicked() {
->>>>>>> origin/claude/happy-torvalds
                         self.is_fullscreen = !self.is_fullscreen;
                     }
 
@@ -283,7 +279,7 @@ impl VideoViewer {
                     }
 
                     // Volume
-                    let vol_icon = if self.is_muted { "" } else { "" };
+                    let vol_icon = if self.is_muted { "🔇" } else { "🔊" };
                     if ui.button(vol_icon).clicked() {
                         self.is_muted = !self.is_muted;
                     }
