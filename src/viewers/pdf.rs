@@ -255,7 +255,8 @@ impl PdfViewer {
     fn extract_page_dimensions(&self, doc: &lopdf::Document, page_id: lopdf::ObjectId, page: &mut PdfPage) {
         if let Ok(page_dict) = doc.get_dictionary(page_id) {
             // Try CropBox first, then MediaBox
-            let box_key = if page_dict.has(b"CropBox") { b"CropBox" } else { b"MediaBox" };
+            // use byte-slices so both branches have the same type (&[u8])
+            let box_key: &[u8] = if page_dict.has(b"CropBox") { &b"CropBox"[..] } else { &b"MediaBox"[..] };
 
             if let Ok(obj) = page_dict.get(box_key) {
                 if let Ok(arr) = obj.as_array() {
