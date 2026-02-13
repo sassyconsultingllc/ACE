@@ -1,9 +1,5 @@
 #![allow(dead_code, unused_imports, unused_variables, deprecated)]
-<<<<<<< HEAD
-//! PDF Viewer - Pure Rust PDF viewing with text extraction
-=======
 //! PDF Viewer - Pure Rust PDF viewing with visual rendering
->>>>>>> origin/claude/happy-torvalds
 //!
 //! REPLACES: Adobe Acrobat ($240/yr), Foxit PDF ($140/yr)
 //!
@@ -886,11 +882,7 @@ impl PdfViewer {
 
         // Error message
         if let Some(ref err) = self.error_message {
-<<<<<<< HEAD
-            ui.colored_label(Color32::YELLOW, format!("[!] {}", err));
-=======
             ui.colored_label(Color32::YELLOW, format!("⚠ {}", err));
->>>>>>> origin/claude/happy-torvalds
             ui.separator();
         }
 
@@ -928,11 +920,7 @@ impl PdfViewer {
             if ui.button("⏮").on_hover_text("First page").clicked() {
                 self.current_page = 0;
             }
-<<<<<<< HEAD
-            if ui.button("<").on_hover_text("Previous page").clicked() {
-=======
             if ui.button("◀").on_hover_text("Previous page").clicked() {
->>>>>>> origin/claude/happy-torvalds
                 self.current_page = self.current_page.saturating_sub(1);
             }
 
@@ -957,21 +945,12 @@ impl PdfViewer {
             ui.separator();
 
             // Zoom
-<<<<<<< HEAD
-            if ui.button("").clicked() {
-                self.zoom = (self.zoom - 0.1).max(0.5);
-            }
-            ui.label(format!("{:.0}%", self.zoom * 100.0));
-            if ui.button("").clicked() {
-                self.zoom = (self.zoom + 0.1).min(3.0);
-=======
             if ui.button("➖").clicked() {
                 self.zoom = (self.zoom - 0.1).max(0.3);
             }
             ui.label(format!("{:.0}%", self.zoom * 100.0));
             if ui.button("➕").clicked() {
                 self.zoom = (self.zoom + 0.1).min(4.0);
->>>>>>> origin/claude/happy-torvalds
             }
             if ui.button("Fit").on_hover_text("Fit to width").clicked() {
                 self.zoom = 1.0;
@@ -980,11 +959,7 @@ impl PdfViewer {
             ui.separator();
 
             // Tools
-<<<<<<< HEAD
-            ui.selectable_value(&mut self.current_tool, PdfTool::Select, " Select");
-=======
             ui.selectable_value(&mut self.current_tool, PdfTool::Select, "☛ Select");
->>>>>>> origin/claude/happy-torvalds
             ui.selectable_value(&mut self.current_tool, PdfTool::Highlight, "Highlight");
             ui.selectable_value(&mut self.current_tool, PdfTool::Note, "Note");
 
@@ -1012,13 +987,8 @@ impl PdfViewer {
                 }
 
                 if !self.search_results.is_empty() {
-<<<<<<< HEAD
-                    if ui.button("v").clicked() { self.next_search_result(); }
-                    if ui.button("^").clicked() { self.prev_search_result(); }
-=======
                     if ui.button("▼").clicked() { self.next_search_result(); }
                     if ui.button("▲").clicked() { self.prev_search_result(); }
->>>>>>> origin/claude/happy-torvalds
                     ui.label(format!("{}/{}", self.current_search_index + 1, self.search_results.len()));
                 }
             });
