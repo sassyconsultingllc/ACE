@@ -153,16 +153,11 @@ impl Icons {
         text: &str,
         tooltip: &str,
     ) -> egui::Response {
-        // We use a horizontal layout inside a button-like frame
-        let btn = egui::Button::new({
-            let mut job = egui::text::LayoutJob::default();
-            // We can't easily embed an image in a Button label in egui,
-            // so we use the text-only path and prepend a space for the icon.
-            // The icon will be rendered separately via ui.horizontal.
-            job.append(text, 0.0, egui::TextFormat::default());
-            job
-        });
-        // For now, just return text button — icon rendered adjacently by caller
+        // Render icon inline before the text button
+        if let Some(tex) = self.textures.get(icon_name) {
+            let text_height = ui.text_style_height(&egui::TextStyle::Body);
+            ui.image((tex.id(), Vec2::splat(text_height)));
+        }
         ui.button(text).on_hover_text(tooltip)
     }
 

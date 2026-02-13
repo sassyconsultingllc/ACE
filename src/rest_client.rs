@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// HTTP method
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[allow(clippy::upper_case_acronyms)] // These are HTTP method names
 pub enum Method {
@@ -59,6 +60,7 @@ impl Method {
 }
 
 /// Content type for request body
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ContentType {
     Json,
@@ -81,6 +83,7 @@ impl ContentType {
 }
 
 /// A saved request
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedRequest {
     pub id: String,
@@ -112,6 +115,7 @@ impl SavedRequest {
 }
 
 /// Collection of saved requests
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestCollection {
     pub id: String,

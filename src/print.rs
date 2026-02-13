@@ -111,7 +111,7 @@ impl PrintDialog {
                 // Number of copies
                 ui.horizontal(|ui| {
                     ui.label("Copies:");
-                    ui.add(egui::DragValue::new(&mut self.settings.copies).speed(1).clamp_range(1..=99));
+                    ui.add(egui::DragValue::new(&mut self.settings.copies).speed(1).range(1..=99));
                 });
 
                 ui.add_space(8.0);
@@ -192,13 +192,13 @@ impl PrintDialog {
                     ui.add(
                         egui::DragValue::new(&mut self.settings.margins.top)
                             .speed(0.1)
-                            .clamp_range(0.0..=2.0),
+                            .range(0.0..=2.0),
                     );
                     ui.label("Bottom:");
                     ui.add(
                         egui::DragValue::new(&mut self.settings.margins.bottom)
                             .speed(0.1)
-                            .clamp_range(0.0..=2.0),
+                            .range(0.0..=2.0),
                     );
                 });
                 ui.horizontal(|ui| {
@@ -206,13 +206,13 @@ impl PrintDialog {
                     ui.add(
                         egui::DragValue::new(&mut self.settings.margins.left)
                             .speed(0.1)
-                            .clamp_range(0.0..=2.0),
+                            .range(0.0..=2.0),
                     );
                     ui.label("Right:");
                     ui.add(
                         egui::DragValue::new(&mut self.settings.margins.right)
                             .speed(0.1)
-                            .clamp_range(0.0..=2.0),
+                            .range(0.0..=2.0),
                     );
                 });
 
@@ -318,7 +318,6 @@ pub fn print_page(content: &[u8], settings: &PrintSettings) -> Result<(), String
     let lines: Vec<&str> = text.lines().collect();
     let max_chars_per_line = (printable_width / (font_size * 0.6)) as usize;
 
-    let mut current_page = page1;
     let mut current_layer_ref = current_layer;
 
     for line in lines {
@@ -331,8 +330,7 @@ pub fn print_page(content: &[u8], settings: &PrintSettings) -> Result<(), String
                 // Add new page
                 let (new_page, new_layer) =
                     doc.add_page(Mm(width_mm), Mm(height_mm), "Layer 1");
-                current_page = new_page;
-                current_layer_ref = doc.get_page(current_page).get_layer(new_layer);
+                current_layer_ref = doc.get_page(new_page).get_layer(new_layer);
                 y_pos = height_mm - margin_top.0 - font_size;
             }
 

@@ -70,12 +70,18 @@ mod markdown;               // Markdown renderer
 // â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*
 // MCP - MULTI-AGENT AI SYSTEM (Grok + Claude, NOT Google)
 // â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*
+mod detection;              // Client-side detection engine with honeypot system
+mod poisoning;              // Fingerprint poisoning engine (canvas, audio, WebGL, etc.)
 mod mcp;                    // Model Context Protocol orchestrator
 mod mcp_panel;              // MCP UI panel
 mod mcp_api;                // API clients (xAI Grok, Anthropic Claude - NO Google)
 mod mcp_fs;                 // Sandboxed file system for AI
 mod mcp_git;                // Git integration
 mod mcp_server;             // MCP Server - expose browser as MCP server for Claude Desktop
+mod mcp_protocol;           // Native MCP protocol (bincode, NO JSON)
+mod mcp_codec;              // Length-prefixed bincode framing (tokio-util codec)
+mod mcp_client;             // MCP WebSocket client (tokio-tungstenite)
+mod mcp_server_native;      // Native MCP WebSocket server (bincode transport)
 
 // â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*â*
 // NETWORKING & SYNC (NO GOOGLE CLOUD)

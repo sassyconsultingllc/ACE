@@ -717,6 +717,21 @@ impl PdfViewer {
                         });
                     }
                 }
+                "h" => {
+                    // Close path: draw line back to path start
+                    if (current_x - path_start_x).abs() > 0.01
+                        || (current_y - path_start_y).abs() > 0.01
+                    {
+                        page.graphics.push(GraphicPrimitive::Line {
+                            x1: current_x, y1: current_y,
+                            x2: path_start_x, y2: path_start_y,
+                            color: stroke_color,
+                            width: line_width,
+                        });
+                        current_x = path_start_x;
+                        current_y = path_start_y;
+                    }
+                }
                 "n" => {
                     // End path without stroke/fill (clipping)
                     rect_pending = None;

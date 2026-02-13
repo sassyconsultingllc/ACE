@@ -8,15 +8,24 @@
 
 use crate::auth::{AuthManager, FirstRunState, FirstRunStep, DeviceType, TailscaleManager, PhoneSync, SyncType};
 use crate::browser::{BrowserEngine, DownloadState, Tab, TabContent, TabId, HistoryManager};
+use crate::console::DevConsole;
 use crate::file_handler::{FileType, OpenFile};
 use crate::html_renderer::HtmlRenderer;
 use crate::extensions::ExtensionManager;
 use crate::icons::Icons;
 use crate::input::FocusManager;
+use crate::json_viewer::JsonViewer;
+use crate::mcp::McpOrchestrator;
+use crate::mcp_panel::McpPanel;
 use crate::network_monitor::{NetworkMonitor, ActivityIndicatorState, ConnectionType, ConnectionState, ConnectionFilter, ConnectionSort, format_bytes, format_speed, format_duration};
 use crate::password_vault::{PasswordVault, Credential, PasswordGeneratorOptions, generate_password};
+use crate::rest_client::RestClient;
 use crate::smart_history::SmartHistory;
 use crate::family_profiles::{ProfileManager, ProfileType, Profile, Action};
+use crate::syntax::SyntaxHighlighter;
+use crate::detection::DetectionEngine;
+use crate::mcp_server_native::{McpNativeServer, NativeServerConfig, McpBridge};
+use crate::poisoning::{PoisoningEngine, PoisonMode};
 use crate::viewers::{
     archive::ArchiveViewer,
     audio::AudioViewer,
@@ -164,6 +173,25 @@ pub struct BrowserApp {
     // SVG icon system (replaces all inline Unicode emoji)
     svg_icons: Icons,
     
+    // Developer tools
+    dev_console: DevConsole,
+    json_viewer: JsonViewer,
+    rest_client: RestClient,
+    syntax_highlighter: SyntaxHighlighter,
+
+    // MCP AI system
+    mcp_orchestrator: McpOrchestrator,
+    mcp_panel: McpPanel,
+
+    // Detection engine + Native MCP server
+    detection_engine: DetectionEngine,
+    mcp_native_server: McpNativeServer,
+    mcp_bridge: std::sync::Arc<McpBridge>,
+
+    // Fingerprint poisoning engine
+    poison_engine: PoisoningEngine,
+    show_poisoning_popover: bool,
+
     // UI state
     dark_mode: bool,
     theme_preset: ThemePreset,
@@ -525,6 +553,25 @@ impl BrowserApp {
             html_renderer: HtmlRenderer::new(),
             legacy_icons,
             svg_icons,
+
+            // Developer tools
+            dev_console: DevConsole::new(),
+            json_viewer: JsonViewer::new(),
+            rest_client: RestClient::new(),
+            syntax_highlighter: SyntaxHighlighter::new(),
+
+            // MCP AI system
+            mcp_orchestrator: McpOrchestrator::new(),
+            mcp_panel: McpPanel::new(),
+
+            // Detection engine + Native MCP server
+            detection_engine: DetectionEngine::new(),
+            mcp_native_server: McpNativeServer::new(NativeServerConfig::default()),
+            mcp_bridge: std::sync::Arc::new(McpBridge::new()),
+
+            // Fingerprint poisoning engine (conservative by default)
+            poison_engine: PoisoningEngine::new(),
+            show_poisoning_popover: false,
             dark_mode: true,
             theme_preset: ThemePreset::SassyRedesign,
             zoom_level: 1.0,
@@ -550,6 +597,18 @@ impl BrowserApp {
             clear_data_cache: true,
             find_match_count: 0,
         };
+
+        // Start the native MCP server in background and wire the bridge
+        {
+            let bridge = app.mcp_native_server.bridge();
+            app.mcp_bridge = bridge;
+            if let Err(e) = app.mcp_native_server.start() {
+                tracing::warn!("Native MCP server failed to start: {}", e);
+            }
+        }
+
+        // Wire detection engine's shared alerts to the MCP bridge for forwarding
+        // (The detection engine pushes alerts via Arc<Mutex<Vec<...>>>)
 
         // Navigate to initial URL if passed via env var (from command-line file/URL arg)
         if let Ok(initial_url) = std::env::var("SASSY_INITIAL_URL") {

@@ -2266,18 +2266,23 @@ fn process_command(
         McpCommand::TypeText { tab_id: _, text, element_ref, clear_first } => {
             // If element_ref provided, find the form input in the DOM and set its value
             if let Some(ref eref) = element_ref {
-                fn set_input_value(
+                fn find_and_set_input(
                     node: &crate::dom::NodeRef,
+                    target_ref: &str,
                     value: &str,
                     clear: bool,
                 ) -> bool {
                     let mut n = node.borrow_mut();
                     if let crate::dom::NodeType::Element = n.node_type {
+                        // Check if this element matches the ref (by id or data-ref attribute)
+                        let matches_ref = n.get_attribute("id").map_or(false, |id| id == target_ref)
+                            || n.get_attribute("data-ref").map_or(false, |r| r == target_ref);
+
                         let is_input = matches!(
                             n.tag_name.as_deref(),
                             Some("input") | Some("textarea")
                         );
-                        if is_input {
+                        if is_input && matches_ref {
                             if clear {
                                 n.set_attribute("value", value);
                             } else {
@@ -2288,14 +2293,14 @@ fn process_command(
                         }
                         // Search children
                         for child in &n.children {
-                            if set_input_value(child, value, clear) {
+                            if find_and_set_input(child, target_ref, value, clear) {
                                 return true;
                             }
                         }
                     }
                     false
                 }
-                set_input_value(&state.renderer.document.root, &text, clear_first);
+                find_and_set_input(&state.renderer.document.root, eref, &text, clear_first);
             }
 
             // Also feed the text to the address bar if no element specified

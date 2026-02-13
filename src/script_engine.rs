@@ -189,8 +189,14 @@ impl ScriptEngine {
 
     pub fn execute(&mut self, script: &str) -> Result<Value, String> {
         self.dom_changed = false;
-        
+
         self.interpreter.execute(script)
+    }
+
+    /// Get mutable reference to the JS interpreter for poisoning injection.
+    /// Used by the PoisoningEngine to inject fingerprint poisoning scripts.
+    pub fn interpreter_mut(&mut self) -> &mut JsInterpreter {
+        &mut self.interpreter
     }
 
     pub fn execute_with_dom(&mut self, script: &str, doc: &Document) -> Result<Value, String> {

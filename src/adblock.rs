@@ -402,8 +402,30 @@ impl AdBlocker {
     
     fn parse_cosmetic_exception(&self, line: &str) -> Option<FilterRule> {
         // #@# rules are exceptions to cosmetic filters
-        // For simplicity, we'll just not add them (they cancel out cosmetic rules)
-        None
+        // Parse just like cosmetic rules but as CosmeticHide with except_domains
+        let parts: Vec<&str> = line.splitn(2, "#@#").collect();
+        if parts.len() < 2 {
+            return None;
+        }
+
+        let domains = if !parts[0].is_empty() {
+            Some(parts[0].split(',')
+                .filter(|d| !d.starts_with('~'))
+                .map(|d| d.to_string())
+                .collect::<HashSet<String>>())
+                .filter(|s: &HashSet<String>| !s.is_empty())
+        } else {
+            None
+        };
+
+        let selector = parts[1].to_string();
+
+        // Return as an Allow rule that will cancel matching cosmetic rules
+        Some(FilterRule::Allow {
+            pattern: selector,
+            regex: None,
+            domains,
+        })
     }
     
     /// Convert AdBlock pattern to regex
@@ -491,7 +513,48 @@ impl AdBlocker {
         
         // Also add custom rules
         for rule in &self.custom_rules {
-            // Same logic as above
+            match rule {
+                FilterRule::Block { pattern, regex, domains, except_domains, resource_types, third_party } => {
+                    if let Some(re) = regex {
+                        self.block_patterns.push(CompiledRule {
+                            pattern: pattern.clone(),
+                            regex: re.clone(),
+                            domains: domains.clone(),
+                            except_domains: except_domains.clone(),
+                            resource_types: resource_types.clone(),
+                            third_party: *third_party,
+                        });
+                    }
+                }
+                FilterRule::Allow { pattern, regex, domains } => {
+                    if let Some(re) = regex {
+                        self.allow_patterns.push(CompiledRule {
+                            pattern: pattern.clone(),
+                            regex: re.clone(),
+                            domains: domains.clone(),
+                            except_domains: None,
+                            resource_types: None,
+                            third_party: None,
+                        });
+                    }
+                }
+                FilterRule::CosmeticHide { selector, domains, except_domains } => {
+                    self.cosmetic_rules.push(CosmeticRule {
+                        selector: selector.clone(),
+                        domains: domains.clone(),
+                        except_domains: except_domains.clone(),
+                        style: None,
+                    });
+                }
+                FilterRule::CosmeticStyle { selector, style, domains } => {
+                    self.cosmetic_rules.push(CosmeticRule {
+                        selector: selector.clone(),
+                        domains: domains.clone(),
+                        except_domains: None,
+                        style: Some(style.clone()),
+                    });
+                }
+            }
         }
     }
     
@@ -554,16 +617,19 @@ impl AdBlocker {
             return false;
         }
         
-        // Check domain restrictions
+        // Check domain restrictions (match against both page and request domain)
         if let Some(domains) = &rule.domains {
-            if !domains.contains(page_domain) && !domain_matches_any(page_domain, domains) {
+            let page_match = domains.contains(page_domain) || domain_matches_any(page_domain, domains);
+            let req_match = domains.contains(request_domain) || domain_matches_any(request_domain, domains);
+            if !page_match && !req_match {
                 return false;
             }
         }
-        
+
         // Check domain exceptions
         if let Some(except) = &rule.except_domains {
-            if except.contains(page_domain) || domain_matches_any(page_domain, except) {
+            if except.contains(page_domain) || domain_matches_any(page_domain, except)
+                || except.contains(request_domain) || domain_matches_any(request_domain, except) {
                 return false;
             }
         }
@@ -771,8 +837,6 @@ impl AdBlockerUI {
     }
     
     pub fn render(&mut self, ui: &mut eframe::egui::Ui) {
-        use eframe::egui;
-        
         ui.heading(" Ad Blocker");
         ui.separator();
         

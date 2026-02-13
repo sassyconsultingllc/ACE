@@ -579,6 +579,7 @@ impl Default for McpApiClient {
 
 /// Standard chat message
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ChatMessage {
     pub role: String,
     pub content: String,
@@ -609,6 +610,7 @@ impl ChatMessage {
 
 /// Chat response
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ChatResponse {
     pub content: String,
     pub finish_reason: String,
@@ -616,6 +618,7 @@ pub struct ChatResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct TokenUsage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
@@ -625,6 +628,7 @@ pub struct TokenUsage {
 // ===== Grok (xAI) Types =====
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct GrokRequest {
     model: String,
     messages: Vec<GrokMessage>,
@@ -634,12 +638,14 @@ struct GrokRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct GrokMessage {
     role: String,
     content: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct GrokResponse {
     choices: Vec<GrokChoice>,
     #[serde(default)]
@@ -647,6 +653,7 @@ struct GrokResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct GrokChoice {
     message: GrokResponseMessage,
     #[serde(default)]
@@ -654,11 +661,13 @@ struct GrokChoice {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct GrokResponseMessage {
     content: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct GrokUsage {
     prompt_tokens: u32,
     completion_tokens: u32,
@@ -668,6 +677,7 @@ struct GrokUsage {
 // ===== Manus Types =====
 
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 struct ManusRequest {
     model: String,
     messages: Vec<ChatMessage>,
@@ -677,6 +687,7 @@ struct ManusRequest {
 
 /// Context for task orchestration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct TaskContext {
     pub project_root: String,
     pub language: String,
@@ -687,6 +698,7 @@ pub struct TaskContext {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct FileContext {
     pub path: String,
     pub summary: Option<String>,
@@ -695,6 +707,7 @@ pub struct FileContext {
 
 /// Orchestration response from Manus
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct OrchestrationResponse {
     pub plan: Vec<TaskPlan>,
     pub reasoning: String,
@@ -702,6 +715,7 @@ pub struct OrchestrationResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct TaskPlan {
     pub id: String,
     pub title: String,
@@ -714,6 +728,7 @@ pub struct TaskPlan {
 // ===== Claude (Anthropic) Types =====
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct ClaudeRequest {
     model: String,
     max_tokens: u32,
@@ -722,12 +737,14 @@ struct ClaudeRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct ClaudeMessage {
     role: String,
     content: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ClaudeResponse {
     content: Vec<ClaudeContent>,
     stop_reason: String,
@@ -735,6 +752,7 @@ struct ClaudeResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ClaudeContent {
     #[serde(rename = "type")]
     content_type: String,
@@ -742,6 +760,7 @@ struct ClaudeContent {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ClaudeUsage {
     input_tokens: u32,
     output_tokens: u32,
@@ -750,6 +769,7 @@ struct ClaudeUsage {
 // ===== Gemini (Google) Types =====
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct GeminiRequest {
     contents: Vec<GeminiContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -759,28 +779,33 @@ struct GeminiRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct GeminiContent {
     role: String,
     parts: Vec<GeminiPart>,
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct GeminiPart {
     text: String,
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct GeminiSystemInstruction {
     parts: Vec<GeminiPart>,
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct GeminiGenerationConfig {
     max_output_tokens: u32,
     temperature: f32,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct GeminiResponse {
     candidates: Vec<GeminiCandidate>,
     #[serde(default)]
@@ -788,6 +813,7 @@ struct GeminiResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct GeminiCandidate {
     content: GeminiResponseContent,
     #[serde(default)]
@@ -795,17 +821,20 @@ struct GeminiCandidate {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct GeminiResponseContent {
     parts: Vec<GeminiResponsePart>,
     role: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct GeminiResponsePart {
     text: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct GeminiUsage {
     #[serde(default)]
     prompt_token_count: u32,
@@ -817,6 +846,7 @@ struct GeminiUsage {
 
 /// Audit response from Gemini
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct AuditResponse {
     pub verdict: String,
     pub feasibility_score: f32,
@@ -832,6 +862,7 @@ pub struct AuditResponse {
 // ===== Ollama Types =====
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct OllamaRequest {
     model: String,
     messages: Vec<OllamaMessage>,
@@ -841,18 +872,21 @@ struct OllamaRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct OllamaMessage {
     role: String,
     content: String,
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct OllamaOptions {
     num_predict: i32,
     temperature: f32,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct OllamaResponse {
     message: OllamaResponseMessage,
     done: bool,
@@ -863,17 +897,20 @@ struct OllamaResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct OllamaResponseMessage {
     role: String,
     content: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct OllamaTagsResponse {
     models: Vec<OllamaModel>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct OllamaModel {
     name: String,
     #[serde(default)]
