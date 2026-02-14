@@ -61,6 +61,7 @@ winit = "0.30"
 # HTTP/NETWORKING - No Google APIs
 # ═══════════════════════════════════════════════════════════════════════════════
 ureq = { version = "2.10", features = ["json", "tls"] }
+webpki-roots = "0.26"                   # Mozilla root certs for TLS fingerprint spoofing
 url = "2.5"
 urlencoding = "2.1"
 
@@ -209,6 +210,16 @@ hostname = "0.4"                         # System hostname for device naming
 sha2 = "0.10"
 crc32fast = "1.4"
 lazy_static = "1.5"
+typed-arena = "2.0"                      # Arena-allocated AST
+smallvec = "1.13"                        # Small inline vectors
+bitflags = "2.6"                         # Bitflags
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEV DEPENDENCIES
+# ═══════════════════════════════════════════════════════════════════════════════
+[dev-dependencies]
+quickcheck = "1"
+quickcheck_macros = "1"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PLATFORM-SPECIFIC - NO CHROME/WEBKIT

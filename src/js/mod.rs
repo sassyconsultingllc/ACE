@@ -14,9 +14,14 @@ pub mod value;
 pub mod parser;
 pub mod interpreter;
 pub mod dom;
+pub mod css;
+
+#[cfg(test)]
+mod tests;
 
 pub use lexer::{Lexer, Token};
 pub use value::Value;
 pub use parser::{Parser, Expr, Stmt};
 pub use interpreter::JsInterpreter;
 pub use dom::DomBridge;
+pub use css::CssEngine;

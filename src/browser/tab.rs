@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 //! Tab management - Represents browser tabs (web pages or file viewers)
 
+use crate::behavioral_mimicry::TabInputHandler;
 use crate::file_handler::{FileType, OpenFile};
 use rand::random;
 
@@ -83,18 +84,23 @@ pub struct Tab {
     pub muted: bool,
     pub created_at: std::time::Instant,
     pub last_accessed: std::time::Instant,
+    /// Per-tab behavioral mimicry (mouse jitter, scroll inertia, typing cadence)
+    pub input_handler: TabInputHandler,
 }
 
 impl Tab {
     pub fn new(content: TabContent) -> Self {
         let now = std::time::Instant::now();
+        let id = TabId::new();
         Self {
-            id: TabId::new(),
+            id,
             content,
             pinned: false,
             muted: false,
             created_at: now,
             last_accessed: now,
+            // Seed from tab ID XOR'd with a constant for behavioral isolation
+            input_handler: TabInputHandler::new(id.0 ^ 0xdeadbeef_cafebabe),
         }
     }
     

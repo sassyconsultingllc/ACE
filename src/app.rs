@@ -27,6 +27,7 @@ use crate::detection::DetectionEngine;
 use crate::mcp_server_native::{McpNativeServer, NativeServerConfig, McpBridge};
 use crate::mcp_protocol::{McpCommand, McpResponse, ErrorCode};
 use crate::poisoning::{PoisoningEngine, PoisonMode};
+use crate::stealth_victories::StealthVictories;
 use crate::script_engine::ScriptEngine;
 use crate::viewers::{
     archive::ArchiveViewer,
@@ -205,6 +206,9 @@ pub struct BrowserApp {
     poison_last_applied_url: Option<String>,
     /// Whether the poisoning badge in the toolbar should pulse (recently applied)
     poison_badge_pulse: bool,
+
+    // Stealth victories - silent anti-tracking warfare counter
+    stealth_victories: StealthVictories,
 
     // UI state
     dark_mode: bool,
@@ -616,6 +620,9 @@ impl BrowserApp {
             detection_last_analyzed_url: None,
             poison_last_applied_url: None,
             poison_badge_pulse: false,
+
+            // Stealth victories - persistent poisoning counter
+            stealth_victories: StealthVictories::new(),
 
             dark_mode: true,
             theme_preset: ThemePreset::SassyRedesign,
@@ -2376,6 +2383,14 @@ impl BrowserApp {
                         // MCP server status
                         if self.mcp_bridge.running.load(std::sync::atomic::Ordering::Relaxed) {
                             ui.label(RichText::new("MCP").small().color(Color32::from_rgb(100, 200, 100)));
+                        }
+                        // Stealth victories counter
+                        ui.separator();
+                        let poisoned = self.stealth_victories.poisoned_count();
+                        if poisoned > 0 {
+                            ui.label(RichText::new(format!("Sites poisoned: {}", poisoned))
+                                .small()
+                                .color(Color32::from_rgb(200, 100, 255)));
                         }
                         ui.separator();
                         ui.label(format!("Zoom: {:.0}%", self.zoom_level * 100.0));
@@ -4315,6 +4330,8 @@ impl eframe::App for BrowserApp {
                                 &url_owned,
                             );
                             self.poison_badge_pulse = true;
+                            // Record stealth kill for the poisoned URL
+                            self.stealth_victories.silent_kill(&url_owned);
                             self.status_message = format!(
                                 "Fingerprint poisoning active: {}",
                                 self.poison_engine.mode_description()
