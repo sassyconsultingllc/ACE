@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! User-based sync sessions
 //!
 //! Connection model:
@@ -78,7 +77,6 @@ impl UserProfile {
         Ok((profile, master, recovery_key))
     }
     
-    #[allow(dead_code)]
     pub fn with_image(mut self, url: &str) -> Self {
         self.avatar = UserAvatar::Image { url: url.into() };
         self
@@ -100,19 +98,16 @@ impl UserProfile {
     }
     
     /// Get user's identity for signing
-    #[allow(dead_code)]
     pub fn identity(&self, master: &MasterSecret) -> Result<UserIdentity, String> {
         self.crypto.identity(master)
     }
     
     /// Get encryption key for user data
-    #[allow(dead_code)]
     pub fn data_key(&self, master: &MasterSecret) -> EncryptionKey {
         self.crypto.data_key(master)
     }
     
     /// Get encryption key for sync
-    #[allow(dead_code)]
     pub fn sync_key(&self, master: &MasterSecret) -> EncryptionKey {
         self.crypto.sync_key(master)
     }
@@ -192,7 +187,6 @@ pub struct BootstrapResult {
     pub recovery_key: String,
 }
 
-#[allow(dead_code)] // Public API methods for user management
 impl UserManager {
     pub fn new() -> Self {
         Self {

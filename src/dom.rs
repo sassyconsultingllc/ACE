@@ -226,11 +226,21 @@ pub struct Document {
 
 impl Document {
     pub fn new() -> Self {
-        Document {
+        let doc = Document {
             root: Node::new_document(),
             title: String::new(),
             base_url: None,
-        }
+        };
+        // Build default html>head+body skeleton
+        let html = doc.create_element("html");
+        let head = doc.create_element("head");
+        let body = doc.create_element("body");
+        let title_node = doc.create_text_node("");
+        Node::append_child(&head, &title_node);
+        Node::append_child(&html, &head);
+        Node::append_child(&html, &body);
+        Node::append_child(&doc.root, &html);
+        doc
     }
 
     pub fn get_element_by_id(&self, id: &str) -> Option<NodeRef> {
@@ -546,8 +556,198 @@ impl Document {
     }
 }
 
+impl std::fmt::Display for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.describe())
+    }
+}
+
+impl std::fmt::Display for Document {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.describe())
+    }
+}
+
 impl Default for Document {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_form_data_from_form() {
+        let form = Node::new_element("form");
+        form.borrow_mut().set_attribute("action", "/submit");
+        form.borrow_mut().set_attribute("method", "POST");
+        let input = Node::new_element("input");
+        input.borrow_mut().set_attribute("name", "username");
+        input.borrow_mut().set_attribute("value", "alice");
+        Node::append_child(&form, &input);
+        let fd = FormData::from_form(&form);
+        assert_eq!(fd.action, "/submit");
+        assert_eq!(fd.method, "POST");
+        assert!(!fd.enctype.is_empty());
+        assert!(fd.fields.iter().any(|(k, v)| k == "username" && v == "alice"));
+    }
+
+    #[test]
+    fn test_form_data_to_urlencoded() {
+        let fd = FormData {
+            action: "/search".to_string(),
+            method: "GET".to_string(),
+            enctype: "application/x-www-form-urlencoded".to_string(),
+            fields: vec![("q".into(), "hello world".into()), ("lang".into(), "en".into())],
+        };
+        let encoded = fd.to_urlencoded();
+        assert!(encoded.contains("q=hello+world"));
+        assert!(encoded.contains("lang=en"));
+    }
+
+    #[test]
+    fn test_form_data_get_url() {
+        let fd = FormData {
+            action: "/search".to_string(),
+            method: "GET".to_string(),
+            enctype: "application/x-www-form-urlencoded".to_string(),
+            fields: vec![("q".into(), "test".into())],
+        };
+        let url = fd.get_url("https://example.com/page");
+        assert!(url.contains("/search"));
+        assert!(url.contains("q=test"));
+    }
+
+    #[test]
+    fn test_form_data_get_url_absolute() {
+        let fd = FormData {
+            action: "https://other.com/submit".to_string(),
+            method: "POST".to_string(),
+            enctype: "application/x-www-form-urlencoded".to_string(),
+            fields: vec![],
+        };
+        let url = fd.get_url("https://example.com/page");
+        assert_eq!(url, "https://other.com/submit");
+    }
+
+    #[test]
+    fn test_node_describe() {
+        let node = Node::new_element("div");
+        {
+            let mut n = node.borrow_mut();
+            n.set_attribute("id", "main");
+            n.set_attribute("class", "container");
+            n.add_event_listener("click", "handler_1".to_string());
+        }
+        let child = Node::new_text("Hello");
+        Node::append_child(&node, &child);
+        let desc = node.borrow().describe();
+        assert!(desc.contains("Node["));
+        assert!(desc.contains("tag=div"));
+        assert!(desc.contains("has_id=true"));
+        assert!(desc.contains("listeners=1"));
+        assert!(desc.contains("children=1"));
+    }
+
+    #[test]
+    fn test_node_remove_attribute() {
+        let node = Node::new_element("p");
+        node.borrow_mut().set_attribute("style", "color: red;");
+        assert!(node.borrow().has_attribute("style"));
+        node.borrow_mut().remove_attribute("style");
+        assert!(!node.borrow().has_attribute("style"));
+    }
+
+    #[test]
+    fn test_node_add_event_listener() {
+        let node = Node::new_element("button");
+        node.borrow_mut().add_event_listener("click", "cb1".into());
+        node.borrow_mut().add_event_listener("click", "cb2".into());
+        let n = node.borrow();
+        let listeners = n.event_listeners.get("click").unwrap();
+        assert_eq!(listeners.len(), 2);
+    }
+
+    #[test]
+    fn test_document_describe() {
+        let doc = Document::new();
+        let desc = doc.describe();
+        assert!(desc.contains("Document["));
+        assert!(desc.contains("title="));
+        assert!(desc.contains("base_url="));
+    }
+
+    #[test]
+    fn test_document_with_title_and_base() {
+        let mut doc = Document::new();
+        doc.title = "My Page".to_string();
+        doc.base_url = Some("https://example.com/".to_string());
+        let desc = doc.describe();
+        assert!(desc.contains("My Page"));
+        assert!(desc.contains("https://example.com/"));
+    }
+
+    #[test]
+    fn test_find_parent_form() {
+        let form = Node::new_element("form");
+        let div = Node::new_element("div");
+        Node::append_child(&form, &div);
+        let input = Node::new_element("input");
+        Node::append_child(&div, &input);
+        let found = Node::find_parent_form(&input);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().borrow().tag_name.as_deref(), Some("form"));
+    }
+
+    #[test]
+    fn test_form_data_default() {
+        let fd = FormData::default();
+        assert!(fd.action.is_empty());
+        assert!(fd.method.is_empty());
+        assert!(fd.fields.is_empty());
+    }
+
+    #[test]
+    fn test_document_create_element() {
+        let doc = Document::new();
+        let el = doc.create_element("div");
+        assert_eq!(el.borrow().tag_name.as_deref(), Some("div"));
+        assert_eq!(el.borrow().node_type, NodeType::Element);
+    }
+
+    #[test]
+    fn test_document_create_text_node() {
+        let doc = Document::new();
+        let text = doc.create_text_node("hello world");
+        assert_eq!(text.borrow().text_content.as_deref(), Some("hello world"));
+        assert_eq!(text.borrow().node_type, NodeType::Text);
+    }
+
+    #[test]
+    fn test_document_get_body() {
+        let doc = Document::new();
+        // No body element yet
+        assert!(doc.get_body().is_none());
+        // Add a body element
+        let html = Node::new_element("html");
+        Node::append_child(&doc.root, &html);
+        let body = Node::new_element("body");
+        Node::append_child(&html, &body);
+        assert!(doc.get_body().is_some());
+    }
+
+    #[test]
+    fn test_document_get_head() {
+        let doc = Document::new();
+        // No head element yet
+        assert!(doc.get_head().is_none());
+        // Add a head element
+        let html = Node::new_element("html");
+        Node::append_child(&doc.root, &html);
+        let head = Node::new_element("head");
+        Node::append_child(&html, &head);
+        assert!(doc.get_head().is_some());
     }
 }

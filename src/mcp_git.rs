@@ -6,11 +6,8 @@
 //! - Commit creation (with approval)
 //! - Branch management
 
-#![allow(dead_code)]
 
-#[allow(unused_imports)]
 use std::collections::HashMap;
-#[allow(unused_imports)]
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use chrono::{DateTime, Utc, TimeZone};

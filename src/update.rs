@@ -2,10 +2,8 @@
 //!
 //! Checks for updates, downloads securely, applies with user consent.
 //! Uses the same quarantine system as downloads - no silent installs.
-#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
-#[allow(unused_imports)]
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const UPDATE_URL: &str = "https://onesassybrowser.com/api/version";

@@ -1,11 +1,8 @@
 //! UI Rendering - Production quality text, shapes, UI components
 //! Uses fontdue for real text rendering
-#![allow(unused_variables)]
-#![allow(dead_code)]
 
 use crate::ui::{Theme, Edge, SidebarLayout, Rect, TabManager, TileLayout};
 use crate::ui::tabs::TerminalColor;
-#[allow(unused_imports)]
 use crate::ui::tabs::{TabContent, TabGroup};
 use crate::ui::network_bar::{NetworkBar, NetworkBarColors, RequestState};
 use crate::ai::{AiConfig, AiProvider};
@@ -13,7 +10,6 @@ use fontdue::{Font, FontSettings};
 use std::sync::OnceLock;
 
 // Re-export helpers for external use
-#[allow(unused_imports)]
 pub use crate::ui::network_bar::{format_bytes, format_bytes_per_sec, truncate_url, truncate_host, state_text};
 
 // Global font instance

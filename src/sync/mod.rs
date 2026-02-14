@@ -22,12 +22,8 @@ pub mod secure;
 pub mod family;
 pub mod users;
 
-#[allow(unused_imports)] // Public API re-exports
 pub use protocol::{SyncMessage, SyncCommand, SyncEvent};
 pub use server::SyncServer;
-#[allow(unused_imports)]
 pub use secure::{SecureSyncServer, SyncConfig, BindMode, TailscaleInfo};
-#[allow(unused_imports)]
 pub use family::{FamilyConfig, FamilyDevice, TrustLevel};
-#[allow(unused_imports)]
 pub use users::{UserManager, UserProfile, UserSession, UserLoginInfo, BootstrapResult};

@@ -3,7 +3,6 @@
 //! Shows when the browser is doing network activity, so users know
 //! something is happening even when the page looks static.
 
-#![allow(dead_code)]
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};

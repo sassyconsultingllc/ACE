@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Native MCP Server — WebSocket Server for Sassy Browser
 //!
 //! Pure Rust, bincode over WebSocket. NO JSON-RPC.

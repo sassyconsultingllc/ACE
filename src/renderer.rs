@@ -244,3 +244,139 @@ pub fn build_default_pipeline() -> RenderPipeline {
     pipeline.add_stage(Box::new(PaintStage));
     pipeline
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_renderer_new_and_parse() {
+        let mut r = Renderer::new(800, 600);
+        r.parse_html("<html><head><title>Test</title></head><body>Hello</body></html>");
+        assert_eq!(r.get_title(), "Test");
+    }
+
+    #[test]
+    fn test_renderer_render_pipeline() {
+        let mut r = Renderer::new(320, 240);
+        r.parse_html("<body>Pipeline test</body>");
+        r.render();
+        assert!(!r.get_buffer().is_empty());
+        // Also exercise the staged pipeline
+        r.render_with_pipeline();
+        assert!(!r.get_buffer().is_empty());
+    }
+
+    #[test]
+    fn test_build_default_pipeline() {
+        let mut pipeline = build_default_pipeline();
+        let mut r = Renderer::new(100, 100);
+        r.parse_html("<body>stage</body>");
+        pipeline.execute(&mut r);
+        assert!(!r.get_buffer().is_empty());
+    }
+
+    #[test]
+    fn test_pipeline_stages_individually() {
+        let mut r = Renderer::new(100, 100);
+        r.parse_html("<body>stages</body>");
+        StyleStage.execute(&mut r);
+        LayoutStage.execute(&mut r);
+        PaintStage.execute(&mut r);
+        assert!(!r.get_buffer().is_empty());
+    }
+
+    #[test]
+    fn test_pipeline_default_trait() {
+        let pipeline = RenderPipeline::default();
+        assert!(pipeline.stages.is_empty());
+    }
+
+    #[test]
+    fn test_scroll_to() {
+        let mut r = Renderer::new(800, 600);
+        r.parse_html("<body>Scroll test content</body>");
+        r.render();
+        r.scroll_to(50.0);
+        assert!(r.scroll_y <= r.max_scroll.max(50.0));
+    }
+
+    #[test]
+    fn test_hit_test() {
+        let mut r = Renderer::new(800, 600);
+        r.parse_html("<body><a href='https://example.com'>Link</a></body>");
+        r.render();
+        // Hit test at origin - may or may not find anything
+        let _result = r.hit_test(10.0, 10.0);
+    }
+
+    #[test]
+    fn test_get_element_rect() {
+        let mut r = Renderer::new(800, 600);
+        r.parse_html("<body><p id='test'>text</p></body>");
+        r.render();
+        // Get links and try to get rect for first node
+        let links = r.get_links();
+        if let Some((_, node)) = links.first() {
+            let _rect = r.get_element_rect(node);
+        }
+    }
+
+    #[test]
+    fn test_get_links_images_forms_scripts() {
+        let mut r = Renderer::new(800, 600);
+        r.parse_html("<body><a href='x'>L</a><img src='y'><form><input></form><script>1</script></body>");
+        r.render();
+        let links = r.get_links();
+        let images = r.get_images();
+        let forms = r.get_forms();
+        let scripts = r.get_scripts();
+        // Verify they return (possibly empty) collections
+        let _ = (links.len(), images.len(), forms.len(), scripts.len());
+    }
+
+    #[test]
+    fn test_describe() {
+        let mut r = Renderer::new(800, 600);
+        r.parse_html("<body><a href='https://example.com'>click</a></body>");
+        r.render();
+        let desc = r.describe();
+        assert!(desc.contains("Renderer["));
+        assert!(desc.contains("title="));
+    }
+
+    #[test]
+    fn test_resize() {
+        let mut r = Renderer::new(800, 600);
+        r.parse_html("<body>Resize test</body>");
+        r.render();
+        r.resize(1024, 768);
+        assert_eq!(r.get_buffer().len(), 1024 * 768);
+    }
+
+    #[test]
+    fn test_scroll() {
+        let mut r = Renderer::new(800, 600);
+        r.parse_html("<body>Scroll content</body>");
+        r.render();
+        r.scroll(10.0);
+        // Scroll should clamp properly
+        assert!(r.scroll_y >= 0.0);
+    }
+
+    #[test]
+    fn test_add_stylesheet() {
+        let mut r = Renderer::new(800, 600);
+        r.parse_html("<body><p>styled</p></body>");
+        r.add_stylesheet("p { color: red; }");
+        r.render();
+        assert!(!r.get_buffer().is_empty());
+    }
+
+    #[test]
+    fn test_base_url_extraction() {
+        let mut r = Renderer::new(800, 600);
+        r.parse_html(r#"<html><head><base href="https://example.com/"></head><body>Base</body></html>"#);
+        assert_eq!(r.document.base_url.as_deref(), Some("https://example.com/"));
+    }
+}

@@ -6,7 +6,6 @@
 // YOUR HISTORY BECOMES INTENTIONAL.
 // ==============================================================================
 
-#![allow(dead_code, unused_variables, unused_imports)]
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};

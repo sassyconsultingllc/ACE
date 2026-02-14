@@ -1,6 +1,5 @@
 //! CSS Engine for the JS interpreter
 //! Parses CSS rules, calculates specificity, and computes styles for elements.
-#![allow(dead_code, unused_variables)]
 
 use std::collections::HashMap;
 

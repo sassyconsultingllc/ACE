@@ -372,6 +372,14 @@ impl Painter {
         }
     }
     
+    /// Describe painter state for diagnostics, reading font_size
+    pub fn describe(&self) -> String {
+        format!(
+            "Painter[{}x{}, font_size={}, buffer_len={}]",
+            self.width, self.height, self.font_size, self.buffer.len()
+        )
+    }
+
     /// Draw image from RGBA data
     pub fn draw_image(&self, buffer: &mut [u32], buffer_width: u32,
                       data: &[u8], x: i32, y: i32, img_width: u32, img_height: u32) {
@@ -404,6 +412,85 @@ impl Painter {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_painter_new_and_resize() {
+        let mut p = Painter::new(100, 100);
+        assert_eq!(p.buffer.len(), 100 * 100);
+        p.resize(200, 150);
+        assert_eq!(p.buffer.len(), 200 * 150);
+    }
+
+    #[test]
+    fn test_painter_describe() {
+        let p = Painter::new(320, 240);
+        let desc = p.describe();
+        assert!(desc.contains("Painter["));
+        assert!(desc.contains("320x240"));
+        assert!(desc.contains("font_size="));
+    }
+
+    #[test]
+    fn test_paint_into() {
+        let p = Painter::new(100, 100);
+        let layout = crate::layout::LayoutBox::default();
+        let mut buffer = vec![0u32; 100 * 100];
+        p.paint_into(&layout, &mut buffer, 100, 0, 0);
+        // Should not crash on empty layout
+    }
+
+    #[test]
+    fn test_alpha_blend() {
+        // Opaque foreground
+        let result = Painter::alpha_blend(0xFF000000, 0xFFFF0000);
+        assert_eq!(result, 0xFFFF0000);
+        // Transparent foreground
+        let result2 = Painter::alpha_blend(0xFF00FF00, 0x00FF0000);
+        assert_eq!(result2, 0xFF00FF00);
+        // Semi-transparent
+        let result3 = Painter::alpha_blend(0xFF000000, 0x80FF0000);
+        assert_ne!(result3, 0);
+    }
+
+    #[test]
+    fn test_fill_rect() {
+        let p = Painter::new(50, 50);
+        let mut buf = vec![0u32; 50 * 50];
+        let color = Color { r: 255, g: 0, b: 0, a: 255 };
+        p.fill_rect(&mut buf, 50, 10, 10, 20, 20, color);
+        // Check center pixel is red
+        let idx = (20 * 50 + 20) as usize;
+        assert_eq!(buf[idx], color.to_u32());
+    }
+
+    #[test]
+    fn test_draw_line() {
+        let p = Painter::new(50, 50);
+        let mut buf = vec![0u32; 50 * 50];
+        let color = Color { r: 0, g: 255, b: 0, a: 255 };
+        p.draw_line(&mut buf, 50, 0, 0, 49, 49, color);
+        // Diagonal should have some pixels set
+        let idx = (25 * 50 + 25) as usize;
+        assert_ne!(buf[idx], 0);
+    }
+
+    #[test]
+    fn test_draw_image() {
+        let p = Painter::new(50, 50);
+        let mut buf = vec![0u32; 50 * 50];
+        // 2x2 RGBA red image
+        let data: Vec<u8> = vec![255, 0, 0, 255, 0, 255, 0, 255,
+                                  0, 0, 255, 255, 255, 255, 0, 255];
+        p.draw_image(&mut buf, 50, &data, 10, 10, 2, 2);
+        // Pixel at (10,10) should be red
+        let idx = (10 * 50 + 10) as usize;
+        assert_ne!(buf[idx], 0);
     }
 }
 

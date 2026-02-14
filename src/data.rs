@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-#[allow(unused_imports)]
 use crate::sync::{UserManager, UserProfile, FamilyConfig};
 
 /// Get the data directory for Sassy Browser
@@ -244,6 +243,36 @@ pub struct SessionState {
     pub active_tab: Option<usize>,
 }
 
+impl SessionState {
+    /// Create a new empty session state
+    pub fn new() -> Self {
+        Self {
+            current_user: None,
+            tabs: Vec::new(),
+            active_tab: None,
+        }
+    }
+
+    /// Create session state for a specific user
+    pub fn for_user(user_id: &str) -> Self {
+        Self {
+            current_user: Some(user_id.to_string()),
+            tabs: Vec::new(),
+            active_tab: None,
+        }
+    }
+
+    /// Snapshot current browser state into a SessionRestore for persistence
+    pub fn to_restore(&self) -> SessionRestore {
+        SessionRestore {
+            user_id: self.current_user.clone().unwrap_or_default(),
+            tabs: self.tabs.clone(),
+            active_tab: self.active_tab,
+            quarantine: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TabState {
     pub id: u64,
@@ -284,13 +313,118 @@ impl SessionRestore {
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
     }
-    
+
     pub fn save(&self) -> Result<(), String> {
         let dir = data_dir().join("sessions");
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        
+
         let path = dir.join(format!("{}.json", self.user_id));
         let content = serde_json::to_string(self).map_err(|e| e.to_string())?;
         fs::write(&path, content).map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_session_state_for_user() {
+        let state = SessionState::for_user("alice");
+        assert_eq!(state.current_user.as_deref(), Some("alice"));
+        assert!(state.tabs.is_empty());
+        assert!(state.active_tab.is_none());
+    }
+
+    #[test]
+    fn test_session_state_to_restore() {
+        let mut state = SessionState::for_user("bob");
+        state.tabs.push(TabState {
+            id: 1,
+            url: "https://example.com".into(),
+            title: "Example".into(),
+            scroll_x: 0,
+            scroll_y: 100,
+        });
+        state.active_tab = Some(0);
+        let restore = state.to_restore();
+        assert_eq!(restore.user_id, "bob");
+        assert_eq!(restore.tabs.len(), 1);
+        assert_eq!(restore.active_tab, Some(0));
+        assert!(restore.quarantine.is_empty());
+    }
+
+    #[test]
+    fn test_session_state_new() {
+        let state = SessionState::new();
+        assert!(state.current_user.is_none());
+        assert!(state.tabs.is_empty());
+    }
+
+    #[test]
+    fn test_protection_stats_default() {
+        let stats = ProtectionStats::default();
+        assert_eq!(stats.total_ads_blocked, 0);
+        assert_eq!(stats.total_trackers_stopped, 0);
+        assert_eq!(stats.total_threats_detected, 0);
+        assert_eq!(stats.total_fingerprints_poisoned, 0);
+        assert_eq!(stats.total_phishing_blocked, 0);
+        assert_eq!(stats.total_malicious_scripts_blocked, 0);
+        assert_eq!(stats.total_downloads_quarantined, 0);
+        assert!(stats.protecting_since.is_none());
+    }
+
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
+        assert!(!config.version.is_empty());
+        assert_eq!(config.theme, "default");
+        assert!(config.privacy.data_stays_local);
+        assert!(config.privacy.zero_telemetry);
+        assert!(config.protection.adblock_enabled);
+        assert!(config.protection.threat_detection);
+    }
+
+    #[test]
+    fn test_privacy_settings_defaults() {
+        let p = PrivacySettings::default();
+        assert!(p.data_stays_local);
+        assert!(p.zero_telemetry);
+        assert!(p.no_crash_reports);
+        assert!(p.block_trackers);
+        assert!(p.poison_fingerprints);
+        assert!(!p.clear_on_exit);
+        assert!(p.dns_over_https);
+    }
+
+    #[test]
+    fn test_protection_settings_defaults() {
+        let p = ProtectionSettings::default();
+        assert!(p.adblock_enabled);
+        assert!(p.threat_detection);
+        assert!(p.download_quarantine);
+        assert!(p.sandbox_enabled);
+        assert!(p.anti_phishing);
+        assert!(p.script_analysis);
+        assert!(p.strict_tls);
+    }
+
+    #[test]
+    fn test_quarantined_file_state_serialization() {
+        let qfs = QuarantinedFileState {
+            id: "q1".into(),
+            filename: "test.exe".into(),
+            source_url: "https://example.com/test.exe".into(),
+            content_type: "application/octet-stream".into(),
+            size_bytes: 1024,
+            sha256: "abc123".into(),
+            quarantined_at_ms: 1700000000000,
+            encrypted_data: None,
+        };
+        let json = serde_json::to_string(&qfs).unwrap();
+        let deser: QuarantinedFileState = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.id, "q1");
+        assert_eq!(deser.filename, "test.exe");
+        assert_eq!(deser.size_bytes, 1024);
     }
 }

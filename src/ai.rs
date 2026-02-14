@@ -2,8 +2,6 @@
 //!
 //! Off by default. When enabled, provides contextual help like Windows XP's "?" button.
 //! Easter eggs throughout encourage exploration and learning.
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::fs;

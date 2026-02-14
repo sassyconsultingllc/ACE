@@ -4,7 +4,6 @@
 //! Shows the multi-agent conversation, task progress, and pending edits.
 
  
-#[allow(unused_imports)]
 use crate::mcp::{
     AgentRole, CodeEdit, EditOperation, McpMessage, McpOrchestrator,
     MessageRole, Task, TaskStatus,

@@ -1,7 +1,6 @@
 //! Tab tile system - visual grid of tab previews
 //! Like Windows alt+tab but for browser tabs
 
-#![allow(unused_variables)]
 
 use std::time::{Duration, Instant};
 use std::collections::VecDeque;

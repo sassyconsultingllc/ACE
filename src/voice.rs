@@ -1204,6 +1204,29 @@ impl MicrophoneCapture {
                 .collect();
         }
     }
+
+    /// Get the voice config for this capture instance
+    pub fn voice_config(&self) -> &VoiceConfig {
+        &self.config
+    }
+
+    /// Get the capture config for this instance
+    pub fn capture_config(&self) -> &CaptureConfig {
+        &self.capture_config
+    }
+
+    /// Process raw audio data through the capture pipeline (resampling + buffering)
+    /// This exposes the internal process_audio_callback for external use
+    pub fn process_audio(&self, data: &[f32], source_rate: u32) {
+        process_audio_callback(
+            data,
+            &self.buffer,
+            &self.peak_level,
+            &self.waveform,
+            source_rate,
+            self.sample_rate,
+        );
+    }
 }
 
 /// Process audio callback (helper for cpal integration)
@@ -1594,7 +1617,17 @@ impl CloudTranscriber {
         self.language = language.to_string();
         self
     }
-    
+
+    /// Get the configured cloud provider
+    pub fn provider(&self) -> CloudProvider {
+        self.provider
+    }
+
+    /// Check whether an API key has been configured
+    pub fn has_api_key(&self) -> bool {
+        !self.api_key.is_empty()
+    }
+
     /// Transcribe audio using the cloud API
     pub fn transcribe(&self, audio_data: &[u8], format: AudioFormat) -> Result<String, String> {
         match self.provider {

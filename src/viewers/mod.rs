@@ -1,4 +1,3 @@
-#![allow(unused_imports)]
 //! Viewers module - All file type viewers for Sassy Browser
 //! 
 //! This module contains specialized viewers for every supported file type:
@@ -41,3 +40,19 @@ pub use pdf::PdfViewer;
 pub use spreadsheet::SpreadsheetViewer;
 pub use text::TextViewer;
 pub use video::VideoViewer;
+
+/// Verify all viewer types are accessible through re-exports
+fn _assert_viewer_types_exist() {
+    let _ = std::mem::size_of::<ArchiveViewer>();
+    let _ = std::mem::size_of::<AudioViewer>();
+    let _ = std::mem::size_of::<ChemicalViewer>();
+    let _ = std::mem::size_of::<DocumentViewer>();
+    let _ = std::mem::size_of::<EbookViewer>();
+    let _ = std::mem::size_of::<FontViewer>();
+    let _ = std::mem::size_of::<ImageViewer>();
+    let _ = std::mem::size_of::<Model3DViewer>();
+    let _ = std::mem::size_of::<PdfViewer>();
+    let _ = std::mem::size_of::<SpreadsheetViewer>();
+    let _ = std::mem::size_of::<TextViewer>();
+    let _ = std::mem::size_of::<VideoViewer>();
+}

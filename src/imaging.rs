@@ -589,7 +589,7 @@ mod tests {
     #[test]
     fn test_with_max_size_and_global_cache_helpers() {
         // Ensure with_max_size constructor exists and behaves
-        let mut c = ImageCache::with_max_size(1024);
+        let c = ImageCache::with_max_size(1024);
         assert_eq!(c.max_size, 1024);
 
         // Global cache helpers
@@ -628,5 +628,138 @@ mod tests {
             ImageState::Loaded(_) => {}
             ImageState::Loading => panic!("unexpected Loading state in callback"),
         }
+    }
+
+    #[test]
+    fn test_image_data_describe_and_pixel_ops() {
+        let mut img = ImageData::new(4, 4);
+        // Exercise describe
+        let desc = img.describe();
+        assert!(desc.contains("ImageData"));
+        assert!(desc.contains("4x4"));
+
+        // Exercise get_pixel / set_pixel
+        img.set_pixel(0, 0, [255, 128, 64, 255]);
+        let px = img.get_pixel(0, 0);
+        assert_eq!(px, [255, 128, 64, 255]);
+
+        // Out-of-bounds returns transparent
+        let oob = img.get_pixel(100, 100);
+        assert_eq!(oob, [0, 0, 0, 0]);
+
+        // Out-of-bounds set is no-op
+        img.set_pixel(100, 100, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_image_cache_describe_and_eviction() {
+        let mut cache = ImageCache::with_max_size(256);
+        let desc = cache.describe();
+        assert!(desc.contains("ImageCache"));
+        assert!(desc.contains("256"));
+
+        // Insert a small image
+        let img = ImageData::new(2, 2);
+        cache.insert("test://a".to_string(), ImageState::Loaded(img));
+        assert!(cache.get("test://a").is_some());
+
+        // Insert an error state
+        cache.insert("test://err".to_string(), ImageState::Error("fail".into()));
+        assert!(cache.get("test://err").is_some());
+
+        // Insert a loading state
+        cache.insert("test://loading".to_string(), ImageState::Loading);
+        assert!(cache.get("test://loading").is_some());
+
+        // Clear
+        cache.clear();
+        assert!(cache.get("test://a").is_none());
+    }
+
+    #[test]
+    fn test_image_state_variants() {
+        // Construct all ImageState variants
+        let loading = ImageState::Loading;
+        let loaded = ImageState::Loaded(ImageData::new(1, 1));
+        let error = ImageState::Error("test error".to_string());
+
+        // Clone them to exercise the Clone trait
+        let _l2 = loading.clone();
+        let _l3 = loaded.clone();
+        let _e2 = error.clone();
+
+        // Debug format
+        let _dbg = format!("{:?}", loading);
+    }
+
+    #[test]
+    fn test_load_image_background_and_enqueue() {
+        cache_clear_global();
+        // load_image_background for a non-cached URL should return Loading
+        let state = load_image_background("test://bg_test");
+        match state {
+            ImageState::Loading => {}
+            _ => panic!("Expected Loading state from load_image_background"),
+        }
+
+        // Enqueue with priority
+        enqueue_image_request("test://priority_test", 10);
+    }
+
+    #[test]
+    fn test_push_and_drain_image_update_queue() {
+        // Drain first to clear any residual
+        let _ = drain_image_update_queue();
+
+        push_image_update_to_queue("test://url1");
+        push_image_update_to_queue("test://url2");
+        // Duplicate of newest should be skipped
+        push_image_update_to_queue("test://url2");
+
+        let drained = drain_image_update_queue();
+        assert!(drained.contains(&"test://url1".to_string()));
+        assert!(drained.contains(&"test://url2".to_string()));
+
+        // Queue should be empty after drain
+        let empty = drain_image_update_queue();
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn test_register_image_update_sender() {
+        let (tx, _rx) = std::sync::mpsc::channel::<String>();
+        register_image_update_sender(tx);
+    }
+
+    #[test]
+    fn test_global_image_cache_arc() {
+        let cache = global_image_cache();
+        let _guard = cache.read().unwrap();
+    }
+
+    #[test]
+    fn test_load_data_url_non_base64() {
+        // URL-encoded data URL (non-base64)
+        let result = load_data_url("data:text/plain,hello%20world");
+        // This will fail to decode as image, which is expected
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_data_url_invalid() {
+        let result = load_data_url("not-a-data-url");
+        assert!(result.is_err());
+
+        let result2 = load_data_url("data:no-comma");
+        assert!(result2.is_err());
+    }
+
+    #[test]
+    fn test_load_or_broken_with_invalid_url() {
+        // load_or_broken should return a valid placeholder for unreachable URLs
+        let img = load_or_broken("http://127.0.0.1:1/nonexistent.png", 16, 16);
+        assert_eq!(img.width, 16);
+        assert_eq!(img.height, 16);
+        assert_eq!(img.pixels.len(), 16 * 16 * 4);
     }
 }

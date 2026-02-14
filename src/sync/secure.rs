@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Secure sync via Tailscale/WireGuard mesh
 //!
 //! Instead of exposing a port on the local network:
@@ -98,7 +97,6 @@ impl TailscaleInfo {
     }
     
     /// Get the connection URL for phone
-    #[allow(dead_code)]
     pub fn connection_url(&self, port: u16) -> Option<String> {
         if let Some(ref dns) = self.magic_dns {
             // Use MagicDNS name (works across networks)
@@ -157,7 +155,6 @@ impl Default for SyncConfig {
 
 impl SyncConfig {
     /// Get the bind address based on mode and available interfaces
-    #[allow(dead_code)]
     pub fn bind_address(&self, tailscale: &TailscaleInfo) -> Result<String, String> {
         match self.bind_mode {
             BindMode::Localhost => {

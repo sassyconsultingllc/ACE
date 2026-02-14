@@ -2,7 +2,6 @@
 //! Sidebars can be placed on any edge: top, right, bottom, left
 //! Each can be hidden, collapsed, or expanded
 
-#![allow(dead_code)]
 
 use super::theme::{SidebarState, Theme};
 use std::collections::HashMap;

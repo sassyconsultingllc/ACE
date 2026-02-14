@@ -921,4 +921,159 @@ mod tests {
         assert!(!mcp_alerts.is_empty());
         assert!(mcp_alerts[0].honeypot_triggered);
     }
+
+    #[test]
+    fn test_suspicion_level_to_u8() {
+        assert_eq!(SuspicionLevel::None.to_u8(), 0);
+        assert_eq!(SuspicionLevel::Low.to_u8(), 1);
+        assert_eq!(SuspicionLevel::Medium.to_u8(), 2);
+        assert_eq!(SuspicionLevel::High.to_u8(), 3);
+        assert_eq!(SuspicionLevel::Critical.to_u8(), 4);
+    }
+
+    #[test]
+    fn test_detection_action_to_u8() {
+        assert_eq!(DetectionAction::LogOnly.to_u8(), 0);
+        assert_eq!(DetectionAction::WarnUser.to_u8(), 1);
+        assert_eq!(DetectionAction::BlockResource.to_u8(), 2);
+        assert_eq!(DetectionAction::QuarantinePage.to_u8(), 3);
+        assert_eq!(DetectionAction::ResetTrust.to_u8(), 4);
+        assert_eq!(DetectionAction::NotifyMcp.to_u8(), 5);
+    }
+
+    #[test]
+    fn test_detection_alert_payload_fields() {
+        let mut engine = DetectionEngine::new();
+        engine.cooldown = Duration::from_millis(0);
+        let mut ctx = untrusted_ctx();
+        ctx.honeypot_form_touched = true;
+        let alerts = engine.analyze(&ctx);
+        let payload = alerts[0].to_mcp_payload();
+        // Exercise all DetectionAlertPayload fields
+        assert!(!payload.rule_name.is_empty());
+        assert_eq!(payload.level, SuspicionLevel::Critical);
+        assert!(!payload.description.is_empty());
+        assert!(!payload.url.is_empty());
+        assert!(!payload.domain.is_empty());
+        assert!(payload.score > 0.0);
+        assert!(payload.honeypot_triggered);
+        let _ = payload.action;
+    }
+
+    #[test]
+    fn test_behavior_record_fields() {
+        let mut engine = DetectionEngine::new();
+        engine.cooldown = Duration::from_millis(0);
+        let mut ctx = untrusted_ctx();
+        ctx.known_trackers = vec!["doubleclick.net".to_string()];
+        engine.analyze(&ctx);
+        let record = engine.get_behavior("known_malicious_tracker").unwrap();
+        // Exercise all BehaviorRecord fields
+        let _ = record.first_seen;
+        assert!(record.count > 0);
+        assert!(record.total_score > 0.0);
+        let _ = record.last_event;
+    }
+
+    #[test]
+    fn test_page_context_all_fields() {
+        let mut ctx = PageContext::default();
+        // Exercise all PageContext fields
+        ctx.url = "https://test.com".to_string();
+        ctx.domain = "test.com".to_string();
+        ctx.trust_level = TrustLevel::Untrusted;
+        ctx.headers.insert("Content-Type".into(), "text/html".into());
+        ctx.scripts_src.push("https://cdn.example.com/script.js".into());
+        ctx.inline_script_hashes.push("sha256-abc".into());
+        ctx.iframes.push("https://frame.example.com".into());
+        ctx.canvas_calls = true;
+        ctx.webgl_calls = true;
+        ctx.battery_api_calls = true;
+        ctx.clipboard_read_attempts = 3;
+        ctx.known_trackers.push("tracker.example.com".into());
+        ctx.login_form_detected = true;
+        ctx.phishing_keywords = true;
+        ctx.crypto_miner_indicators = true;
+        ctx.honeypot_form_touched = true;
+        ctx.honeypot_link_followed = true;
+        ctx.honeypot_storage_read = true;
+        ctx.honeypot_cookie_exfiltrated = true;
+        ctx.honeypot_canvas_probed = true;
+        ctx.redirect_chain_length = 6;
+        let _ = ctx.last_updated;
+    }
+
+    #[test]
+    fn test_honeypot_config_generate_html_js() {
+        let config = HoneypotConfig::default();
+        let html = config.generate_injection_html();
+        assert!(html.contains("sassy_hp_"));
+        let js = config.generate_injection_js();
+        assert!(js.contains("sassy_hp_"));
+        // Test should_activate
+        assert!(HoneypotConfig::should_activate(TrustLevel::Untrusted));
+        assert!(HoneypotConfig::should_activate(TrustLevel::Acknowledged));
+        assert!(!HoneypotConfig::should_activate(TrustLevel::Reviewed));
+    }
+
+    #[test]
+    fn test_drain_mcp_alerts() {
+        let mut engine = DetectionEngine::new();
+        let mut ctx = untrusted_ctx();
+        ctx.honeypot_canvas_probed = true;
+        engine.analyze(&ctx);
+        let drained = engine.drain_mcp_alerts();
+        assert!(!drained.is_empty());
+        // Second drain should be empty
+        let drained2 = engine.drain_mcp_alerts();
+        assert!(drained2.is_empty());
+    }
+
+    #[test]
+    fn test_engine_clear_and_total() {
+        let mut engine = DetectionEngine::new();
+        let mut ctx = untrusted_ctx();
+        ctx.canvas_calls = true;
+        engine.analyze(&ctx);
+        assert!(engine.total_alerts() > 0);
+        assert!(engine.cumulative_score() > 0.0);
+        assert!(engine.active_alert_count() > 0);
+        let _ = engine.recent_alerts(10);
+        engine.clear();
+        assert_eq!(engine.total_alerts(), 0);
+    }
+
+    #[test]
+    fn test_honeypot_setup_and_get() {
+        let mut engine = DetectionEngine::new();
+        let config = engine.setup_honeypots(42, TrustLevel::Untrusted);
+        assert!(config.is_some());
+        assert!(engine.get_honeypot(42).is_some());
+        // Removes on established level (trusted enough to disengage honeypots)
+        let config2 = engine.setup_honeypots(42, TrustLevel::Established);
+        assert!(config2.is_none());
+        assert!(engine.get_honeypot(42).is_none());
+        // Remove tab
+        engine.setup_honeypots(99, TrustLevel::Untrusted);
+        engine.remove_tab(99);
+        assert!(engine.get_honeypot(99).is_none());
+    }
+
+    #[test]
+    fn test_suspicion_level_to_violation_severity() {
+        // None maps to None
+        assert!(SuspicionLevel::None.to_violation_severity().is_none());
+        // Low maps to Some(Low)
+        let low = SuspicionLevel::Low.to_violation_severity();
+        assert!(low.is_some());
+        // Medium maps to Some(Medium)
+        let med = SuspicionLevel::Medium.to_violation_severity();
+        assert!(med.is_some());
+        // High maps to Some(High)
+        let high = SuspicionLevel::High.to_violation_severity();
+        assert!(high.is_some());
+        // Critical maps to Some(Critical)
+        let crit = SuspicionLevel::Critical.to_violation_severity();
+        assert!(crit.is_some());
+    }
 }

@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(deprecated)]
 //! Audio Player - MP3, WAV, FLAC, OGG playback with visualization
 //!
 //! Uses rodio for real audio playback and symphonia-decoded waveform data
@@ -6,11 +6,9 @@
 //! and repeat modes.
 
 use crate::file_handler::{AudioContent, FileContent, OpenFile};
-use eframe::egui::{self, Color32, FontId, Pos2, Rect, RichText, Stroke, Vec2};
-use image::GenericImageView;
+use eframe::egui::{self, Color32, Pos2, Rect, RichText, Stroke, Vec2};
 use rodio::Source;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 /// Shared state between the UI thread and the audio playback thread
@@ -191,7 +189,7 @@ impl AudioViewer {
                     let buf_reader = std::io::BufReader::new(file);
                     if let Ok(source) = rodio::Decoder::new(buf_reader) {
                         // Skip ahead by consuming samples
-                        let skip_samples = (pos * 44100.0) as usize; // approximate
+                        let _skip_samples = (pos * 44100.0) as usize; // approximate
                         let skipped = source.skip_duration(std::time::Duration::from_secs_f64(pos));
                         new_sink.append(skipped);
 
@@ -450,7 +448,7 @@ impl AudioViewer {
         }
     }
 
-    fn render_progress(&mut self, ui: &mut egui::Ui, audio: &AudioContent, file_path: &std::path::Path, duration: f64) {
+    fn render_progress(&mut self, ui: &mut egui::Ui, _audio: &AudioContent, file_path: &std::path::Path, duration: f64) {
         ui.horizontal(|ui| {
             ui.label(RichText::new(format_duration(self.current_position)).monospace());
 

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 // Case normalization helpers  make comparisons case/format insensitive
 //! Normalize strings to a canonical ASCII alphanumeric lowercase form so
 //! that CamelCase, snake_case, kebab-case and UPPERCASE compare equal.

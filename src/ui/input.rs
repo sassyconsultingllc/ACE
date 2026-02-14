@@ -2,7 +2,6 @@
 //!
 //! All input routing and text editing in one place.
 
-#![allow(dead_code)]
 
 use std::time::Instant;
 

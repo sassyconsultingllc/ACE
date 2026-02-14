@@ -3,7 +3,6 @@
 //! Blocks spam popups while allowing legitimate ones like captchas.
 //! Uses heuristics to distinguish between user-initiated and spam popups.
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};

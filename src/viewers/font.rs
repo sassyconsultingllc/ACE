@@ -1,8 +1,8 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(deprecated)]
 //! Font Viewer - TTF, OTF, WOFF preview with character map
 
 use crate::file_handler::{FileContent, FontContent, OpenFile};
-use eframe::egui::{self, Color32, FontId, RichText, Vec2};
+use eframe::egui::{self, Color32, FontId, RichText};
 
 pub struct FontViewer {
     preview_text: String,
@@ -25,7 +25,7 @@ impl FontViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, _icons: &crate::icons::Icons) {
         if let FileContent::Font(font) = &file.content {
             self.render_toolbar(ui, font);
             ui.separator();
@@ -185,7 +185,7 @@ impl FontViewer {
         }
     }
     
-    fn render_character_map(&mut self, ui: &mut egui::Ui, font: &FontContent, zoom: f32) {
+    fn render_character_map(&mut self, ui: &mut egui::Ui, _font: &FontContent, zoom: f32) {
         ui.heading("Character Map");
         ui.add_space(10.0);
         

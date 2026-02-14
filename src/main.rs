@@ -130,6 +130,9 @@ mod fontcase;
 mod adblock;
 pub mod icons;                 // SVG icon system (replaces inline Unicode emoji)
 
+// Self-healing health watchdog (monitors + auto-fixes browser internals)
+mod health;
+
 use std::env;
 
 fn main() {

@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_variables, unused_imports)]
-
 use super::lexer::{Token, TokenKind, Lexer};
 
 #[derive(Debug, Clone)]

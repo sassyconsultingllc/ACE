@@ -6,7 +6,6 @@
 // Weekly reports. FINALLY, PARENTAL CONTROLS THAT WORK.
 // ==============================================================================
 
-#![allow(dead_code, unused_variables, unused_imports)]
 
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

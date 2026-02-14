@@ -1,4 +1,3 @@
-#![allow(dead_code, unused_variables, unused_imports)]
 //! HTML Renderer - Pure Rust HTML/CSS/JS rendering
 //!
 //! Renders web pages using:

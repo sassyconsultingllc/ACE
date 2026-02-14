@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Family device management
 //!
 //! Philosophy: Approve devices, not monitor sessions.

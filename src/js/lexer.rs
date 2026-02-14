@@ -1,5 +1,3 @@
-#![allow(unused_variables, unused_imports, dead_code)]
-
 use std::iter::Peekable;
 use std::str::Chars;
 

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Sync protocol definitions
 //! JSON-based message format for browser <-> phone communication
 
@@ -337,7 +336,6 @@ impl SyncMessage {
         Self::new(MessagePayload::Ack { message_id, success, error })
     }
     
-    #[allow(dead_code)]
     pub fn ping() -> Self {
         Self::new(MessagePayload::Ping)
     }

@@ -2,8 +2,6 @@
 //!
 //! Renders Markdown to styled DOM elements.
 //! Supports: headings, lists, code blocks, links, emphasis, tables.
-#![allow(dead_code)]
-
 use crate::style::Color;
 
 /// Markdown block element

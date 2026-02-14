@@ -6,7 +6,6 @@
 //! fingerprint (JA3 hash) closely matches Chrome/Edge 132 on Windows.  The goal
 //! is to defeat naive TLS fingerprinting that blocks non-browser user agents
 //! while preserving the security guarantees of `rustls` and its `ring` backend.
-#![allow(dead_code)]
 //!
 //! # Target JA3 (Chrome 132)
 //!

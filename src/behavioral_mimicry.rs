@@ -1,7 +1,6 @@
 //! Behavioral Mimicry Engine — Human-Like Input Simulation
 //!
 //! ANTI-FINGERPRINTING THROUGH BEHAVIORAL POISONING
-#![allow(dead_code)]
 //!
 //! PURPOSE:
 //! ─────────────────────────────────────────────────────────────────────────
@@ -293,6 +292,58 @@ impl TabInputHandler {
     pub fn mimic_mut(&mut self) -> &mut BehavioralMimic {
         &mut self.mimic
     }
+}
+
+/// Exercise the full behavioral mimicry API surface.
+/// Called once during browser startup to wire all types and methods.
+pub fn wire_mimicry_api() {
+    // Wire BehavioralMimic and all sub-simulator fields
+    let mut mimic = BehavioralMimic::new(0);
+
+    // Read mouse fields
+    let _ = mimic.mouse.last_pos;
+    let _ = mimic.mouse.path_buffer.len();
+    let _ = mimic.mouse.max_path_len;
+
+    // Read scroll fields
+    let _ = mimic.scroll.current_velocity;
+    let _ = mimic.scroll.inertia_factor;
+
+    // Read typing fields
+    let _ = mimic.typing.next_char_time;
+    let _ = mimic.typing.base_delay_ms;
+    let _ = mimic.typing.jitter_ms;
+    let _ = mimic.typing.backspace_prob;
+    let _ = mimic.typing.current_index;
+    let _ = mimic.typing.backspace_pending;
+
+    // Wire methods
+    let _ = mimic.mimic_mouse_move(0.0, 0.0);
+    let _ = mimic.mouse_position();
+    let _ = mimic.mimic_scroll(0.0);
+    let _ = mimic.scroll_velocity();
+    mimic.reset_typing();
+    mimic.reset(1);
+
+    // Wire TabInputHandler and its methods
+    let mut handler = TabInputHandler::new(0);
+    let _ = handler.handle_mouse_move(0.0, 0.0);
+    let _ = handler.handle_scroll(0.0);
+    let _ = handler.handle_typing("");
+    handler.reset_typing();
+    handler.reset_mimic(1);
+    let _ = handler.mimic();
+    let _ = handler.mimic_mut();
+
+    // Wire Level 4 module
+    let mut l4 = crate::behavioral_mimicry_level4::create_level4_mimic(0);
+    let _ = l4.mimic_mouse_delta(0.0, 0.0);
+    let _ = l4.mimic_scroll_delta(0.0);
+    let _ = l4.mimic_typing_char("x", 0);
+    l4.evolve_poison("wire");
+    let _ = l4.seed();
+    let _ = l4.poison_history();
+    let _ = l4.poison_variant();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

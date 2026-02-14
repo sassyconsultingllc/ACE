@@ -6,8 +6,6 @@
 //! 2. Private key encrypted with Argon2-derived key from PIN (if set)
 //! 3. Symmetric encryption uses ChaCha20-Poly1305 (AEAD)
 //! 4. Key derivation uses HKDF-SHA256 for sub-keys
-#![allow(dead_code)]
-
 //!
 //! WHY THIS MATTERS:
 //! - User data encrypted at rest
@@ -24,8 +22,6 @@
 use ring::rand::{SecureRandom, SystemRandom};
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use ring::digest::{digest, SHA256};
-#[allow(unused_imports)]
-use ring::hmac;
 use ring::hkdf;
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::{SaltString, PasswordHash};

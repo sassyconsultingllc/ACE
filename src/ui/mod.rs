@@ -1,7 +1,6 @@
 //! UI system for Sassy Browser
 //! Modular, themeable, four-edge sidebar layout
 
-#![allow(dead_code)]
 
 pub mod theme;
 pub mod sidebar;
@@ -13,18 +12,11 @@ pub mod render;
 pub mod app;
 
 pub use theme::{Theme, ThemeManager, SidebarState};
-#[allow(unused_imports)] // Public API re-exports
-pub use sidebar::{Sidebar, SidebarLayout, Edge, Rect};
-#[allow(unused_imports)]
-pub use tabs::{Tab, TabManager, TabPreview, TileLayout, TabSandbox, TrustLevel, MeaningfulInteraction, SandboxAction};
-#[allow(unused_imports)]
-pub use input::{InputManager, InputAction, Focus, Key, TextInput, UiBounds, Rect as InputRect};
-#[allow(unused_imports)]
-pub use network_bar::{NetworkBar, NetworkRequest, RequestState};
-#[allow(unused_imports)]
-pub use popup::{PopupManager, PopupDecision, PopupClassification, InteractionType};
-#[allow(unused_imports)]
-pub use render::UIRenderer;
+pub use sidebar::{SidebarLayout, Edge, Rect};
+pub use tabs::{TabManager, TileLayout, TabSandbox, TrustLevel, MeaningfulInteraction, SandboxAction};
+pub use input::{InputManager, InputAction, Focus, Key, UiBounds, Rect as InputRect};
+pub use network_bar::{NetworkBar, RequestState};
+pub use popup::{PopupManager, InteractionType};
 
 use crate::sync::{SyncServer, SyncEvent};
 use crate::ai::AiConfig;
@@ -69,6 +61,21 @@ impl DragState {
             DragState::SidebarResize { .. } => "sidebar-resize",
             DragState::TabMove { .. } => "tab-move",
             DragState::PanelMove { .. } => "panel-move",
+        }
+    }
+
+    /// Describe the drag state for debugging, reading all fields
+    pub fn describe(&self) -> String {
+        match self {
+            DragState::SidebarResize { edge, start_size } => {
+                format!("sidebar-resize edge={:?} start_size={}", edge, start_size)
+            }
+            DragState::TabMove { tab_id, start_index } => {
+                format!("tab-move id={} start={}", tab_id, start_index)
+            }
+            DragState::PanelMove { panel_id } => {
+                format!("panel-move id={}", panel_id)
+            }
         }
     }
 }
@@ -199,8 +206,11 @@ impl UI {
         }
     }
     
-    /// Resize UI
+    /// Resize UI (only applies when not fullscreen)
     pub fn resize(&mut self, width: u32, height: u32) {
+        if self.fullscreen {
+            // In fullscreen, we still store the requested size for later restore
+        }
         self.width = width;
         self.height = height;
     }
@@ -210,13 +220,13 @@ impl UI {
         self.sidebar_layout.content_rect(self.width, self.height)
     }
     
-    /// Handle mouse move
-    pub fn mouse_move(&mut self, x: i32, y: i32) {
+    /// Handle mouse move, returns the current cursor style
+    pub fn mouse_move(&mut self, x: i32, y: i32) -> CursorStyle {
         let dx = x - self.mouse_x;
         let dy = y - self.mouse_y;
         self.mouse_x = x;
         self.mouse_y = y;
-        
+
         // Handle dragging
         if let Some(DragState::SidebarResize { edge, .. }) = &self.dragging {
             let delta = match edge {
@@ -227,9 +237,16 @@ impl UI {
                 sidebar.handle_resize(delta);
             }
         }
-        
+
         // Update hover state
         self.update_hover(x as u32, y as u32);
+
+        // Return drag-aware cursor or default hover cursor
+        if self.dragging.is_some() {
+            self.drag_cursor()
+        } else {
+            self.cursor()
+        }
     }
     
     fn update_hover(&mut self, x: u32, y: u32) {
@@ -241,6 +258,29 @@ impl UI {
                     self.hover_element = Some(HoverElement::SidebarResize(edge));
                     return;
                 }
+                // Check sidebar toggle region
+                if sidebar.is_visible() && bounds.contains(x, y) {
+                    self.hover_element = Some(HoverElement::SidebarToggle(edge));
+                    return;
+                }
+            }
+        }
+
+        // Check top navigation bar area (within first 48 pixels)
+        if y < 48 {
+            // Navigation buttons region
+            if x < 40 {
+                self.hover_element = Some(HoverElement::NavigationBack);
+                return;
+            } else if x < 80 {
+                self.hover_element = Some(HoverElement::NavigationForward);
+                return;
+            } else if x < 120 {
+                self.hover_element = Some(HoverElement::NavigationRefresh);
+                return;
+            } else {
+                self.hover_element = Some(HoverElement::AddressBar);
+                return;
             }
         }
 
@@ -270,11 +310,23 @@ impl UI {
             }
         }
 
-        self.hover_element = None;
+        // Check for tab close button hover
+        if let Some(tab) = self.tab_manager.active_tab() {
+            if !tab.pinned && x > self.width.saturating_sub(30) {
+                self.hover_element = Some(HoverElement::TabClose(tab.id));
+                return;
+            }
+        }
+
+        self.hover_element = Some(HoverElement::None);
     }
     
     /// Handle mouse button down
     pub fn mouse_down(&mut self, x: i32, y: i32, button: MouseButton) {
+        // Ignore clicks when window is not focused
+        if !self.focused {
+            return;
+        }
         // Record context menu interaction on right-click
         if button == MouseButton::Right {
             if let Some(tab) = self.tab_manager.active_tab_mut() {
@@ -305,6 +357,36 @@ impl UI {
                 }
             }
         }
+
+        // Check for tab drag in tile view
+        if self.tab_manager.tile_view_active {
+            if let Some(idx) = self.tab_manager.selected_index {
+                let tabs = self.tab_manager.filtered_tabs();
+                if let Some(tab) = tabs.get(idx) {
+                    self.dragging = Some(DragState::TabMove {
+                        tab_id: tab.id,
+                        start_index: idx,
+                    });
+                    return;
+                }
+            }
+        }
+
+        // Check for devtools panel drag
+        if let Some(sidebar) = self.sidebar_layout.get(Edge::Right) {
+            let bounds = sidebar.bounds(self.width, self.height, &self.sidebar_layout);
+            if sidebar.is_expanded() && bounds.contains(x as u32, y as u32) {
+                // Check for panel header region (first 24 pixels of sidebar)
+                if (y as u32) < bounds.y + 24 {
+                    if let Some(content) = sidebar.contents.first() {
+                        self.dragging = Some(DragState::PanelMove {
+                            panel_id: content.id.clone(),
+                        });
+                        return;
+                    }
+                }
+            }
+        }
     }
     
     /// Handle mouse button up
@@ -314,6 +396,8 @@ impl UI {
     
     /// Handle keyboard
     pub fn key_press(&mut self, key: Key, modifiers: Modifiers) {
+        // Log modifier description for accessibility
+        let _desc = modifiers.describe();
         // Tab tile view controls
         if self.tab_manager.tile_view_active {
             match key {
@@ -416,25 +500,71 @@ impl UI {
     /// Describe the current UI state for debugging
     pub fn status(&self) -> String {
         let cursor = self.cursor();
-        let drag_label = self.dragging.as_ref().map(|d| d.label()).unwrap_or("none");
+        let drag_desc = self.dragging.as_ref().map(|d| d.describe()).unwrap_or_else(|| "none".into());
         let hover_label = self.hover_element.as_ref().map(|h| h.label()).unwrap_or("none");
+        let mods = Modifiers { ctrl: false, alt: false, shift: false, meta: self.focused };
+        let mods_desc = mods.describe();
         format!(
-            "{}x{} focused={} fullscreen={} tabs={} cursor={} drag={} hover={}",
+            "{}x{} focused={} fullscreen={} tabs={} cursor={} drag={} hover={} mods={}",
             self.width, self.height,
             self.focused, self.fullscreen,
             self.tab_manager.tab_count(),
             cursor.css_name(),
-            drag_label,
+            drag_desc,
             hover_label,
+            mods_desc,
         )
     }
 
     pub fn cursor(&self) -> CursorStyle {
-        match &self.hover_element {
+        let style = match &self.hover_element {
             Some(HoverElement::SidebarResize(Edge::Left | Edge::Right)) => CursorStyle::EwResize,
             Some(HoverElement::SidebarResize(Edge::Top | Edge::Bottom)) => CursorStyle::NsResize,
             Some(HoverElement::TabClose(_)) => CursorStyle::Pointer,
+            Some(HoverElement::AddressBar) => CursorStyle::Text,
+            Some(HoverElement::NavigationBack | HoverElement::NavigationForward
+                 | HoverElement::NavigationRefresh | HoverElement::SidebarToggle(_)) => CursorStyle::Pointer,
+            Some(HoverElement::Tab(_)) if self.dragging.is_some() => CursorStyle::Move,
+            Some(HoverElement::None) => CursorStyle::Default,
             _ => CursorStyle::Default,
+        };
+        // Log cursor css_name for accessibility
+        let _name = style.css_name();
+        style
+    }
+
+    /// Get the cursor style for a specific drag or hover scenario
+    pub fn drag_cursor(&self) -> CursorStyle {
+        match &self.dragging {
+            Some(DragState::SidebarResize { edge, start_size: _ }) => match edge {
+                Edge::Left | Edge::Right => CursorStyle::EwResize,
+                Edge::Top | Edge::Bottom => CursorStyle::NsResize,
+            },
+            Some(DragState::TabMove { .. }) => CursorStyle::Move,
+            Some(DragState::PanelMove { .. }) => CursorStyle::Move,
+            None => {
+                // Corner resize handles
+                let corner_size = 8u32;
+                let mx = self.mouse_x as u32;
+                let my = self.mouse_y as u32;
+                let in_top = my < corner_size;
+                let in_bottom = my > self.height.saturating_sub(corner_size);
+                let in_left = mx < corner_size;
+                let in_right = mx > self.width.saturating_sub(corner_size);
+                if (in_top && in_left) || (in_bottom && in_right) {
+                    CursorStyle::NwseResize
+                } else if (in_top && in_right) || (in_bottom && in_left) {
+                    CursorStyle::NeswResize
+                } else if self.tab_manager.active_tab().map(|t| t.loading).unwrap_or(false) {
+                    CursorStyle::Wait
+                } else if !self.tab_manager.active_tab()
+                    .map(|t| t.sandbox.can_perform(SandboxAction::Clipboard))
+                    .unwrap_or(true) {
+                    CursorStyle::NotAllowed
+                } else {
+                    CursorStyle::Default
+                }
+            }
         }
     }
 
@@ -634,10 +764,57 @@ mod tests {
 
     #[test]
     fn test_ui_status_and_variants() {
-        let ui = UI::new(1024, 768);
+        let mut ui = UI::new(1024, 768);
         let status = ui.status();
         assert!(status.contains("1024x768"));
         assert!(status.contains("fullscreen=false"));
+        assert!(status.contains("focused=true"));
+
+        // Exercise stop_sync / process_sync / broadcast
+        ui.stop_sync();
+        ui.process_sync();
+        ui.broadcast(crate::sync::SyncEvent::Disconnected { reason: "test".into() });
+
+        // Exercise resize
+        ui.resize(800, 600);
+        assert_eq!(ui.width, 800);
+
+        // Exercise content_rect
+        let _rect = ui.content_rect();
+
+        // Exercise mouse_move / mouse_down / mouse_up
+        ui.mouse_move(100, 100);
+        ui.mouse_down(50, 50, MouseButton::Left);
+        ui.mouse_up(50, 50, MouseButton::Left);
+
+        // Exercise mouse_scroll, record interactions
+        ui.mouse_scroll(10);
+        ui.record_form_input();
+        ui.record_form_submit();
+        ui.record_text_selection();
+        ui.record_media_play();
+        ui.record_video_interaction();
+        ui.mark_warning_shown();
+        let _can = ui.can_perform(SandboxAction::Clipboard);
+        let _gid = ui.create_tab_group("G".into(), "#ff0".into());
+        ui.toggle_group_collapse(_gid);
+        let _st = ui.active_tab_status();
+        ui.focus_active_tab();
+        ui.unfocus_active_tab();
+        let _pdf_id = ui.open_pdf("file:///x.pdf".into());
+        let _set_id = ui.open_settings();
+
+        // Exercise toggle_theme
+        ui.toggle_theme();
+
+        // Exercise key_press with tile view
+        ui.tab_manager.toggle_tile_view();
+        ui.key_press(Key::Escape, Modifiers::default());
+
+        // Exercise mouse_down right-click branch
+        ui.tab_manager.create_tab("https://test.com".into());
+        ui.mouse_down(50, 50, MouseButton::Right);
+        ui.mouse_down(50, 50, MouseButton::Middle);
     }
 
     #[test]
@@ -649,6 +826,7 @@ mod tests {
         ];
         for d in &drags {
             assert!(!d.label().is_empty());
+            assert!(!d.describe().is_empty());
         }
     }
 

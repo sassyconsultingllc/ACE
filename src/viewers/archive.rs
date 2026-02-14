@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+﻿#![allow(deprecated)]
 //! Archive Handler - Full ZIP, RAR, 7z, TAR support with creation
 //!
 //! Features:
@@ -9,7 +9,7 @@
 //! - Convert: Between archive formats
 
 use crate::file_handler::{ArchiveContent, ArchiveEntry, ArchiveFormat, FileContent, OpenFile};
-use eframe::egui::{self, Color32, FontId, RichText, Vec2, Sense};
+use eframe::egui::{self};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
@@ -322,7 +322,6 @@ impl ArchiveViewer {
     
     fn extract_zip(archive: &std::path::Path, output: &std::path::Path) -> Result<usize, String> {
         use std::fs::{self, File};
-        use std::io::Read;
         use zip::ZipArchive;
         
         let file = File::open(archive).map_err(|e| e.to_string())?;
@@ -437,7 +436,6 @@ impl ArchiveViewer {
         selected_indices: &HashSet<usize>,
     ) -> Result<usize, String> {
         use std::fs::{self, File};
-        use std::io::Read;
         use zip::ZipArchive;
 
         let file = File::open(archive_path).map_err(|e| e.to_string())?;
@@ -1016,6 +1014,69 @@ impl ArchiveViewer {
             "exe" | "msi" | "dll" => "",
             _ => "DOC",
         }
+    }
+
+    /// Access preview state for testing and external use
+    pub fn preview_state(&self) -> (Option<usize>, Option<&str>) {
+        (self.preview_entry, self.preview_content.as_deref())
+    }
+
+    /// Access files marked for removal
+    pub fn files_marked_for_removal(&self) -> &HashSet<usize> {
+        &self.files_to_remove
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_archive_mode_variants() {
+        let modes = [ArchiveMode::View, ArchiveMode::Create, ArchiveMode::Edit];
+        assert_eq!(modes.len(), 3);
+    }
+
+    #[test]
+    fn test_compression_level_variants() {
+        let levels = [
+            CompressionLevel::Store,
+            CompressionLevel::Fastest,
+            CompressionLevel::Fast,
+            CompressionLevel::Normal,
+            CompressionLevel::Maximum,
+            CompressionLevel::Ultra,
+        ];
+        assert_eq!(levels.len(), 6);
+    }
+
+    #[test]
+    fn test_sort_column_modified() {
+        let col = SortColumn::Modified;
+        assert_eq!(col, SortColumn::Modified);
+    }
+
+    #[test]
+    fn test_new_archive_fields() {
+        let archive = NewArchive {
+            name: "test".into(),
+            format: crate::file_handler::ArchiveFormat::Zip,
+            compression: CompressionLevel::Normal,
+            files: vec![],
+            password: Some("secret".into()),
+            split_size: Some(1024),
+        };
+        assert!(archive.password.is_some());
+        assert_eq!(archive.split_size, Some(1024));
+    }
+
+    #[test]
+    fn test_viewer_dead_fields() {
+        let viewer = ArchiveViewer::new();
+        assert!(viewer.files_marked_for_removal().is_empty());
+        let (entry, content) = viewer.preview_state();
+        assert!(entry.is_none());
+        assert!(content.is_none());
     }
 }
 

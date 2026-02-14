@@ -5,7 +5,6 @@
 
  
 use crate::style::Color;
-#[allow(unused_imports)]
 use std::collections::HashMap;
 
 /// JSON value type (simplified for our use)
@@ -639,12 +638,12 @@ impl Default for JsonColors {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_simple() {
         let json = r#"{"name": "test", "value": 42}"#;
         let value = JsonValue::parse(json).unwrap();
-        
+
         match value {
             JsonValue::Object(pairs) => {
                 assert_eq!(pairs.len(), 2);
@@ -652,12 +651,12 @@ mod tests {
             _ => panic!("Expected object"),
         }
     }
-    
+
     #[test]
     fn test_parse_array() {
         let json = "[1, 2, 3]";
         let value = JsonValue::parse(json).unwrap();
-        
+
         match value {
             JsonValue::Array(items) => {
                 assert_eq!(items.len(), 3);
@@ -665,14 +664,249 @@ mod tests {
             _ => panic!("Expected array"),
         }
     }
-    
+
     #[test]
     fn test_pretty_print() {
         let json = r#"{"name":"test"}"#;
         let value = JsonValue::parse(json).unwrap();
         let pretty = value.pretty_print(0);
-        
+
         assert!(pretty.contains("\"name\""));
         assert!(pretty.contains("\"test\""));
+    }
+
+    #[test]
+    fn test_all_json_value_variants() {
+        // Null
+        let null = JsonValue::parse("null").unwrap();
+        assert_eq!(null.type_name(), "null");
+        assert_eq!(null.child_count(), 0);
+
+        // Bool
+        let t = JsonValue::parse("true").unwrap();
+        assert_eq!(t.type_name(), "boolean");
+        let f = JsonValue::parse("false").unwrap();
+        assert_eq!(f.type_name(), "boolean");
+
+        // Number
+        let n = JsonValue::parse("42.5").unwrap();
+        assert_eq!(n.type_name(), "number");
+
+        // String
+        let s = JsonValue::parse(r#""hello""#).unwrap();
+        assert_eq!(s.type_name(), "string");
+
+        // Array
+        let a = JsonValue::parse("[1, 2, 3]").unwrap();
+        assert_eq!(a.type_name(), "array");
+        assert_eq!(a.child_count(), 3);
+
+        // Object
+        let o = JsonValue::parse(r#"{"a": 1, "b": 2}"#).unwrap();
+        assert_eq!(o.type_name(), "object");
+        assert_eq!(o.child_count(), 2);
+    }
+
+    #[test]
+    fn test_pretty_print_all_types() {
+        let json = r#"{"str":"hello","num":42,"float":3.14,"bool":true,"null":null,"arr":[1,2],"nested":{"x":1}}"#;
+        let value = JsonValue::parse(json).unwrap();
+        let pretty = value.pretty_print(0);
+        assert!(pretty.contains("\"str\""));
+        assert!(pretty.contains("null"));
+        assert!(pretty.contains("true"));
+    }
+
+    #[test]
+    fn test_pretty_print_simple_array() {
+        // Short simple array should be inline
+        let json = "[1, 2, 3]";
+        let value = JsonValue::parse(json).unwrap();
+        let pretty = value.pretty_print(0);
+        assert!(pretty.contains("[1, 2, 3]"));
+    }
+
+    #[test]
+    fn test_pretty_print_empty_collections() {
+        let empty_arr = JsonValue::Array(vec![]);
+        assert_eq!(empty_arr.pretty_print(0), "[]");
+
+        let empty_obj = JsonValue::Object(vec![]);
+        assert_eq!(empty_obj.pretty_print(0), "{}");
+    }
+
+    #[test]
+    fn test_json_tree_node() {
+        let value = JsonValue::parse(r#"{"key": "val"}"#).unwrap();
+        let node = JsonTreeNode::new(value.clone());
+        assert!(node.key.is_none());
+        assert!(node.expanded);
+        assert_eq!(node.depth, 0);
+        assert!(node.path.is_empty());
+
+        let desc = node.describe();
+        assert!(desc.contains("JsonTreeNode"));
+        assert!(desc.contains("(root)"));
+
+        // with_key
+        let keyed = JsonTreeNode::new(value).with_key("mykey".to_string());
+        assert_eq!(keyed.key.as_deref(), Some("mykey"));
+        let desc2 = keyed.describe();
+        assert!(desc2.contains("mykey"));
+    }
+
+    #[test]
+    fn test_json_viewer_load_and_navigate() {
+        let mut viewer = JsonViewer::new();
+        viewer.load(r#"{"name":"test","items":[1,2,3],"nested":{"a":"b"}}"#).unwrap();
+        assert!(viewer.root.is_some());
+
+        // toggle_expand
+        viewer.toggle_expand("$");
+        assert!(!viewer.expanded_paths.contains("$"));
+        viewer.toggle_expand("$");
+        assert!(viewer.expanded_paths.contains("$"));
+
+        // expand_all / collapse_all
+        viewer.expand_all();
+        assert!(viewer.expanded_paths.len() > 1);
+        viewer.collapse_all();
+        assert_eq!(viewer.expanded_paths.len(), 1); // only "$"
+
+        // search
+        viewer.search("test");
+        assert!(!viewer.search_results.is_empty());
+
+        // next_result / prev_result
+        viewer.next_result();
+        assert!(viewer.selected_path.is_some());
+        viewer.prev_result();
+        assert!(viewer.selected_path.is_some());
+
+        // copy_value
+        let val = viewer.copy_value("$");
+        assert!(val.is_some());
+
+        // copy_path
+        let path = viewer.copy_path("$.name");
+        assert_eq!(path, "$.name");
+    }
+
+    #[test]
+    fn test_json_viewer_describe() {
+        let mut viewer = JsonViewer::new();
+        viewer.load(r#"{"a":1,"b":"hello"}"#).unwrap();
+        let desc = viewer.describe();
+        assert!(desc.contains("JsonViewer"));
+        assert!(desc.contains("root=object"));
+    }
+
+    #[test]
+    fn test_json_viewer_empty_search() {
+        let mut viewer = JsonViewer::new();
+        viewer.load(r#"{"x": 1}"#).unwrap();
+        viewer.search("");
+        assert!(viewer.search_results.is_empty());
+
+        // next/prev on empty results should not panic
+        viewer.next_result();
+        viewer.prev_result();
+    }
+
+    #[test]
+    fn test_json_colors_describe() {
+        let colors = JsonColors::default();
+        let desc = colors.describe();
+        assert!(desc.contains("JsonColors"));
+        assert!(desc.contains("key="));
+        assert!(desc.contains("string="));
+        assert!(desc.contains("number="));
+        assert!(desc.contains("true="));
+        assert!(desc.contains("false="));
+        assert!(desc.contains("null="));
+        assert!(desc.contains("bracket="));
+        assert!(desc.contains("colon="));
+    }
+
+    #[test]
+    fn test_json_colors_fields() {
+        let colors = JsonColors::default();
+        assert!(colors.key.a > 0);
+        assert!(colors.string.a > 0);
+        assert!(colors.number.a > 0);
+        assert!(colors.bool_true.a > 0);
+        assert!(colors.bool_false.a > 0);
+        assert!(colors.null.a > 0);
+        assert!(colors.bracket.a > 0);
+        assert!(colors.colon.a > 0);
+    }
+
+    #[test]
+    fn test_json_viewer_default() {
+        let viewer = JsonViewer::default();
+        assert!(viewer.root.is_none());
+        assert!(viewer.search_query.is_empty());
+        assert_eq!(viewer.current_search_index, 0);
+    }
+
+    #[test]
+    fn test_json_parse_unicode_escape() {
+        let json = r#""\u0041\u0042\u0043""#;
+        let value = JsonValue::parse(json).unwrap();
+        match value {
+            JsonValue::String(s) => assert_eq!(s, "ABC"),
+            _ => panic!("Expected string"),
+        }
+    }
+
+    #[test]
+    fn test_json_parse_negative_number() {
+        let json = "-42";
+        let value = JsonValue::parse(json).unwrap();
+        match value {
+            JsonValue::Number(n) => assert_eq!(n, -42.0),
+            _ => panic!("Expected number"),
+        }
+    }
+
+    #[test]
+    fn test_json_parse_errors() {
+        assert!(JsonValue::parse("").is_err());
+        assert!(JsonValue::parse("nul").is_err());
+        assert!(JsonValue::parse("[1,").is_err());
+        assert!(JsonValue::parse("{\"key\"").is_err());
+        assert!(JsonValue::parse("@").is_err());
+    }
+
+    #[test]
+    fn test_json_value_get_at_path() {
+        let mut viewer = JsonViewer::new();
+        viewer.load(r#"{"items":[10,20,30],"nested":{"deep":"val"}}"#).unwrap();
+
+        let root_val = viewer.copy_value("$");
+        assert!(root_val.is_some());
+
+        let item_val = viewer.copy_value("$.items[1]");
+        assert!(item_val.is_some());
+        assert!(item_val.unwrap().contains("20"));
+
+        let nested_val = viewer.copy_value("$.nested.deep");
+        assert!(nested_val.is_some());
+    }
+
+    #[test]
+    fn test_json_viewer_search_number() {
+        let mut viewer = JsonViewer::new();
+        viewer.load(r#"{"count": 42, "name": "test"}"#).unwrap();
+        viewer.search("42");
+        assert!(!viewer.search_results.is_empty());
+    }
+
+    #[test]
+    fn test_json_viewer_search_key() {
+        let mut viewer = JsonViewer::new();
+        viewer.load(r#"{"username": "admin"}"#).unwrap();
+        viewer.search("username");
+        assert!(!viewer.search_results.is_empty());
     }
 }

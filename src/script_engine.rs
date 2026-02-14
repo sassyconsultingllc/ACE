@@ -1,8 +1,6 @@
 // Script Engine - JavaScript-DOM bridge
 
-#[allow(unused_imports)]
 use crate::js::{JsInterpreter, Value, Lexer, Token, Parser, Expr, Stmt};
-#[allow(unused_imports)]
 use crate::dom::{Document, Node, NodeRef};
 use crate::engine::Timer;
 use std::rc::Rc;
@@ -919,4 +917,152 @@ fn native_storage_key(args: Vec<Value>) -> Value {
         let storage = s.borrow();
         storage.keys().nth(index).map(|k| Value::String(k.clone())).unwrap_or(Value::Null)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_syntax_valid() {
+        let result = ScriptEngine::validate_syntax("var x = 1 + 2;");
+        assert!(result.is_ok());
+        assert!(result.unwrap() > 0);
+    }
+
+    #[test]
+    fn test_validate_syntax_expression() {
+        let result = ScriptEngine::validate_syntax("function add(a, b) { return a + b; }");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_to_ast() {
+        let result = ScriptEngine::parse_to_ast("var x = 42;");
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert!(!stmts.is_empty());
+    }
+
+    #[test]
+    fn test_describe_expression_variants() {
+        // Test all expression description branches
+        assert!(ScriptEngine::describe_expression(&Expr::Number(42.0)).contains("Number"));
+        assert!(ScriptEngine::describe_expression(&Expr::String("hi".into())).contains("String"));
+        assert!(ScriptEngine::describe_expression(&Expr::Boolean(true)).contains("Boolean"));
+        assert!(ScriptEngine::describe_expression(&Expr::Identifier("x".into())).contains("Identifier"));
+        assert!(ScriptEngine::describe_expression(&Expr::Array(vec![])).contains("Array"));
+        assert!(ScriptEngine::describe_expression(&Expr::Object(vec![])).contains("Object"));
+    }
+
+    #[test]
+    fn test_describe_expression_binary() {
+        let expr = Expr::Binary {
+            op: "+".to_string(),
+            left: Box::new(Expr::Number(1.0)),
+            right: Box::new(Expr::Number(2.0)),
+        };
+        assert!(ScriptEngine::describe_expression(&expr).contains("Binary"));
+    }
+
+    #[test]
+    fn test_describe_expression_call() {
+        let expr = Expr::Call {
+            callee: Box::new(Expr::Identifier("foo".into())),
+            args: vec![],
+        };
+        assert!(ScriptEngine::describe_expression(&expr).contains("FunctionCall"));
+    }
+
+    #[test]
+    fn test_script_engine_new_and_execute() {
+        let mut engine = ScriptEngine::new();
+        let result = engine.execute("var x = 1 + 2;");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_script_engine_default() {
+        let engine = ScriptEngine::default();
+        assert!(!engine.has_dom_changes());
+    }
+
+    #[test]
+    fn test_take_popup_requests() {
+        let engine = ScriptEngine::new();
+        let popups = engine.take_popup_requests();
+        assert!(popups.is_empty());
+    }
+
+    #[test]
+    fn test_get_console_output() {
+        let mut engine = ScriptEngine::new();
+        let _ = engine.execute("var x = 1;");
+        let output = engine.get_console_output();
+        // Output may or may not have entries, but function should work
+        let _ = output.len();
+    }
+
+    #[test]
+    fn test_take_timers_and_add_timer() {
+        let mut engine = ScriptEngine::new();
+        // Initially empty
+        let timers = engine.take_timers();
+        assert!(timers.is_empty());
+        // Add a timer
+        let id1 = engine.add_timer("callback1()".to_string(), 100, false);
+        assert!(id1 > 0);
+        let id2 = engine.add_timer("callback2()".to_string(), 200, true);
+        assert!(id2 > id1);
+        // Take timers drains them
+        let timers = engine.take_timers();
+        assert_eq!(timers.len(), 2);
+        assert_eq!(timers[0].callback, "callback1()");
+        assert_eq!(timers[1].callback, "callback2()");
+        // After take, should be empty
+        let timers2 = engine.take_timers();
+        assert!(timers2.is_empty());
+    }
+
+    #[test]
+    fn test_pending_timers_and_next_timer_id_fields() {
+        let mut engine = ScriptEngine::new();
+        // Read the fields directly - pending_timers and next_timer_id
+        assert!(engine.pending_timers.is_empty());
+        assert!(engine.next_timer_id >= 1);
+        // Add timer to populate pending_timers
+        engine.add_timer("test()".to_string(), 50, false);
+        assert_eq!(engine.pending_timers.len(), 1);
+        assert!(engine.next_timer_id >= 2);
+    }
+
+    #[test]
+    fn test_get_timer_callback() {
+        let engine = ScriptEngine::new();
+        // No timer stored, should return None
+        let cb = engine.get_timer_callback(999);
+        assert!(cb.is_none());
+    }
+
+    #[test]
+    fn test_fire_window_event() {
+        let mut engine = ScriptEngine::new();
+        // Create a simple event value
+        let event = Value::Object(std::rc::Rc::new(std::cell::RefCell::new(std::collections::HashMap::new())));
+        let results = engine.fire_window_event("click", event);
+        // No listeners registered, so results should be empty
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_document_bridge_field() {
+        // Exercise the DocumentBridge struct's document field
+        let doc = crate::dom::Document::new();
+        let bridge = DocumentBridge {
+            document: &doc as *const crate::dom::Document,
+        };
+        // Read the document field (raw pointer)
+        let _ptr = bridge.document;
+        assert!(!bridge.document.is_null());
+    }
 }

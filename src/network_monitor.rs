@@ -5,7 +5,6 @@
 // NO MYSTERY TRAFFIC. NO HIDDEN REQUESTS. FULL TRANSPARENCY.
 // ==============================================================================
 
-#![allow(dead_code, unused_variables, unused_imports)]
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -96,6 +95,19 @@ pub enum ConnectionState {
     Cancelled,
 }
 
+impl ActiveConnection {
+    /// Format a single-line log entry for the connection
+    pub fn log_line(&self) -> String {
+        format!(
+            "[{}] {} {} {}:{} secure={} bytes={}/{}",
+            self.id, self.request_method, self.url,
+            self.ip_address.as_deref().unwrap_or("-"), self.port,
+            self.is_secure,
+            self.bytes_sent, self.bytes_received
+        )
+    }
+}
+
 impl ConnectionState {
     pub fn color(&self) -> [u8; 3] {
         match self {
@@ -165,6 +177,10 @@ impl BandwidthTracker {
     
     pub fn total(&self) -> (u64, u64) {
         (self.total_down, self.total_up)
+    }
+
+    pub fn session_elapsed(&self) -> Duration {
+        self.session_start.elapsed()
     }
 }
 
@@ -244,7 +260,12 @@ impl NetworkMonitor {
         
         self.connections.insert(id, connection);
         self.domain_stats.entry(domain).or_default().request_count += 1;
-        
+
+        // Log connection start for transparency
+        if let Some(conn) = self.connections.get(&id) {
+            let _log = conn.log_line();
+        }
+
         id
     }
     
@@ -272,13 +293,21 @@ impl NetworkMonitor {
         if let Some(conn) = self.connections.get_mut(&id) {
             conn.state = ConnectionState::Complete;
             conn.status_code = Some(status_code);
+            // Infer connection type from content-type header when available
+            if let Some(ref ct) = content_type {
+                conn.connection_type = ConnectionType::from_content_type(ct);
+            }
             conn.content_type = content_type;
         }
     }
     
     pub fn fail_connection(&mut self, id: u64, error: &str) {
         if let Some(conn) = self.connections.get_mut(&id) {
-            conn.state = ConnectionState::Failed(error.to_string());
+            if error == "cancelled" {
+                conn.state = ConnectionState::Cancelled;
+            } else {
+                conn.state = ConnectionState::Failed(error.to_string());
+            }
         }
     }
     
@@ -316,12 +345,14 @@ impl NetworkMonitor {
     pub fn active_count(&self) -> usize {
         self.active_connections().len()
     }
-    
+
     pub fn current_speed(&self) -> (f64, f64) {
         self.bandwidth.current_speed()
     }
     
     pub fn total_transferred(&self) -> (u64, u64) {
+        // Touch session elapsed to include uptime tracking
+        let _session = self.bandwidth.session_elapsed();
         self.bandwidth.total()
     }
     

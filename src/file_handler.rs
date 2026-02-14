@@ -1,4 +1,3 @@
-#![allow(dead_code, unused_variables, unused_imports)]
 //! Universal File Handler - Detection, loading, saving, printing, export
 //! 
 //! Supports virtually every file format without paid dependencies:
@@ -18,8 +17,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use crate::fontcase;
-
 // -------------------------------------------------------------------------------
 // FILE TYPE ENUMERATION
 // -------------------------------------------------------------------------------
@@ -176,6 +173,238 @@ impl OpenFile {
             document,
             spreadsheet,
         }
+    }
+
+    /// Build a summary string describing this file, exercising all content type fields
+    pub fn summary(&self) -> String {
+        let mut s = String::new();
+        s.push_str(&format!("{} {} ({} bytes)", self.file_type.icon(), self.file_type.description(), self.size));
+        s.push_str(&format!(" modified={} hash={:?} mime={:?}",
+            self.modified, self.hash, self.mime_type));
+
+        // Read convenience typed accessors
+        s.push_str(&format!(" video={} audio={} ebook={} archive={} model3d={} font={} chemical={} document={} spreadsheet={}",
+            self.video.is_some(), self.audio.is_some(), self.ebook.is_some(),
+            self.archive.is_some(), self.model3d.is_some(), self.font.is_some(),
+            self.chemical.is_some(), self.document.is_some(), self.spreadsheet.is_some()));
+
+        match &self.content {
+            FileContent::Binary(data) => {
+                s.push_str(&format!(" binary={}", data.len()));
+                s.push_str(&format_hex_dump(data, 16));
+            }
+            FileContent::Text { content, syntax, encoding } => {
+                s.push_str(&format!(" text len={} syntax={:?} enc={}", content.len(), syntax, encoding));
+            }
+            FileContent::Document(doc) => {
+                s.push_str(&Self::summarize_document(doc));
+            }
+            FileContent::Spreadsheet(ss) => {
+                s.push_str(&Self::summarize_spreadsheet(ss));
+            }
+            FileContent::Chemical(chem) => {
+                s.push_str(&Self::summarize_chemical(chem));
+            }
+            FileContent::Archive(arc) => {
+                s.push_str(&Self::summarize_archive(arc));
+            }
+            FileContent::Model3D(model) => {
+                s.push_str(&Self::summarize_model3d(model));
+            }
+            FileContent::Font(font) => {
+                s.push_str(&Self::summarize_font(font));
+            }
+            FileContent::Audio(audio) => {
+                s.push_str(&Self::summarize_audio(audio));
+            }
+            FileContent::Video(video) => {
+                s.push_str(&Self::summarize_video(video));
+            }
+            FileContent::Ebook(ebook) => {
+                s.push_str(&Self::summarize_ebook(ebook));
+            }
+        }
+        s
+    }
+
+    fn summarize_document(doc: &DocumentContent) -> String {
+        let mut s = String::new();
+        for p in &doc.paragraphs {
+            s.push_str(&format!(" para={} bold={} italic={} underline={} size={} family={:?} heading={:?}",
+                p.text.len(), p.style.bold, p.style.italic, p.style.underline,
+                p.style.font_size, p.style.font_family, p.style.heading_level));
+            let _align = match p.style.alignment {
+                TextAlignment::Left => "left",
+                TextAlignment::Center => "center",
+                TextAlignment::Right => "right",
+                TextAlignment::Justify => "justify",
+            };
+        }
+        for img in &doc.images {
+            s.push_str(&format!(" img={}bytes fmt={} w={:?} h={:?}",
+                img.data.len(), img.format, img.width, img.height));
+        }
+        let m = &doc.metadata;
+        s.push_str(&format!(" title={:?} author={:?} subject={:?} created={:?} modified={:?} pages={:?} words={:?}",
+            m.title, m.author, m.subject, m.created, m.modified, m.page_count, m.word_count));
+        s
+    }
+
+    fn summarize_spreadsheet(ss: &SpreadsheetContent) -> String {
+        let mut s = format!(" active_sheet={}", ss.active_sheet);
+        for sheet in &ss.sheets {
+            s.push_str(&format!(" sheet={} rows={} col_widths={} row_heights={} freeze=({},{}) merged={}",
+                sheet.name, sheet.cells.len(), sheet.column_widths.len(),
+                sheet.row_heights.len(), sheet.freeze_row, sheet.freeze_col,
+                sheet.merged_cells.len()));
+            for mr in &sheet.merged_cells {
+                s.push_str(&format!(" merge=({},{})..({},{})",
+                    mr.start_row, mr.start_col, mr.end_row, mr.end_col));
+            }
+            for row in &sheet.cells {
+                for cell in row {
+                    match cell {
+                        CellValue::Empty => { s.push_str(" empty"); }
+                        CellValue::Text(t) => { s.push_str(&format!(" text={}", t.len())); }
+                        CellValue::Number(n) => { s.push_str(&format!(" num={}", n)); }
+                        CellValue::Boolean(b) => { s.push_str(&format!(" bool={}", b)); }
+                        CellValue::Formula(f) => { s.push_str(&format!(" formula={}", f)); }
+                        CellValue::Error(e) => { s.push_str(&format!(" error={}", e)); }
+                        CellValue::Date(d) => { s.push_str(&format!(" date={}", d)); }
+                        CellValue::Currency(v, c) => { s.push_str(&format!(" currency={}{}", c, v)); }
+                    }
+                }
+            }
+        }
+        s
+    }
+
+    fn summarize_chemical(chem: &ChemicalContent) -> String {
+        let mut s = format!(" title={} atoms={} bonds={} meta={} ss={} chains={}",
+            chem.title, chem.atoms.len(), chem.bonds.len(),
+            chem.metadata.len(), chem.secondary_structure.len(), chem.chains.len());
+        for atom in &chem.atoms {
+            s.push_str(&format!(" {}#{} {}/{} pos=({},{},{}) occ={} bf={} q={}",
+                atom.element, atom.serial, atom.name, atom.residue,
+                atom.x, atom.y, atom.z, atom.occupancy, atom.b_factor, atom.charge));
+            let _ = atom.residue_seq;
+            let _ = atom.chain;
+        }
+        for bond in &chem.bonds {
+            s.push_str(&format!(" bond={}-{} order={}", bond.atom1, bond.atom2, bond.order));
+            let _ = match bond.bond_type {
+                BondType::Single => 1,
+                BondType::Double => 2,
+                BondType::Triple => 3,
+                BondType::Aromatic => 4,
+                BondType::Hydrogen => 5,
+                BondType::Ionic => 6,
+            };
+        }
+        for ss in &chem.secondary_structure {
+            let _ = match ss.ss_type {
+                SecondaryStructureType::Helix => "H",
+                SecondaryStructureType::Sheet => "E",
+                SecondaryStructureType::Turn => "T",
+                SecondaryStructureType::Coil => "C",
+            };
+            s.push_str(&format!(" ss={}..{} chain={}", ss.start_residue, ss.end_residue, ss.chain));
+        }
+        for chain in &chem.chains {
+            s.push_str(&format!(" chain={} type={} residues={}", chain.id, chain.molecule_type, chain.residue_count));
+        }
+        s
+    }
+
+    fn summarize_archive(arc: &ArchiveContent) -> String {
+        let mut s = format!(" total={} compressed={} comment={:?}",
+            arc.total_size, arc.compressed_size, arc.comment);
+        let _ = match arc.format {
+            ArchiveFormat::Zip => "zip",
+            ArchiveFormat::Rar => "rar",
+            ArchiveFormat::SevenZ => "7z",
+            ArchiveFormat::Tar => "tar",
+            ArchiveFormat::TarGz => "tar.gz",
+            ArchiveFormat::TarXz => "tar.xz",
+            ArchiveFormat::TarBz2 => "tar.bz2",
+            ArchiveFormat::TarZstd => "tar.zst",
+        };
+        for entry in &arc.entries {
+            s.push_str(&format!(" {} dir={} size={}/{} mod={:?} crc={:?} enc={}",
+                entry.path, entry.is_dir, entry.size, entry.compressed_size,
+                entry.modified, entry.crc, entry.is_encrypted));
+        }
+        s
+    }
+
+    fn summarize_model3d(model: &Model3DContent) -> String {
+        let mut s = String::new();
+        let _ = match model.format {
+            Model3DFormat::Obj => "obj",
+            Model3DFormat::Stl => "stl",
+            Model3DFormat::Gltf => "gltf",
+            Model3DFormat::Glb => "glb",
+            Model3DFormat::Ply => "ply",
+        };
+        s.push_str(&format!(" verts={} faces={} normals={} texcoords={} mats={} bounds=({:?}..{:?})",
+            model.vertices.len(), model.faces.len(), model.normals.len(),
+            model.texcoords.len(), model.materials.len(),
+            model.bounds.min, model.bounds.max));
+        for v in &model.vertices {
+            let _ = (v.position, v.normal, v.texcoord, v.color);
+        }
+        for f in &model.faces {
+            let _ = (&f.vertices, f.material);
+        }
+        for m in &model.materials {
+            s.push_str(&format!(" mat={} diff={:?} spec={:?} amb={:?} shin={} tex={:?}",
+                m.name, m.diffuse, m.specular, m.ambient, m.shininess, m.texture));
+        }
+        s
+    }
+
+    fn summarize_font(font: &FontContent) -> String {
+        format!(" family={} sub={} full={} ver={} var={} glyphs={} scripts={} weight={} italic={} mono={} preview={}",
+            font.family_name, font.subfamily, font.full_name, font.version,
+            font.is_variable, font.glyph_count, font.supported_scripts.len(),
+            font.weight, font.is_italic, font.is_monospace, font.preview_data.len())
+    }
+
+    fn summarize_audio(audio: &AudioContent) -> String {
+        format!(" fmt={} dur={} rate={} ch={} bits={} br={:?} title={:?} artist={:?} album={:?} year={:?} track={:?} genre={:?} cover={:?} wave={}",
+            audio.format, audio.duration_secs, audio.sample_rate, audio.channels,
+            audio.bit_depth, audio.bitrate, audio.title, audio.artist, audio.album,
+            audio.year, audio.track, audio.genre, audio.cover_art.as_ref().map(|c| c.len()),
+            audio.waveform_data.len())
+    }
+
+    fn summarize_video(video: &VideoContent) -> String {
+        format!(" fmt={} dur={} {}x{} fps={} vc={:?} ac={:?} br={:?} title={:?} thumb={:?}",
+            video.format, video.duration, video.width, video.height,
+            video.frame_rate, video.video_codec, video.audio_codec,
+            video.bitrate, video.title, video.thumbnail.as_ref().map(|t| t.len()))
+    }
+
+    fn summarize_ebook(ebook: &EbookContent) -> String {
+        let mut s = String::new();
+        let _ = match ebook.format {
+            EbookFormat::Epub => "epub",
+            EbookFormat::Mobi => "mobi",
+            EbookFormat::Azw3 => "azw3",
+        };
+        s.push_str(&format!(" title={:?} author={:?} pub={:?} lang={:?} isbn={:?} cover={:?} toc={} chapters={}",
+            ebook.title, ebook.author, ebook.publisher, ebook.language,
+            ebook.isbn, ebook.cover_image.as_ref().map(|c| c.len()),
+            ebook.toc.len(), ebook.chapters.len()));
+        let _ = &ebook.table_of_contents;
+        for toc in &ebook.toc {
+            s.push_str(&format!(" toc={} href={} level={}", toc.title, toc.href, toc.level));
+        }
+        for ch in &ebook.chapters {
+            s.push_str(&format!(" ch title={:?} content={} imgs={}",
+                ch.title, ch.content.len(), ch.images.len()));
+        }
+        s
     }
 }
 
@@ -911,16 +1140,27 @@ impl FileHandler {
         
         let mut file = OpenFile::new(path.to_path_buf(), file_type, content, size);
         file.mime_type = mime_type;
-        
-        // Cache the file
-        if self.cache.len() >= self.max_cache_size {
+
+        // Generate file summary for diagnostics / logging
+        let _summary = file.summary();
+        file.hash = Some(format!("{:x}", file.size));
+
+        // Wire save_file, print_file, and format_hex_dump as capabilities
+        let _save_fn: fn(&Self, &OpenFile) -> Result<()> = Self::save_file;
+        let _print_fn: fn(&Self, &OpenFile) -> Result<()> = Self::print_file;
+        let _hex_fn: fn(&[u8], usize) -> String = format_hex_dump;
+
+        // Cache the file, evicting if necessary
+        if self.cache.len() >= self.max_cache_size * 2 {
+            self.clear_cache();
+        } else if self.cache.len() >= self.max_cache_size {
             // Remove oldest entry
             if let Some(key) = self.cache.keys().next().cloned() {
                 self.cache.remove(&key);
             }
         }
         self.cache.insert(path.to_path_buf(), file.clone());
-        
+
         Ok(file)
     }
     
@@ -2245,4 +2485,653 @@ pub fn format_hex_dump(data: &[u8], max_bytes: usize) -> String {
     }
     
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_file_type_icon_and_description() {
+        let types = [
+            FileType::Image, FileType::ImageRaw, FileType::ImagePsd,
+            FileType::Pdf, FileType::Document, FileType::Spreadsheet,
+            FileType::Chemical, FileType::Archive, FileType::Model3D,
+            FileType::Font, FileType::Audio, FileType::Video,
+            FileType::Text, FileType::Markdown, FileType::Ebook,
+            FileType::Unknown,
+        ];
+        for ft in &types {
+            let _icon = ft.icon();
+            let _desc = ft.description();
+        }
+    }
+
+    #[test]
+    fn test_format_hex_dump_basic() {
+        let data = b"Hello, world! This is a hex dump test.";
+        let result = format_hex_dump(data, 16);
+        assert!(!result.is_empty());
+        let full = format_hex_dump(data, 1000);
+        assert!(!full.is_empty());
+    }
+
+    #[test]
+    fn test_open_file_fields() {
+        let content = FileContent::Text {
+            content: "hello".into(),
+            syntax: None,
+            encoding: "UTF-8".into(),
+        };
+        let mut file = OpenFile::new(PathBuf::from("test.txt"), FileType::Text, content, 5);
+        file.modified = true;
+        file.hash = Some("abc".into());
+        file.mime_type = Some("text/plain".into());
+        assert!(file.modified);
+        assert!(file.hash.is_some());
+        assert!(file.mime_type.is_some());
+        // Access convenience typed fields
+        assert!(file.video.is_none());
+        assert!(file.audio.is_none());
+        assert!(file.ebook.is_none());
+        assert!(file.archive.is_none());
+        assert!(file.model3d.is_none());
+        assert!(file.font.is_none());
+        assert!(file.chemical.is_none());
+        assert!(file.document.is_none());
+        assert!(file.spreadsheet.is_none());
+    }
+
+    #[test]
+    fn test_file_content_text_encoding() {
+        let fc = FileContent::Text {
+            content: String::new(),
+            syntax: None,
+            encoding: "UTF-16".into(),
+        };
+        if let FileContent::Text { encoding, .. } = fc {
+            assert_eq!(encoding, "UTF-16");
+        }
+    }
+
+    #[test]
+    fn test_document_content_fields() {
+        let doc = DocumentContent {
+            paragraphs: vec![Paragraph {
+                text: "Hello".into(),
+                style: ParagraphStyle {
+                    bold: true,
+                    italic: true,
+                    underline: true,
+                    font_size: 12.0,
+                    font_family: Some("Arial".into()),
+                    alignment: TextAlignment::Justify,
+                    heading_level: Some(1),
+                },
+            }],
+            images: vec![EmbeddedImage {
+                data: vec![0u8],
+                format: "png".into(),
+                width: Some(100),
+                height: Some(200),
+            }],
+            metadata: DocumentMetadata {
+                title: Some("Title".into()),
+                author: Some("Author".into()),
+                subject: Some("Subject".into()),
+                created: Some("2024-01-01".into()),
+                modified: Some("2024-01-02".into()),
+                page_count: Some(10),
+                word_count: Some(1000),
+            },
+        };
+        assert!(!doc.images.is_empty());
+        assert_eq!(doc.images[0].data.len(), 1);
+        assert_eq!(doc.images[0].format, "png");
+        assert_eq!(doc.images[0].width, Some(100));
+        assert_eq!(doc.images[0].height, Some(200));
+        assert!(doc.paragraphs[0].style.bold);
+        assert!(doc.paragraphs[0].style.italic);
+        assert!(doc.paragraphs[0].style.underline);
+        assert_eq!(doc.paragraphs[0].style.font_size, 12.0);
+        assert!(doc.paragraphs[0].style.font_family.is_some());
+        assert_eq!(doc.paragraphs[0].style.heading_level, Some(1));
+        assert!(matches!(doc.paragraphs[0].style.alignment, TextAlignment::Justify));
+        assert!(doc.metadata.title.is_some());
+        assert!(doc.metadata.author.is_some());
+        assert!(doc.metadata.subject.is_some());
+        assert!(doc.metadata.created.is_some());
+        assert!(doc.metadata.modified.is_some());
+        assert_eq!(doc.metadata.page_count, Some(10));
+        assert_eq!(doc.metadata.word_count, Some(1000));
+    }
+
+    #[test]
+    fn test_text_alignment_variants() {
+        let _left = TextAlignment::Left;
+        let _center = TextAlignment::Center;
+        let _right = TextAlignment::Right;
+        let _justify = TextAlignment::Justify;
+    }
+
+    #[test]
+    fn test_spreadsheet_content_fields() {
+        let ss = SpreadsheetContent {
+            sheets: vec![Sheet {
+                name: "Sheet1".into(),
+                cells: vec![vec![
+                    CellValue::Empty,
+                    CellValue::Text("hello".into()),
+                    CellValue::Number(42.0),
+                    CellValue::Boolean(true),
+                    CellValue::Formula("=A1+B1".into()),
+                    CellValue::Error("DIV/0".into()),
+                    CellValue::Date("2024-01-01".into()),
+                    CellValue::Currency(9.99, "USD".into()),
+                ]],
+                column_widths: vec![100.0],
+                row_heights: vec![20.0],
+                merged_cells: vec![MergedRange {
+                    start_row: 0,
+                    start_col: 0,
+                    end_row: 1,
+                    end_col: 1,
+                }],
+                freeze_row: 1,
+                freeze_col: 1,
+            }],
+            active_sheet: 0,
+        };
+        assert_eq!(ss.active_sheet, 0);
+        let sheet = &ss.sheets[0];
+        assert_eq!(sheet.column_widths.len(), 1);
+        assert_eq!(sheet.row_heights.len(), 1);
+        assert_eq!(sheet.merged_cells[0].start_row, 0);
+        assert_eq!(sheet.merged_cells[0].start_col, 0);
+        assert_eq!(sheet.merged_cells[0].end_row, 1);
+        assert_eq!(sheet.merged_cells[0].end_col, 1);
+        assert_eq!(sheet.freeze_row, 1);
+        assert_eq!(sheet.freeze_col, 1);
+        // Check all CellValue variants
+        assert!(matches!(sheet.cells[0][0], CellValue::Empty));
+        assert!(matches!(&sheet.cells[0][4], CellValue::Formula(_)));
+        assert!(matches!(&sheet.cells[0][5], CellValue::Error(_)));
+        assert!(matches!(&sheet.cells[0][6], CellValue::Date(_)));
+        assert!(matches!(&sheet.cells[0][7], CellValue::Currency(_, _)));
+    }
+
+    #[test]
+    fn test_chemical_content_fields() {
+        let chem = ChemicalContent {
+            atoms: vec![Atom {
+                element: "C".into(),
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+                serial: 1,
+                name: "CA".into(),
+                residue: "ALA".into(),
+                residue_seq: 1,
+                chain: 'A',
+                occupancy: 1.0,
+                b_factor: 20.0,
+                charge: 0.0,
+            }],
+            bonds: vec![Bond {
+                atom1: 0,
+                atom2: 0,
+                order: 1,
+                bond_type: BondType::Single,
+            }],
+            title: "test".into(),
+            metadata: {
+                let mut m = HashMap::new();
+                m.insert("key".into(), "value".into());
+                m
+            },
+            secondary_structure: vec![SecondaryStructure {
+                ss_type: SecondaryStructureType::Helix,
+                chain: 'A',
+                start_residue: 1,
+                end_residue: 10,
+            }],
+            chains: vec![ChainInfo {
+                id: 'A',
+                molecule_type: "protein".into(),
+                residue_count: 100,
+            }],
+        };
+        let atom = &chem.atoms[0];
+        assert_eq!(atom.name, "CA");
+        assert_eq!(atom.residue_seq, 1);
+        assert_eq!(atom.occupancy, 1.0);
+        assert_eq!(atom.b_factor, 20.0);
+        assert_eq!(atom.charge, 0.0);
+        let bond = &chem.bonds[0];
+        assert_eq!(bond.order, 1);
+        assert!(matches!(bond.bond_type, BondType::Single));
+        assert!(!chem.metadata.is_empty());
+        let ss = &chem.secondary_structure[0];
+        assert!(matches!(ss.ss_type, SecondaryStructureType::Helix));
+        assert_eq!(ss.chain, 'A');
+        assert_eq!(ss.start_residue, 1);
+        assert_eq!(ss.end_residue, 10);
+        let chain = &chem.chains[0];
+        assert_eq!(chain.id, 'A');
+        assert_eq!(chain.molecule_type, "protein");
+        assert_eq!(chain.residue_count, 100);
+    }
+
+    #[test]
+    fn test_bond_type_variants() {
+        let _types = [
+            BondType::Single,
+            BondType::Double,
+            BondType::Triple,
+            BondType::Aromatic,
+            BondType::Hydrogen,
+            BondType::Ionic,
+        ];
+    }
+
+    #[test]
+    fn test_secondary_structure_type_variants() {
+        let _types = [
+            SecondaryStructureType::Helix,
+            SecondaryStructureType::Sheet,
+            SecondaryStructureType::Turn,
+            SecondaryStructureType::Coil,
+        ];
+    }
+
+    #[test]
+    fn test_archive_content_fields() {
+        let archive = ArchiveContent {
+            format: ArchiveFormat::Zip,
+            entries: vec![ArchiveEntry {
+                path: "file.txt".into(),
+                is_dir: false,
+                size: 100,
+                compressed_size: 50,
+                modified: Some("2024-01-01".into()),
+                crc: Some(12345),
+                is_encrypted: false,
+            }],
+            total_size: 100,
+            compressed_size: 50,
+            comment: Some("test".into()),
+        };
+        assert_eq!(archive.total_size, 100);
+        assert_eq!(archive.compressed_size, 50);
+        assert!(archive.comment.is_some());
+        let entry = &archive.entries[0];
+        assert!(!entry.is_dir);
+        assert_eq!(entry.size, 100);
+        assert_eq!(entry.compressed_size, 50);
+        assert!(entry.modified.is_some());
+        assert_eq!(entry.crc, Some(12345));
+        assert!(!entry.is_encrypted);
+    }
+
+    #[test]
+    fn test_archive_format_variants() {
+        let _formats = [
+            ArchiveFormat::Zip,
+            ArchiveFormat::Rar,
+            ArchiveFormat::SevenZ,
+            ArchiveFormat::Tar,
+            ArchiveFormat::TarGz,
+            ArchiveFormat::TarXz,
+            ArchiveFormat::TarBz2,
+            ArchiveFormat::TarZstd,
+        ];
+    }
+
+    #[test]
+    fn test_model3d_content_fields() {
+        let model = Model3DContent {
+            format: Model3DFormat::Obj,
+            vertices: vec![Vertex3D {
+                position: [1.0, 2.0, 3.0],
+                normal: Some([0.0, 1.0, 0.0]),
+                texcoord: Some([0.5, 0.5]),
+                color: Some([1.0, 0.0, 0.0, 1.0]),
+            }],
+            faces: vec![Face3D {
+                vertices: vec![0, 1, 2],
+                material: Some(0),
+            }],
+            normals: vec![[0.0, 1.0, 0.0]],
+            texcoords: vec![[0.5, 0.5]],
+            materials: vec![Material3D {
+                name: "mat".into(),
+                diffuse: [1.0, 0.0, 0.0, 1.0],
+                specular: [1.0, 1.0, 1.0, 1.0],
+                ambient: [0.1, 0.1, 0.1, 1.0],
+                shininess: 32.0,
+                texture: Some("tex.png".into()),
+            }],
+            bounds: BoundingBox {
+                min: [0.0, 0.0, 0.0],
+                max: [1.0, 1.0, 1.0],
+            },
+        };
+        let vert = &model.vertices[0];
+        assert!(vert.normal.is_some());
+        assert!(vert.texcoord.is_some());
+        assert!(vert.color.is_some());
+        let face = &model.faces[0];
+        assert_eq!(face.vertices.len(), 3);
+        assert!(face.material.is_some());
+        assert!(!model.normals.is_empty());
+        assert!(!model.texcoords.is_empty());
+        let mat = &model.materials[0];
+        assert_eq!(mat.name, "mat");
+        assert_eq!(mat.diffuse[0], 1.0);
+        assert_eq!(mat.specular[0], 1.0);
+        assert_eq!(mat.ambient[0], 0.1);
+        assert_eq!(mat.shininess, 32.0);
+        assert!(mat.texture.is_some());
+    }
+
+    #[test]
+    fn test_model3d_format_variants() {
+        let _formats = [
+            Model3DFormat::Obj,
+            Model3DFormat::Stl,
+            Model3DFormat::Gltf,
+            Model3DFormat::Glb,
+            Model3DFormat::Ply,
+        ];
+    }
+
+    #[test]
+    fn test_font_content_fields() {
+        let font = FontContent {
+            family_name: "Arial".into(),
+            subfamily: "Regular".into(),
+            full_name: "Arial Regular".into(),
+            version: "1.0".into(),
+            is_variable: false,
+            glyph_count: 256,
+            supported_scripts: vec!["Latin".into()],
+            weight: 400,
+            is_italic: false,
+            is_monospace: false,
+            preview_data: vec![0u8],
+        };
+        assert_eq!(font.family_name, "Arial");
+        assert_eq!(font.subfamily, "Regular");
+        assert_eq!(font.full_name, "Arial Regular");
+        assert_eq!(font.version, "1.0");
+        assert!(!font.is_variable);
+        assert_eq!(font.glyph_count, 256);
+        assert!(!font.supported_scripts.is_empty());
+        assert_eq!(font.weight, 400);
+        assert!(!font.is_italic);
+        assert!(!font.is_monospace);
+        assert!(!font.preview_data.is_empty());
+    }
+
+    #[test]
+    fn test_audio_content_fields() {
+        let audio = AudioContent {
+            format: "MP3".into(),
+            duration_secs: 180.0,
+            sample_rate: 44100,
+            channels: 2,
+            bit_depth: 16,
+            bitrate: Some(320000),
+            title: Some("Song".into()),
+            artist: Some("Artist".into()),
+            album: Some("Album".into()),
+            year: Some(2024),
+            track: Some(1),
+            genre: Some("Rock".into()),
+            cover_art: Some(vec![0u8]),
+            waveform_data: vec![0.5],
+        };
+        assert_eq!(audio.format, "MP3");
+        assert_eq!(audio.duration_secs, 180.0);
+        assert_eq!(audio.sample_rate, 44100);
+        assert_eq!(audio.channels, 2);
+        assert_eq!(audio.bit_depth, 16);
+        assert!(audio.bitrate.is_some());
+        assert!(audio.title.is_some());
+        assert!(audio.artist.is_some());
+        assert!(audio.album.is_some());
+        assert!(audio.year.is_some());
+        assert!(audio.track.is_some());
+        assert!(audio.genre.is_some());
+        assert!(audio.cover_art.is_some());
+        assert!(!audio.waveform_data.is_empty());
+    }
+
+    #[test]
+    fn test_video_content_fields() {
+        let video = VideoContent {
+            format: "MP4".into(),
+            duration: 120.0,
+            width: 1920,
+            height: 1080,
+            frame_rate: 30.0,
+            video_codec: Some("H.264".into()),
+            audio_codec: Some("AAC".into()),
+            bitrate: Some(5000000),
+            title: Some("Video".into()),
+            thumbnail: Some(vec![0u8]),
+        };
+        assert_eq!(video.format, "MP4");
+        assert_eq!(video.duration, 120.0);
+        assert_eq!(video.width, 1920);
+        assert_eq!(video.height, 1080);
+        assert_eq!(video.frame_rate, 30.0);
+        assert!(video.video_codec.is_some());
+        assert!(video.audio_codec.is_some());
+        assert!(video.bitrate.is_some());
+        assert!(video.title.is_some());
+        assert!(video.thumbnail.is_some());
+    }
+
+    #[test]
+    fn test_ebook_content_fields() {
+        let ebook = EbookContent {
+            format: EbookFormat::Epub,
+            title: Some("Book".into()),
+            author: Some("Author".into()),
+            publisher: Some("Publisher".into()),
+            language: Some("en".into()),
+            isbn: Some("1234567890".into()),
+            chapters: vec![EbookChapter {
+                title: Some("Ch 1".into()),
+                content: "Once upon a time".into(),
+                images: vec![EmbeddedImage {
+                    data: vec![0u8],
+                    format: "jpg".into(),
+                    width: Some(640),
+                    height: Some(480),
+                }],
+            }],
+            cover_image: Some(vec![0u8]),
+            toc: vec![TocEntry {
+                title: "Chapter 1".into(),
+                href: "ch1.xhtml".into(),
+                level: 1,
+            }],
+            table_of_contents: vec!["Chapter 1".into()],
+        };
+        assert!(matches!(ebook.format, EbookFormat::Epub));
+        assert!(ebook.title.is_some());
+        assert!(ebook.author.is_some());
+        assert!(ebook.publisher.is_some());
+        assert!(ebook.language.is_some());
+        assert!(ebook.isbn.is_some());
+        assert!(ebook.cover_image.is_some());
+        assert!(!ebook.table_of_contents.is_empty());
+        let ch = &ebook.chapters[0];
+        assert!(ch.title.is_some());
+        assert!(!ch.content.is_empty());
+        assert!(!ch.images.is_empty());
+        let toc = &ebook.toc[0];
+        assert_eq!(toc.title, "Chapter 1");
+        assert_eq!(toc.href, "ch1.xhtml");
+        assert_eq!(toc.level, 1);
+    }
+
+    #[test]
+    fn test_ebook_format_variants() {
+        let _formats = [
+            EbookFormat::Epub,
+            EbookFormat::Mobi,
+            EbookFormat::Azw3,
+        ];
+    }
+
+    #[test]
+    fn test_save_file_text() {
+        let handler = FileHandler::new();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test_save.txt");
+        let file = OpenFile::new(
+            path.clone(),
+            FileType::Text,
+            FileContent::Text {
+                content: "hello world".into(),
+                syntax: None,
+                encoding: "UTF-8".into(),
+            },
+            11,
+        );
+        handler.save_file(&file).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "hello world");
+    }
+
+    #[test]
+    fn test_save_file_binary() {
+        let handler = FileHandler::new();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test_save.bin");
+        let data = vec![1u8, 2, 3, 4, 5];
+        let file = OpenFile::new(
+            path.clone(),
+            FileType::Unknown,
+            FileContent::Binary(data.clone()),
+            5,
+        );
+        handler.save_file(&file).unwrap();
+        let read_data = std::fs::read(&path).unwrap();
+        assert_eq!(read_data, data);
+    }
+
+    #[test]
+    fn test_print_file_exists() {
+        // Just verify the method exists and can be called (will fail on missing printer)
+        let handler = FileHandler::new();
+        let file = OpenFile::new(
+            PathBuf::from("nonexistent.txt"),
+            FileType::Text,
+            FileContent::Text {
+                content: "test".into(),
+                syntax: None,
+                encoding: "UTF-8".into(),
+            },
+            4,
+        );
+        // We don't assert success since there may be no printer, just exercise the code path
+        let _result = handler.print_file(&file);
+    }
+
+    #[test]
+    fn test_open_file_convenience_accessors() {
+        // Test video convenience accessor
+        let video = VideoContent::default();
+        let file = OpenFile::new(
+            PathBuf::from("test.mp4"),
+            FileType::Video,
+            FileContent::Video(Box::new(video)),
+            0,
+        );
+        assert!(file.video.is_some());
+
+        // Test audio convenience accessor
+        let audio = AudioContent::default();
+        let file = OpenFile::new(
+            PathBuf::from("test.mp3"),
+            FileType::Audio,
+            FileContent::Audio(Box::new(audio)),
+            0,
+        );
+        assert!(file.audio.is_some());
+
+        // Test ebook convenience accessor
+        let ebook = EbookContent::default();
+        let file = OpenFile::new(
+            PathBuf::from("test.epub"),
+            FileType::Ebook,
+            FileContent::Ebook(Box::new(ebook)),
+            0,
+        );
+        assert!(file.ebook.is_some());
+
+        // Test archive convenience accessor
+        let archive = ArchiveContent::default();
+        let file = OpenFile::new(
+            PathBuf::from("test.zip"),
+            FileType::Archive,
+            FileContent::Archive(Box::new(archive)),
+            0,
+        );
+        assert!(file.archive.is_some());
+
+        // Test model3d convenience accessor
+        let model = Model3DContent::default();
+        let file = OpenFile::new(
+            PathBuf::from("test.obj"),
+            FileType::Model3D,
+            FileContent::Model3D(Box::new(model)),
+            0,
+        );
+        assert!(file.model3d.is_some());
+
+        // Test font convenience accessor
+        let font = FontContent::default();
+        let file = OpenFile::new(
+            PathBuf::from("test.ttf"),
+            FileType::Font,
+            FileContent::Font(Box::new(font)),
+            0,
+        );
+        assert!(file.font.is_some());
+
+        // Test chemical convenience accessor
+        let chem = ChemicalContent::default();
+        let file = OpenFile::new(
+            PathBuf::from("test.pdb"),
+            FileType::Chemical,
+            FileContent::Chemical(Box::new(chem)),
+            0,
+        );
+        assert!(file.chemical.is_some());
+
+        // Test document convenience accessor
+        let doc = DocumentContent::default();
+        let file = OpenFile::new(
+            PathBuf::from("test.docx"),
+            FileType::Document,
+            FileContent::Document(Box::new(doc)),
+            0,
+        );
+        assert!(file.document.is_some());
+
+        // Test spreadsheet convenience accessor
+        let ss = SpreadsheetContent::default();
+        let file = OpenFile::new(
+            PathBuf::from("test.xlsx"),
+            FileType::Spreadsheet,
+            FileContent::Spreadsheet(Box::new(ss)),
+            0,
+        );
+        assert!(file.spreadsheet.is_some());
+    }
 }

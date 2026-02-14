@@ -2,8 +2,6 @@
 //!
 //! HTTP cookie storage and management with proper security handling.
 
-#![allow(unused_variables)]
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -243,7 +241,7 @@ impl CookieJar {
         let mut result = Vec::new();
         
         // Check all domains that might match
-        for (cookie_domain, cookies) in &self.cookies {
+        for (_cookie_domain, cookies) in &self.cookies {
             for cookie in cookies {
                 if cookie.matches(domain, path, is_secure) {
                     result.push(cookie);

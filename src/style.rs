@@ -1,5 +1,4 @@
 // Style - CSS parsing and style computation
-#![allow(unused_variables)]
 
 use std::collections::HashMap;
 use crate::dom::{NodeRef, NodeType};

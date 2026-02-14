@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(deprecated)]
 //! Image Editor - Full editing capabilities for all image formats
 //! 
 //! Features:
@@ -8,7 +8,7 @@
 //! - Print: System print dialog
 
 use eframe::egui::{self, Color32, ColorImage, TextureHandle, Vec2, Rect, Pos2, Sense, Stroke};
-use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba, imageops};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 

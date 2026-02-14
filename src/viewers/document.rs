@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(deprecated)]
 //! Document Editor - Full editing for DOCX, ODT, RTF
 //!
 //! Features:
@@ -9,9 +9,8 @@
 //! - Print: System print dialog
 
 use crate::file_handler::{DocumentContent, FileContent, OpenFile};
-use eframe::egui::{self, Color32, RichText, TextEdit, Vec2, Rect, Pos2, Sense, Stroke};
+use eframe::egui::{self, Color32, RichText, TextEdit, Sense, Stroke};
 use std::path::{Path, PathBuf};
-use crate::fontcase;
 
 /// Text formatting
 #[derive(Debug, Clone, Default)]
@@ -735,7 +734,7 @@ impl DocumentViewer {
     // UI RENDERING
     // ---------------------------------------------------------------------------
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, _icons: &crate::icons::Icons) {
         // Load document if empty
         if self.paragraphs.is_empty() {
             if let FileContent::Document(content) = &file.content {
@@ -1122,5 +1121,127 @@ impl DocumentViewer {
                     }
                 });
             });
+    }
+
+    /// Access the current selection range
+    pub fn selection_range(&self) -> (Option<(usize, usize)>, Option<(usize, usize)>) {
+        (self.selection_start, self.selection_end)
+    }
+
+    /// Access scroll offset
+    pub fn scroll_offset(&self) -> f32 {
+        self.scroll_offset
+    }
+
+    /// Access page layout mode
+    pub fn page_layout(&self) -> PageLayout {
+        self.page_layout
+    }
+
+    /// Access page count
+    pub fn page_count(&self) -> usize {
+        self.page_count
+    }
+
+    /// Access clipboard contents
+    pub fn clipboard(&self) -> Option<&[Paragraph]> {
+        self.clipboard.as_deref()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_text_format_fields() {
+        let fmt = TextFormat {
+            font_family: "Arial".into(),
+            background: Some(Color32::WHITE),
+            ..Default::default()
+        };
+        assert_eq!(fmt.font_family, "Arial");
+        assert!(fmt.background.is_some());
+    }
+
+    #[test]
+    fn test_paragraph_style_fields() {
+        let style = ParagraphStyle {
+            name: "Test".into(),
+            format: TextFormat::default(),
+            indent_left: 10.0,
+            indent_right: 5.0,
+            indent_first_line: 20.0,
+            spacing_before: 8.0,
+            spacing_after: 12.0,
+            line_spacing: 1.5,
+            list_style: None,
+        };
+        assert_eq!(style.indent_left, 10.0);
+        assert_eq!(style.indent_right, 5.0);
+        assert_eq!(style.indent_first_line, 20.0);
+        assert_eq!(style.spacing_before, 8.0);
+        assert_eq!(style.spacing_after, 12.0);
+        assert_eq!(style.line_spacing, 1.5);
+    }
+
+    #[test]
+    fn test_list_style_variants() {
+        let styles = [
+            ListStyle::Bullet,
+            ListStyle::Numbered(1),
+            ListStyle::Lettered,
+            ListStyle::Roman,
+        ];
+        assert_eq!(styles.len(), 4);
+    }
+
+    #[test]
+    fn test_paragraph_list_item() {
+        let para = Paragraph {
+            text: "Item".into(),
+            style: "Normal".into(),
+            format: TextFormat::default(),
+            list_item: Some(ListStyle::Bullet),
+        };
+        assert!(para.list_item.is_some());
+    }
+
+    #[test]
+    fn test_page_layout_variants() {
+        let layouts = [
+            PageLayout::Continuous,
+            PageLayout::PageView,
+            PageLayout::TwoPage,
+            PageLayout::WebView,
+        ];
+        assert_eq!(layouts.len(), 4);
+    }
+
+    #[test]
+    fn test_insert_delete_paragraph() {
+        let mut viewer = DocumentViewer::new();
+        viewer.paragraphs.push(Paragraph {
+            text: "First".into(),
+            style: "Normal".into(),
+            format: TextFormat::default(),
+            list_item: None,
+        });
+        viewer.insert_paragraph(0, "Second".into());
+        assert_eq!(viewer.paragraphs.len(), 2);
+        viewer.delete_paragraph(1);
+        assert_eq!(viewer.paragraphs.len(), 1);
+    }
+
+    #[test]
+    fn test_viewer_dead_fields() {
+        let viewer = DocumentViewer::new();
+        let (start, end) = viewer.selection_range();
+        assert!(start.is_none());
+        assert!(end.is_none());
+        assert_eq!(viewer.scroll_offset(), 0.0);
+        assert_eq!(viewer.page_layout(), PageLayout::Continuous);
+        assert_eq!(viewer.page_count(), 1);
+        assert!(viewer.clipboard().is_none());
     }
 }

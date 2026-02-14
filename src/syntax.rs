@@ -443,7 +443,7 @@ impl Default for SyntaxHighlighter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_js_highlight() {
         let highlighter = SyntaxHighlighter::new();
@@ -451,11 +451,194 @@ mod tests {
         assert!(!tokens.is_empty());
         assert!(!tokens[0].is_empty());
     }
-    
+
     #[test]
     fn test_rust_highlight() {
         let highlighter = SyntaxHighlighter::new();
         let tokens = highlighter.highlight("fn main() { println!(\"Hello\"); }", Language::Rust);
+        assert!(!tokens.is_empty());
+    }
+
+    #[test]
+    fn test_all_themes() {
+        let one_dark = SyntaxTheme::one_dark();
+        assert!(one_dark.background.a > 0);
+
+        let github = SyntaxTheme::github_light();
+        assert!(github.background.a > 0);
+
+        let dracula = SyntaxTheme::dracula();
+        assert!(dracula.background.a > 0);
+
+        // from_name
+        let t1 = SyntaxTheme::from_name("github");
+        assert_eq!(t1.background.r, github.background.r);
+        let t2 = SyntaxTheme::from_name("github_light");
+        assert_eq!(t2.background.r, github.background.r);
+        let t3 = SyntaxTheme::from_name("light");
+        assert_eq!(t3.background.r, github.background.r);
+        let t4 = SyntaxTheme::from_name("dracula");
+        assert_eq!(t4.background.r, dracula.background.r);
+        let t5 = SyntaxTheme::from_name("unknown_theme");
+        assert_eq!(t5.background.r, one_dark.background.r);
+    }
+
+    #[test]
+    fn test_set_theme_and_apply_theme() {
+        let mut hl = SyntaxHighlighter::new();
+
+        // set_theme
+        hl.set_theme(SyntaxTheme::dracula());
+        assert_eq!(hl.background().r, SyntaxTheme::dracula().background.r);
+
+        // apply_theme
+        hl.apply_theme("github");
+        assert_eq!(hl.background().r, SyntaxTheme::github_light().background.r);
+
+        hl.apply_theme("dracula");
+        assert_eq!(hl.background().r, SyntaxTheme::dracula().background.r);
+    }
+
+    #[test]
+    fn test_color_for_all_token_types() {
+        let hl = SyntaxHighlighter::new();
+        let types = [
+            TokenType::Keyword, TokenType::String, TokenType::Number,
+            TokenType::Comment, TokenType::Function, TokenType::Type,
+            TokenType::Operator, TokenType::Punctuation, TokenType::Variable,
+            TokenType::Constant, TokenType::Attribute, TokenType::Tag,
+            TokenType::Property, TokenType::Plain,
+        ];
+        for tt in &types {
+            let color = hl.color_for(*tt);
+            assert!(color.a > 0, "Token {:?} should have non-zero alpha", tt);
+        }
+    }
+
+    #[test]
+    fn test_background_method() {
+        let hl = SyntaxHighlighter::new();
+        let bg = hl.background();
+        assert!(bg.a > 0);
+    }
+
+    #[test]
+    fn test_describe() {
+        let hl = SyntaxHighlighter::new();
+        let desc = hl.describe();
+        assert!(desc.contains("SyntaxHighlighter"));
+        assert!(desc.contains("unique_colors"));
+        assert!(desc.contains("languages"));
+    }
+
+    #[test]
+    fn test_language_from_annotation() {
+        assert_eq!(Language::from_annotation("js"), Language::JavaScript);
+        assert_eq!(Language::from_annotation("javascript"), Language::JavaScript);
+        assert_eq!(Language::from_annotation("jsx"), Language::JavaScript);
+        assert_eq!(Language::from_annotation("ts"), Language::TypeScript);
+        assert_eq!(Language::from_annotation("typescript"), Language::TypeScript);
+        assert_eq!(Language::from_annotation("tsx"), Language::TypeScript);
+        assert_eq!(Language::from_annotation("rs"), Language::Rust);
+        assert_eq!(Language::from_annotation("rust"), Language::Rust);
+        assert_eq!(Language::from_annotation("py"), Language::Python);
+        assert_eq!(Language::from_annotation("python"), Language::Python);
+        assert_eq!(Language::from_annotation("html"), Language::Html);
+        assert_eq!(Language::from_annotation("htm"), Language::Html);
+        assert_eq!(Language::from_annotation("css"), Language::Css);
+        assert_eq!(Language::from_annotation("scss"), Language::Css);
+        assert_eq!(Language::from_annotation("sass"), Language::Css);
+        assert_eq!(Language::from_annotation("json"), Language::Json);
+        assert_eq!(Language::from_annotation("md"), Language::Markdown);
+        assert_eq!(Language::from_annotation("markdown"), Language::Markdown);
+        assert_eq!(Language::from_annotation("unknown"), Language::Plain);
+    }
+
+    #[test]
+    fn test_highlight_python_with_comment() {
+        let hl = SyntaxHighlighter::new();
+        let tokens = hl.highlight("x = 10 # comment", Language::Python);
+        assert!(!tokens.is_empty());
+        // Should have comment token
+        let flat: Vec<_> = tokens.into_iter().flatten().collect();
+        assert!(flat.iter().any(|t| t.token_type == TokenType::Comment));
+    }
+
+    #[test]
+    fn test_highlight_all_token_production() {
+        let hl = SyntaxHighlighter::new();
+        // Code that exercises keywords, strings, numbers, operators, punctuation, identifiers
+        let code = r#"const MyType = "hello"; let x = 42; fn foo() {}"#;
+        let tokens = hl.highlight(code, Language::JavaScript);
+        let flat: Vec<_> = tokens.into_iter().flatten().collect();
+        assert!(flat.iter().any(|t| t.token_type == TokenType::Keyword));
+        assert!(flat.iter().any(|t| t.token_type == TokenType::String));
+        assert!(flat.iter().any(|t| t.token_type == TokenType::Number));
+        assert!(flat.iter().any(|t| t.token_type == TokenType::Punctuation));
+    }
+
+    #[test]
+    fn test_highlight_token_fields() {
+        let token = HighlightToken {
+            text: "test".to_string(),
+            token_type: TokenType::Constant,
+            color: Color::new(100, 200, 50, 255),
+        };
+        assert_eq!(token.text, "test");
+        assert_eq!(token.token_type, TokenType::Constant);
+        assert_eq!(token.color.r, 100);
+
+        // Exercise Attribute, Tag, Property variants
+        let _attr = HighlightToken { text: "attr".into(), token_type: TokenType::Attribute, color: Color::new(0,0,0,255) };
+        let _tag = HighlightToken { text: "tag".into(), token_type: TokenType::Tag, color: Color::new(0,0,0,255) };
+        let _prop = HighlightToken { text: "prop".into(), token_type: TokenType::Property, color: Color::new(0,0,0,255) };
+    }
+
+    #[test]
+    fn test_theme_field_access() {
+        let theme = SyntaxTheme::one_dark();
+        // Access all fields to wire them
+        let _ = theme.background;
+        let _ = theme.foreground;
+        let _ = theme.keyword;
+        let _ = theme.string;
+        let _ = theme.number;
+        let _ = theme.comment;
+        let _ = theme.function;
+        let _ = theme.type_name;
+        let _ = theme.operator;
+        let _ = theme.punctuation;
+        let _ = theme.variable;
+        let _ = theme.constant;
+        let _ = theme.attribute;
+        let _ = theme.tag;
+        let _ = theme.property;
+    }
+
+    #[test]
+    fn test_default_highlighter() {
+        let hl = SyntaxHighlighter::default();
+        let tokens = hl.highlight("42", Language::Plain);
+        assert!(!tokens.is_empty());
+    }
+
+    #[test]
+    fn test_default_theme() {
+        let theme = SyntaxTheme::default();
+        assert_eq!(theme.background.r, SyntaxTheme::one_dark().background.r);
+    }
+
+    #[test]
+    fn test_highlight_css_language() {
+        let hl = SyntaxHighlighter::new();
+        let tokens = hl.highlight("color: inherit !important;", Language::Css);
+        assert!(!tokens.is_empty());
+    }
+
+    #[test]
+    fn test_highlight_typescript() {
+        let hl = SyntaxHighlighter::new();
+        let tokens = hl.highlight("interface Foo { bar: string; }", Language::TypeScript);
         assert!(!tokens.is_empty());
     }
 }

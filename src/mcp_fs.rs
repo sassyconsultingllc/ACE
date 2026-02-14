@@ -3,12 +3,10 @@
 //! Provides safe, sandboxed file system access for the AI agents.
 //! All operations are logged and can be reviewed before execution.
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-#[allow(unused_imports)]
 use std::io::{self, Read, Write};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

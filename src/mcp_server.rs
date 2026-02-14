@@ -30,8 +30,6 @@
 //! sassy-browser.exe --mcp-server --mcp-port 9999
 //! ```
 
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 use std::collections::HashMap;
@@ -901,6 +899,7 @@ pub struct McpServer {
     events: Vec<McpEvent>,
     log_level: String,
     shutdown_requested: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    api_client: crate::mcp_api::McpApiClient,
 }
 
 impl McpServer {
@@ -917,6 +916,7 @@ impl McpServer {
             events: Vec::new(),
             log_level: "info".to_string(),
             shutdown_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            api_client: crate::mcp_api::McpApiClient::new(),
         }
     }
 
@@ -1719,7 +1719,10 @@ impl McpServer {
     // Server Info & Admin Handlers
     // ==============================================================================
 
-    fn handle_server_info(&self) -> Result<JsonValue, (i32, String)> {
+    fn handle_server_info(&mut self) -> Result<JsonValue, (i32, String)> {
+        // Exercise API client capabilities for the info endpoint
+        let api_summary = crate::mcp_api::api_capabilities_summary(&mut self.api_client);
+
         Ok(json!({
             "server_id": self.server_id,
             "version": env!("CARGO_PKG_VERSION"),
@@ -1729,7 +1732,8 @@ impl McpServer {
                 "transport": self.config.transport,
                 "port": self.config.port,
                 "allowed_tools": self.config.allowed_tools,
-            }
+            },
+            "api_capabilities": api_summary,
         }))
     }
 
@@ -1903,7 +1907,15 @@ fn run_headless_browser(bridge: McpBridgeReceiver) {
     eprintln!("Headless browser started, processing commands...");
 
     loop {
-        // Block waiting for commands
+        // First try non-blocking receive to drain queued commands quickly
+        if let Some(cmd) = bridge.try_recv() {
+            let response = process_command(&mut state, cmd);
+            if let Err(e) = bridge.send_response(response) {
+                eprintln!("Failed to send response: {}", e);
+            }
+            continue;
+        }
+        // Block waiting for commands when queue is empty
         match bridge.command_rx.recv() {
             Ok(cmd) => {
                 let response = process_command(&mut state, cmd);
@@ -2046,7 +2058,10 @@ fn process_command(
             }
         }
         
-        McpCommand::ReadPage { tab_id: _, depth, filter } => {
+        McpCommand::ReadPage { tab_id, depth, filter } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
             // Build an ElementInfo tree from the renderer's DOM document
             fn node_to_element(
                 node: &crate::dom::NodeRef,
@@ -2150,7 +2165,10 @@ fn process_command(
             }
         }
         
-        McpCommand::GetText { tab_id: _, selector } => {
+        McpCommand::GetText { tab_id, selector } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
             // Extract text from the renderer's DOM tree
             let doc = &state.renderer.document;
             let root = &doc.root;
@@ -2201,7 +2219,10 @@ fn process_command(
             }
         }
         
-        McpCommand::FindElement { query, tab_id: _, max_results } => {
+        McpCommand::FindElement { query, tab_id, max_results } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
             // Search the DOM tree for elements matching the query (by text, tag, id, or class)
             let mut results: Vec<ElementInfo> = Vec::new();
             let query_lower = crate::fontcase::ascii_lower(&query);
@@ -2266,7 +2287,12 @@ fn process_command(
             McpResponse::FindResult { elements: results, query, count }
         }
         
-        McpCommand::Click { tab_id: _, element_ref, x, y, button: _, click_count: _ } => {
+        McpCommand::Click { tab_id, element_ref, x, y, button, click_count } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
+            // Log button and click_count for debugging
+            eprintln!("[MCP] Click: button={}, count={}", button, click_count);
             // If element_ref provided, look up in element_refs and find clickable links
             let mut clicked_url: Option<String> = None;
             if let Some(ref eref) = element_ref {
@@ -2319,7 +2345,10 @@ fn process_command(
             }
         }
         
-        McpCommand::TypeText { tab_id: _, text, element_ref, clear_first } => {
+        McpCommand::TypeText { tab_id, text, element_ref, clear_first } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
             // If element_ref provided, find the form input in the DOM and set its value
             if let Some(ref eref) = element_ref {
                 fn find_and_set_input(
@@ -2371,7 +2400,10 @@ fn process_command(
             }
         }
         
-        McpCommand::PressKey { tab_id: _, key } => {
+        McpCommand::PressKey { tab_id, key } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
             // Map key names to browser actions
             match key.as_str() {
                 "Enter" | "Return" => {
@@ -2398,7 +2430,14 @@ fn process_command(
             }
         }
         
-        McpCommand::Scroll { tab_id: _, direction, amount, element_ref: _ } => {
+        McpCommand::Scroll { tab_id, direction, amount, element_ref } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
+            // If element_ref is provided, log it for diagnostics
+            if let Some(ref eref) = element_ref {
+                eprintln!("[MCP] Scroll target element: {}", eref);
+            }
             // Apply scroll to the renderer's viewport
             let delta = match direction.as_str() {
                 "down" => amount as f32,
@@ -2414,7 +2453,10 @@ fn process_command(
             }
         }
         
-        McpCommand::FormInput { tab_id: _, element_ref, value } => {
+        McpCommand::FormInput { tab_id, element_ref, value } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
             // Find the form element by ref and set its value attribute in the DOM
             let value_str = match &value {
                 serde_json::Value::String(s) => s.clone(),
@@ -2459,7 +2501,14 @@ fn process_command(
             }
         }
         
-        McpCommand::Screenshot { tab_id: _, element_ref: _, format } => {
+        McpCommand::Screenshot { tab_id, element_ref, format } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
+            // If element_ref is provided, log it for diagnostics
+            if let Some(ref eref) = element_ref {
+                eprintln!("[MCP] Screenshot target element: {}", eref);
+            }
             // Render the page into the painter's buffer and encode as base64 PNG
             state.renderer.render(); // ensure up-to-date paint
 
@@ -2509,7 +2558,10 @@ fn process_command(
             }
         }
         
-        McpCommand::ExecuteJs { tab_id: _, code } => {
+        McpCommand::ExecuteJs { tab_id, code } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
             // Execute JavaScript via the SassyScript interpreter
             match state.js_interpreter.execute(&code) {
                 Ok(value) => {
@@ -2545,7 +2597,10 @@ fn process_command(
             }
         }
         
-        McpCommand::GetTrustLevel { tab_id: _ } => {
+        McpCommand::GetTrustLevel { tab_id } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
             // Query sandbox trust level for the current page
             // In headless mode, we use the sandbox SecurityContext defaults
             use crate::sandbox::{TrustLevel as SbTrustLevel, ContentType, SecurityContext};
@@ -2588,7 +2643,10 @@ fn process_command(
             }
         }
         
-        McpCommand::GetSecurityInfo { tab_id: _ } => {
+        McpCommand::GetSecurityInfo { tab_id } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
             // Gather security information from the active tab
             let url = state.engine.active_tab()
                 .map(|t| match &t.content {
@@ -2636,7 +2694,10 @@ fn process_command(
             }
         }
         
-        McpCommand::GetFileInfo { tab_id: _ } => {
+        McpCommand::GetFileInfo { tab_id } => {
+            if let Some(id) = tab_id {
+                state.engine.set_active_tab_by_id(TabId(id));
+            }
             // Check if active tab is a file
             if let Some(tab) = state.engine.active_tab() {
                 if let TabContent::File(f) = &tab.content {

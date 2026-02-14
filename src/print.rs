@@ -1,4 +1,3 @@
-#![allow(dead_code, unused_imports, unused_variables)]
 //! Print module - Cross-platform print dialog and preview
 //!
 //! Provides printing support for:

@@ -36,13 +36,9 @@ pub mod page;
 pub mod popup;
 pub mod network;
 
-#[allow(unused_imports)] // Public API re-exports for external use
 pub use quarantine::{Quarantine, QuarantinedFile, ReleaseStatus, Warning, WarningLevel};
-#[allow(unused_imports)]
 pub use page::{PageSandbox, PageTrust, SandboxManager, Interaction};
-#[allow(unused_imports)]
 pub use popup::{PopupHandler, PopupRequest, PopupDecision, BlockedPopup};
-#[allow(unused_imports)]
 pub use network::NetworkSandbox;
 
 use serde::{Deserialize, Serialize};

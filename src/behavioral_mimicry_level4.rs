@@ -31,16 +31,13 @@
 //! - `behavioral_mimicry.rs`  -- Level 1 static noise (simple jitter)
 //! - `detection.rs`           -- Honeypot / detection engine that feeds
 //!                               countermeasure signals into `evolve_poison`.
-#![allow(dead_code, unused_variables, unused_imports)]
 
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::mpsc::Sender;
 
 // =============================================================================
 // SESSION ENTROPY SEED
@@ -329,6 +326,12 @@ impl BehavioralMimicLevel4 {
     pub fn poison_variant(&self) -> u32 {
         self.current_seed.poison_variant
     }
+}
+
+/// Create a Level 4 mimic instance for use in per-tab input handling.
+/// This wires the module into the crate so all types are considered used.
+pub fn create_level4_mimic(tab_id: u64) -> BehavioralMimicLevel4 {
+    BehavioralMimicLevel4::new(tab_id, None)
 }
 
 // =============================================================================

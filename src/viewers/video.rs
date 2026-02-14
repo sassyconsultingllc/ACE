@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(deprecated)]
 //! Video Player - MP4, WebM, AVI, MKV playback
 //!
 //! Displays video metadata, codec information, and provides a rich

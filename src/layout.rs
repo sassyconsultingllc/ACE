@@ -1,9 +1,7 @@
 // Layout - Box layout engine with Flexbox support
-#![allow(unused_variables)]
 
 use crate::dom::{NodeRef, NodeType};
-#[allow(unused_imports)]
-use crate::style::{ComputedStyle, Display, Dimension, Position, FlexDirection, JustifyContent, AlignItems, FlexWrap};
+use crate::style::{ComputedStyle, Display, Dimension, FlexDirection, JustifyContent, AlignItems, FlexWrap};
 
 #[derive(Debug, Clone, Default)]
 pub struct LayoutBox {
@@ -178,7 +176,7 @@ impl LayoutEngine {
         let align = style.align_items;
         
         let container_main = if is_row { layout_box.content.width } else { layout_box.content.height };
-        let container_cross = if is_row { layout_box.content.height } else { layout_box.content.width };
+        let _container_cross = if is_row { layout_box.content.height } else { layout_box.content.width };
         let container_x = layout_box.content.x;
         let container_y = layout_box.content.y;
         
@@ -233,7 +231,7 @@ impl LayoutEngine {
             let item_count = line.items.len();
             
             // Calculate positions based on justify-content
-            let (mut main_pos, gap, extra_start) = match justify {
+            let (mut main_pos, gap, _extra_start) = match justify {
                 JustifyContent::FlexStart => (0.0, 0.0, 0.0),
                 JustifyContent::FlexEnd => (free_space, 0.0, 0.0),
                 JustifyContent::Center => (free_space / 2.0, 0.0, 0.0),
@@ -488,5 +486,109 @@ impl LayoutEngine {
             if let Some(found) = self.find_layout_for_node(child, target) { return Some(found); }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rect_methods() {
+        let r = Rect::new(10.0, 20.0, 100.0, 50.0);
+        assert_eq!(r.right(), 110.0);
+        assert_eq!(r.bottom(), 70.0);
+        assert!(r.contains(50.0, 40.0));
+        assert!(!r.contains(200.0, 200.0));
+    }
+
+    #[test]
+    fn test_rect_zero() {
+        let z = Rect::zero();
+        assert_eq!(z.x, 0.0);
+        assert_eq!(z.y, 0.0);
+        assert_eq!(z.width, 0.0);
+        assert_eq!(z.height, 0.0);
+    }
+
+    #[test]
+    fn test_box_type_variants() {
+        let types = [BoxType::Block, BoxType::Inline, BoxType::InlineBlock,
+                     BoxType::Flex, BoxType::Anonymous, BoxType::Text];
+        for bt in &types {
+            let _ = format!("{:?}", bt);
+        }
+        assert_eq!(BoxType::default(), BoxType::Block);
+    }
+
+    #[test]
+    fn test_flex_item_frozen_field() {
+        let item = FlexItem {
+            main_size: 100.0,
+            cross_size: 50.0,
+            flex_grow: 1.0,
+            flex_shrink: 1.0,
+            frozen: true,
+        };
+        assert!(item.frozen);
+        assert_eq!(item.main_size, 100.0);
+        assert_eq!(item.cross_size, 50.0);
+        // Read flex_grow and flex_shrink explicitly
+        assert_eq!(item.flex_grow, 1.0);
+        assert_eq!(item.flex_shrink, 1.0);
+    }
+
+    #[test]
+    fn test_flex_line() {
+        let mut line = FlexLine::new();
+        assert!(line.items.is_empty());
+        assert_eq!(line.total_main, 0.0);
+        assert_eq!(line.max_cross, 0.0);
+        line.items.push(0);
+        line.total_main = 100.0;
+        line.max_cross = 50.0;
+        assert_eq!(line.items.len(), 1);
+    }
+
+    #[test]
+    fn test_layout_box_describe() {
+        let lb = LayoutBox {
+            box_type: BoxType::Block,
+            text: Some("hello".to_string()),
+            bounds: Rect::new(0.0, 0.0, 200.0, 100.0),
+            content: Rect::new(5.0, 5.0, 190.0, 90.0),
+            ..Default::default()
+        };
+        let desc = lb.describe();
+        assert!(desc.contains("LayoutBox["));
+        assert!(desc.contains("Block"));
+        assert!(desc.contains("text_len=5"));
+        // Verify right() and bottom() are called in describe
+        assert!(desc.contains("r="));
+        assert!(desc.contains("b="));
+    }
+
+    #[test]
+    fn test_layout_engine_basic() {
+        use crate::dom::Node;
+        let engine_lyt = LayoutEngine::new(800.0, 600.0);
+        let root = Node::new_document();
+        let body = Node::new_element("body");
+        Node::append_child(&root, &body);
+        let text = Node::new_text("Hello world");
+        Node::append_child(&body, &text);
+        let styles = std::collections::HashMap::new();
+        let mut engine = LayoutEngine::new(800.0, 600.0);
+        let result = engine.layout(&root, &styles);
+        assert!(result.bounds.width > 0.0);
+    }
+
+    #[test]
+    fn test_layout_box_default() {
+        let lb = LayoutBox::default();
+        assert!(lb.node.is_none());
+        assert_eq!(lb.box_type, BoxType::Block);
+        assert!(lb.children.is_empty());
+        assert!(!lb.is_anonymous);
     }
 }

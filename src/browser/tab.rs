@@ -1,4 +1,3 @@
-#![allow(dead_code, unused_variables, unused_imports)]
 //! Tab management - Represents browser tabs (web pages or file viewers)
 
 use crate::behavioral_mimicry::TabInputHandler;

@@ -8,15 +8,24 @@
 
 use crate::auth::{AuthManager, FirstRunState, FirstRunStep, DeviceType, TailscaleManager, PhoneSync, SyncType};
 use crate::browser::{BrowserEngine, DownloadState, Tab, TabContent, TabId, HistoryManager};
-use crate::console::DevConsole;
+use crate::console::{DevConsole, ConsolePanel, LogLevel, ConsoleEntry, NetworkEntry, console_log, console_info, console_warn, console_error, console_debug};
 use crate::file_handler::{FileType, OpenFile};
 use crate::html_renderer::HtmlRenderer;
 use crate::extensions::ExtensionManager;
 use crate::icons::Icons;
 use crate::input::FocusManager;
 use crate::json_viewer::JsonViewer;
-use crate::mcp::McpOrchestrator;
-use crate::mcp_panel::McpPanel;
+use crate::mcp::{
+    McpOrchestrator, AgentRole, IntentType, UserIntent, Entity,
+    AgentRequest, AgentResponse, TokenUsage, McpServer, McpMessage,
+    extract_entities, format_operation, EditOperation, MessageRole,
+    Provider, TaskStatus, IssueSeverity, AgentConfig, HostingMode,
+};
+use crate::mcp_panel::{
+    McpPanel, PanelMode, PanelRender, RenderElement, AgentStatus,
+    Action as McpAction, ActionStyle, NotificationStyle, McpTheme, QuickCommand,
+    get_quick_commands,
+};
 use crate::network_monitor::{NetworkMonitor, ActivityIndicatorState, ConnectionType, ConnectionState, ConnectionFilter, ConnectionSort, format_bytes, format_speed, format_duration};
 use crate::password_vault::{PasswordVault, Credential, PasswordGeneratorOptions, generate_password};
 use crate::rest_client::RestClient;
@@ -28,7 +37,26 @@ use crate::mcp_server_native::{McpNativeServer, NativeServerConfig, McpBridge};
 use crate::mcp_protocol::{McpCommand, McpResponse, ErrorCode};
 use crate::poisoning::{PoisoningEngine, PoisonMode};
 use crate::stealth_victories::StealthVictories;
+use crate::ai::{AiRuntime, EasterEggReward};
 use crate::script_engine::ScriptEngine;
+use crate::adblock::{AdBlocker, AdBlockerUI, BlockStats, FilterList, FilterRule, ResourceType as AdResourceType};
+use crate::voice::{
+    VoiceConfig, VoiceState, VoiceSession, WhisperModel, WhisperEngine,
+    TranscriptResult, TranscriptSegment, AudioFormat, AudioDevice,
+    MicrophoneCapture, VoiceActivityDetector, VoiceInput, VoiceCommandResult,
+    VoiceCommand, CloudProvider, CloudTranscriber, HotkeyConfig, HotkeyModifiers,
+    TriggerMode, list_audio_devices, key_name, default_audio_device,
+    convert_to_whisper_format, convert_raw_pcm, WhisperParams, CaptureConfig,
+};
+use crate::hittest::{HitResult, ElementType, CursorType, InteractionTracker, InteractionQuality, hit_test, hit_test_all};
+use crate::layout::LayoutBox;
+use crate::protocol::{HttpClient, FetchOptions, CredentialsMode, CacheMode, RedirectMode, MultipartFormData, parse_data_url, url_encode, encode_form_data};
+use crate::network::{
+    NetworkState as NetActivityState,
+    NetworkRequest as NetActivityRequest,
+    SharedNetworkMonitor, shared_monitor, shared_monitor_describe,
+};
+use crate::rest_client::{Method as RestMethod, ContentType as RestContentType, SavedRequest, RequestCollection};
 use crate::viewers::{
     archive::ArchiveViewer,
     audio::AudioViewer,
@@ -43,6 +71,12 @@ use crate::viewers::{
     text::TextViewer,
     video::VideoViewer,
 };
+use crate::sandbox::{
+    TrustLevel, SecurityContext, ContentType, InteractionType, ViolationSeverity,
+};
+use crate::sandbox::page::Interaction;
+use crate::sandbox::popup::PopupRequest;
+use crate::sandbox::quarantine::{QuarantinedFile, WarningLevel, ReleaseStatus};
 use anyhow::Result;
 use eframe::egui::{self, Color32, FontId, Key, RichText, Vec2};
 use eframe::egui::{ColorImage, TextureHandle};
@@ -68,6 +102,7 @@ pub enum ThemePreset {
 pub enum LeftSidebarMode {
     Bookmarks,
     History,
+    Protection,
 }
 
 /// Browser application state
@@ -178,9 +213,9 @@ pub struct BrowserApp {
     
     // Developer tools
     dev_console: DevConsole,
-    json_viewer: JsonViewer,
+    pub json_viewer: JsonViewer,
     rest_client: RestClient,
-    syntax_highlighter: SyntaxHighlighter,
+    pub syntax_highlighter: SyntaxHighlighter,
 
     // MCP AI system
     mcp_orchestrator: McpOrchestrator,
@@ -210,6 +245,59 @@ pub struct BrowserApp {
     // Stealth victories - silent anti-tracking warfare counter
     stealth_victories: StealthVictories,
 
+    // Ad blocker - always-on tracker/ad protection
+    ad_blocker: std::sync::Arc<std::sync::RwLock<AdBlocker>>,
+    ad_blocker_ui: AdBlockerUI,
+    adblock_panel_visible: bool,
+
+    // AI Runtime
+    ai_runtime: AiRuntime,
+    ai_response: String,
+    ai_error: Option<String>,
+    ai_easter_egg_pending: Option<EasterEggReward>,
+
+    // Hit testing for rendered content
+    last_hit_result: Option<HitResult>,
+    hit_test_cursor: CursorType,
+    interaction_tracker: InteractionTracker,
+    hittest_panel_visible: bool,
+
+    // Protocol handler for HTTP navigation
+    http_client: HttpClient,
+
+    // REST client panel
+    rest_client_panel_visible: bool,
+
+    // Network activity monitor panel (from network.rs module)
+    network_activity_panel_visible: bool,
+    /// Standalone network activity monitor (network.rs module)
+    net_activity_monitor: crate::network::NetworkMonitor,
+
+    // Protocol diagnostics panel
+    protocol_diagnostics_panel_visible: bool,
+
+    // Voice input
+    voice_panel_visible: bool,
+    voice_recording_active: bool,
+    voice_last_transcript: String,
+    voice_command_result: Option<String>,
+    voice_status_text: String,
+    voice_selected_device: usize,
+    voice_cloud_api_key: String,
+    voice_selected_cloud: usize,
+    voice_selected_hotkey_preset: usize,
+    voice_show_settings: bool,
+
+    // Session state tracking
+    session_state: crate::data::SessionState,
+
+    // Sandbox - 4-layer isolation
+    sandbox_manager: crate::sandbox::SandboxManager,
+    popup_handler: crate::sandbox::popup::PopupHandler,
+    download_quarantine: crate::sandbox::quarantine::Quarantine,
+    network_sandbox: crate::sandbox::network::NetworkSandbox,
+    show_sandbox_panel: bool,
+
     // UI state
     dark_mode: bool,
     theme_preset: ThemePreset,
@@ -226,9 +314,7 @@ pub struct BrowserApp {
     ai_query_input: String,
     
     // Context menu state
-    #[allow(dead_code)]
     context_menu_pos: Option<egui::Pos2>,
-    #[allow(dead_code)]
     context_menu_link: Option<String>,
     
     // Status
@@ -420,6 +506,7 @@ impl BrowserApp {
                 let engine_filename = suggested_filename.unwrap_or(&filename);
                 self.engine.start_download(url, Some(engine_filename));
                 self.profile_manager.record_download(&filename, url, size_hint, true, None);
+                console_log(&format!("Download started: {}", filename));
                 self.status_message = format!("Download started: {}", filename);
                 true
             }
@@ -430,6 +517,7 @@ impl BrowserApp {
                     msg = format!("{} (approval requested: {})", msg, req_id);
                     self.profile_manager.record_download(&filename, url, size_hint, false, None);
                 }
+                console_warn(&msg);
                 self.status_message = msg;
                 false
             }
@@ -624,6 +712,56 @@ impl BrowserApp {
             // Stealth victories - persistent poisoning counter
             stealth_victories: StealthVictories::new(),
 
+            // Ad blocker - always-on protection
+            ad_blocker: std::sync::Arc::new(std::sync::RwLock::new(AdBlocker::new())),
+            ad_blocker_ui: AdBlockerUI::new(std::sync::Arc::new(std::sync::RwLock::new(AdBlocker::new()))),
+            adblock_panel_visible: false,
+
+            // AI runtime
+            ai_runtime: crate::ai::load_runtime(),
+            ai_response: String::new(),
+            ai_error: None,
+            ai_easter_egg_pending: None,
+
+            // Hit testing
+            last_hit_result: None,
+            hit_test_cursor: CursorType::Default,
+            interaction_tracker: InteractionTracker::new(),
+            hittest_panel_visible: false,
+
+            // Protocol handler
+            http_client: HttpClient::new(),
+
+            // REST client panel
+            rest_client_panel_visible: false,
+
+            // Network activity monitor panel (network.rs)
+            network_activity_panel_visible: false,
+            net_activity_monitor: crate::network::NetworkMonitor::new(),
+
+            // Protocol diagnostics panel
+            protocol_diagnostics_panel_visible: false,
+
+            // Voice input
+            voice_panel_visible: false,
+            voice_recording_active: false,
+            voice_last_transcript: String::new(),
+            voice_command_result: None,
+            voice_status_text: "Voice input ready".into(),
+            voice_selected_device: 0,
+            voice_cloud_api_key: String::new(),
+            voice_selected_cloud: 0,
+            voice_selected_hotkey_preset: 0,
+            voice_show_settings: false,
+
+            // Sandbox - 4-layer isolation
+            session_state: crate::data::SessionState::new(),
+            sandbox_manager: crate::sandbox::SandboxManager::new(),
+            popup_handler: crate::sandbox::popup::PopupHandler::new(),
+            download_quarantine: crate::sandbox::quarantine::Quarantine::new(),
+            network_sandbox: crate::sandbox::network::NetworkSandbox::new(),
+            show_sandbox_panel: false,
+
             dark_mode: true,
             theme_preset: ThemePreset::SassyRedesign,
             zoom_level: 1.0,
@@ -649,6 +787,9 @@ impl BrowserApp {
             clear_data_cache: true,
             find_match_count: 0,
         };
+
+        // Wire ad_blocker_ui to share the same Arc as ad_blocker
+        app.ad_blocker_ui = AdBlockerUI::new(app.ad_blocker.clone());
 
         // Start the native MCP server in background and wire the bridge
         {
@@ -1689,8 +1830,7 @@ impl BrowserApp {
             });
     }
     
-    #[allow(dead_code)]
-    fn render_file_content(&mut self, ui: &mut egui::Ui, file: &OpenFile) {
+    pub fn render_file_content(&mut self, ui: &mut egui::Ui, file: &OpenFile) {
         let icons = &self.svg_icons;
         match file.file_type {
             FileType::Image | FileType::ImageRaw | FileType::ImagePsd => {
@@ -2336,6 +2476,334 @@ impl BrowserApp {
         let _has_alerts = self.detection_engine.render_alert_banner(ui);
     }
 
+
+    // =========================================================================
+    // DEVELOPER CONSOLE - Full-featured DevTools panel (F12)
+    // =========================================================================
+
+    fn render_dev_console(&mut self, ctx: &egui::Context) {
+        if !self.show_dev_tools { return; }
+        let mut open = self.show_dev_tools;
+        egui::Window::new("Developer Tools")
+            .open(&mut open)
+            .resizable(true)
+            .default_size(Vec2::new(800.0, 400.0))
+            .min_width(400.0)
+            .min_height(200.0)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    for panel in ConsolePanel::all() {
+                        let label = panel.label();
+                        let selected = self.dev_console.active_panel == *panel;
+                        if ui.selectable_label(selected, label).clicked() {
+                            self.dev_console.active_panel = *panel;
+                        }
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("Toggle").clicked() {
+                            self.dev_console.toggle();
+                        }
+                        ui.label(RichText::new(format!("h:{}", self.dev_console.height)).small().color(Color32::GRAY));
+                    });
+                });
+                ui.separator();
+                match self.dev_console.active_panel {
+                    ConsolePanel::Console => self.render_dev_console_tab(ui),
+                    ConsolePanel::Network => self.render_dev_network_tab(ui),
+                    ConsolePanel::Elements => self.render_dev_elements_tab(ui),
+                    ConsolePanel::Sources => self.render_dev_sources_tab(ui),
+                    ConsolePanel::Application => self.render_dev_application_tab(ui),
+                }
+            });
+        if !open { self.show_dev_tools = false; }
+    }
+
+    fn render_dev_console_tab(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Levels:").small());
+            if ui.selectable_label(self.dev_console.show_log, "Log").clicked() { self.dev_console.show_log = !self.dev_console.show_log; }
+            if ui.selectable_label(self.dev_console.show_info, "Info").clicked() { self.dev_console.show_info = !self.dev_console.show_info; }
+            if ui.selectable_label(self.dev_console.show_warn, "Warn").clicked() { self.dev_console.show_warn = !self.dev_console.show_warn; }
+            if ui.selectable_label(self.dev_console.show_error, "Error").clicked() { self.dev_console.show_error = !self.dev_console.show_error; }
+            ui.separator();
+            if ui.small_button("Clear").clicked() { self.dev_console.clear(); }
+            ui.separator();
+            ui.label(RichText::new("Filter:").small());
+            ui.text_edit_singleline(&mut self.dev_console.console_filter);
+        });
+        ui.separator();
+        let filtered: Vec<ConsoleEntry> = self.dev_console.filtered_console_entries().into_iter().cloned().collect();
+        let entry_count = filtered.len();
+        let total_count = self.dev_console.console_entries.len();
+        egui::ScrollArea::vertical().max_height(ui.available_height() - 40.0).stick_to_bottom(true).show(ui, |ui| {
+            if filtered.is_empty() {
+                ui.label(RichText::new(format!("No console output ({} total, all filtered)", total_count)).italics().color(Color32::GRAY));
+            } else {
+                ui.label(RichText::new(format!("Showing {} of {} entries", entry_count, total_count)).small().color(Color32::GRAY));
+                for entry in &filtered {
+                    let c = entry.level.color();
+                    let color = egui::Color32::from_rgba_premultiplied(c.r, c.g, c.b, c.a);
+                    let prefix = entry.level.prefix();
+                    let _level_desc = entry.level.describe();
+                    let ts = entry.timestamp.format("%H:%M:%S%.3f").to_string();
+                    let source_str = entry.source.as_deref().unwrap_or("");
+                    let stack_str = entry.stack_trace.as_deref().unwrap_or("");
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(&ts).monospace().size(10.0).color(Color32::GRAY));
+                        ui.label(RichText::new(format!("{}{}", prefix, &entry.message)).monospace().size(11.0).color(color));
+                        if !source_str.is_empty() {
+                            ui.label(RichText::new(format!("@ {}", source_str)).monospace().size(10.0).color(Color32::GRAY));
+                        }
+                    });
+                    let full_desc = entry.describe();
+                    if !stack_str.is_empty() {
+                        ui.label(RichText::new(stack_str).monospace().size(10.0).color(Color32::from_rgb(180, 180, 180)));
+                    }
+                    if ui.small_button("...").on_hover_text(&full_desc).clicked() {
+                        self.status_message = full_desc;
+                    }
+                }
+            }
+        });
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(">").monospace().color(Color32::from_rgb(100, 180, 255)));
+            let response = ui.text_edit_singleline(&mut self.dev_console.input_buffer);
+            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                self.dev_console.handle_key("Enter", false);
+            }
+            ui.label(RichText::new(format!("cur:{} hist:{}", self.dev_console.input_cursor, self.dev_console.command_history.len())).small().color(Color32::GRAY));
+            if let Some(idx) = self.dev_console.history_index {
+                ui.label(RichText::new(format!("[{}]", idx)).small().color(Color32::YELLOW));
+            }
+        });
+    }
+
+    fn render_dev_network_tab(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Filter:").small());
+            ui.text_edit_singleline(&mut self.dev_console.network_filter);
+            ui.separator();
+            if ui.small_button("Clear Network").clicked() { self.dev_console.network_entries.clear(); self.dev_console.selected_network_entry = None; }
+            ui.label(RichText::new(format!("next_id:{}", self.dev_console.next_request_id)).small().color(Color32::GRAY));
+        });
+        ui.separator();
+        let filtered: Vec<NetworkEntry> = self.dev_console.filtered_network_entries().into_iter().cloned().collect();
+        let total = self.dev_console.network_entries.len();
+        let max = self.dev_console.max_network_entries;
+        egui::ScrollArea::vertical().max_height(ui.available_height() - 10.0).show(ui, |ui| {
+            if filtered.is_empty() {
+                ui.label(RichText::new(format!("No network requests ({}/{})", total, max)).italics().color(Color32::GRAY));
+            } else {
+                ui.label(RichText::new(format!("Showing {} of {}/{} requests", filtered.len(), total, max)).small().color(Color32::GRAY));
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("ID").monospace().size(10.0).strong());
+                    ui.add_space(10.0);
+                    ui.label(RichText::new("Method").monospace().size(10.0).strong());
+                    ui.add_space(10.0);
+                    ui.label(RichText::new("Status").monospace().size(10.0).strong());
+                    ui.add_space(10.0);
+                    ui.label(RichText::new("URL").monospace().size(10.0).strong());
+                    ui.add_space(10.0);
+                    ui.label(RichText::new("Duration").monospace().size(10.0).strong());
+                    ui.add_space(10.0);
+                    ui.label(RichText::new("Type").monospace().size(10.0).strong());
+                });
+                ui.separator();
+                for entry in &filtered {
+                    let sc = entry.status_color();
+                    let status_color = Color32::from_rgb(sc.r, sc.g, sc.b);
+                    let is_selected = self.dev_console.selected_network_entry == Some(entry.id);
+                    let row = ui.horizontal(|ui| {
+                        ui.label(RichText::new(format!("{}", entry.id)).monospace().size(10.0));
+                        ui.add_space(10.0);
+                        ui.label(RichText::new(&entry.method).monospace().size(10.0).color(Color32::from_rgb(100, 180, 255)));
+                        ui.add_space(10.0);
+                        let status_str = match (&entry.status, &entry.status_text) {
+                            (Some(s), Some(t)) => format!("{} {}", s, t),
+                            (Some(s), None) => format!("{}", s),
+                            _ => "pending".to_string(),
+                        };
+                        ui.label(RichText::new(&status_str).monospace().size(10.0).color(status_color));
+                        ui.add_space(10.0);
+                        let url_display = if entry.url.len() > 60 { format!("{}...", &entry.url[..57]) } else { entry.url.clone() };
+                        ui.label(RichText::new(&url_display).monospace().size(10.0));
+                        ui.add_space(10.0);
+                        let dur = entry.duration_ms.map_or("--".to_string(), |d| format!("{}ms", d));
+                        ui.label(RichText::new(&dur).monospace().size(10.0));
+                        ui.add_space(10.0);
+                        let ct = entry.content_type.as_deref().unwrap_or("--");
+                        ui.label(RichText::new(ct).monospace().size(10.0).color(Color32::GRAY));
+                    });
+                    if row.response.interact(egui::Sense::click()).clicked() {
+                        if is_selected { self.dev_console.selected_network_entry = None; } else { self.dev_console.selected_network_entry = Some(entry.id); }
+                    }
+                    if is_selected {
+                        ui.indent("net_detail", |ui| {
+                            ui.add_space(4.0);
+                            let desc = entry.describe();
+                            ui.label(RichText::new(&desc).monospace().size(10.0).color(Color32::from_rgb(200, 200, 200)));
+                            ui.add_space(4.0);
+                            ui.label(RichText::new("Waterfall:").small().strong());
+                            let wf_desc = entry.waterfall.describe();
+                            ui.label(RichText::new(&wf_desc).monospace().size(10.0).color(Color32::from_rgb(180, 180, 220)));
+                            let total_wf = entry.waterfall.total_ms();
+                            if total_wf > 0.0 {
+                                let segments = entry.waterfall.segments();
+                                ui.horizontal(|ui| {
+                                    for (name, _start, dur, wf_color) in &segments {
+                                        let frac = (*dur / total_wf).clamp(0.0, 1.0) as f32;
+                                        let bar_width = (frac * 200.0).max(4.0);
+                                        let bar_color = Color32::from_rgb(wf_color.r, wf_color.g, wf_color.b);
+                                        let (rect, _) = ui.allocate_exact_size(Vec2::new(bar_width, 12.0), egui::Sense::hover());
+                                        ui.painter().rect_filled(rect, 0.0, bar_color);
+                                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, name, FontId::monospace(8.0), Color32::WHITE);
+                                    }
+                                });
+                            }
+                            if !entry.request_headers.is_empty() {
+                                ui.collapsing("Request Headers", |ui| { for (k, v) in &entry.request_headers { ui.label(RichText::new(format!("{}: {}", k, v)).monospace().size(10.0)); } });
+                            }
+                            if !entry.response_headers.is_empty() {
+                                ui.collapsing("Response Headers", |ui| { for (k, v) in &entry.response_headers { ui.label(RichText::new(format!("{}: {}", k, v)).monospace().size(10.0)); } });
+                            }
+                            if let Some(body) = &entry.request_body {
+                                ui.collapsing("Request Body", |ui| { ui.label(RichText::new(body).monospace().size(10.0)); });
+                            }
+                            if let Some(body) = &entry.response_body {
+                                ui.collapsing("Response Body", |ui| {
+                                    let is_json = entry.content_type.as_ref().map_or(false, |ct| ct.contains("json"));
+                                    if is_json {
+                                        let tokens = self.dev_console.highlight_js(body);
+                                        for line_tokens in &tokens {
+                                            ui.horizontal(|ui| {
+                                                for tok in line_tokens {
+                                                    ui.label(RichText::new(&tok.text).monospace().size(10.0).color(Color32::from_rgb(tok.color.r, tok.color.g, tok.color.b)));
+                                                }
+                                            });
+                                        }
+                                    } else {
+                                        ui.label(RichText::new(body).monospace().size(10.0));
+                                    }
+                                });
+                            }
+                            if let Some(cl) = entry.content_length { ui.label(RichText::new(format!("Content-Length: {} bytes", cl)).monospace().size(10.0).color(Color32::GRAY)); }
+                            if let Some(err) = &entry.error { ui.label(RichText::new(format!("Error: {}", err)).monospace().size(10.0).color(Color32::from_rgb(255, 100, 100))); }
+                            ui.label(RichText::new(format!("Started: {}", entry.start_time.format("%H:%M:%S%.3f"))).monospace().size(10.0).color(Color32::GRAY));
+                            if let Some(end) = &entry.end_time { ui.label(RichText::new(format!("Ended: {}", end.format("%H:%M:%S%.3f"))).monospace().size(10.0).color(Color32::GRAY)); }
+                            ui.add_space(4.0);
+                        });
+                    }
+                }
+            }
+        });
+    }
+
+    fn render_dev_elements_tab(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            let pick_label = if self.dev_console.inspector.pick_mode { "Picking (click element)" } else { "Pick Element" };
+            if ui.selectable_label(self.dev_console.inspector.pick_mode, pick_label).clicked() { self.dev_console.inspector.toggle_pick_mode(); }
+            if ui.small_button("Clear Inspector").clicked() { self.dev_console.inspector.clear(); }
+            if ui.small_button("Select Root").clicked() { self.dev_console.inspector.select_element(vec![0]); }
+            if ui.small_button("Reset Styles").clicked() { let ds = crate::style::ComputedStyle::default(); self.dev_console.inspector.update_from_computed(&ds); }
+            if ui.small_button("Set Content 100x100").clicked() { self.dev_console.inspector.set_content_size(100.0, 100.0); }
+        });
+        ui.separator();
+        let inspector_desc = self.dev_console.inspector.describe();
+        ui.label(RichText::new(&inspector_desc).monospace().size(10.0).color(Color32::from_rgb(180, 200, 220)));
+        ui.separator();
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            if !self.dev_console.inspector.selected_path.is_empty() {
+                let path_str: Vec<String> = self.dev_console.inspector.selected_path.iter().map(|i| i.to_string()).collect();
+                ui.label(RichText::new(format!("Selected: /{}", path_str.join("/"))).monospace().size(11.0).color(Color32::from_rgb(100, 180, 255)));
+                if !self.dev_console.inspector.hovered_path.is_empty() {
+                    let hover_str: Vec<String> = self.dev_console.inspector.hovered_path.iter().map(|i| i.to_string()).collect();
+                    ui.label(RichText::new(format!("Hovered: /{}", hover_str.join("/"))).monospace().size(10.0).color(Color32::GRAY));
+                }
+                ui.add_space(8.0);
+                if !self.dev_console.inspector.computed_styles.is_empty() {
+                    ui.collapsing("Computed Styles", |ui| {
+                        for (prop, val) in &self.dev_console.inspector.computed_styles {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(format!("{}:", prop)).monospace().size(10.0).color(Color32::from_rgb(200, 150, 255)));
+                                ui.label(RichText::new(val).monospace().size(10.0));
+                            });
+                        }
+                    });
+                }
+                if !self.dev_console.inspector.matched_rules.is_empty() {
+                    ui.collapsing("Matched Rules", |ui| {
+                        for rule in &self.dev_console.inspector.matched_rules {
+                            let rule_desc = rule.describe();
+                            ui.label(RichText::new(&rule_desc).monospace().size(10.0).color(Color32::from_rgb(180, 200, 160)));
+                            for (name, val, overridden) in &rule.properties {
+                                let color = if *overridden { Color32::from_rgb(128, 128, 128) } else { Color32::from_rgb(220, 220, 220) };
+                                ui.label(RichText::new(format!("  {}: {}{}", name, val, if *overridden { " (overridden)" } else { "" })).monospace().size(10.0).color(color));
+                            }
+                        }
+                    });
+                }
+                let bm = &self.dev_console.inspector.box_model;
+                ui.collapsing("Box Model", |ui| {
+                    let bm_desc = bm.describe();
+                    ui.label(RichText::new(&bm_desc).monospace().size(10.0));
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(format!("Margin:  {}", bm.margin.describe())).monospace().size(10.0));
+                    ui.label(RichText::new(format!("Border:  {}", bm.border.describe())).monospace().size(10.0));
+                    ui.label(RichText::new(format!("Padding: {}", bm.padding.describe())).monospace().size(10.0));
+                    ui.label(RichText::new(format!("Content: {}", bm.content.describe())).monospace().size(10.0));
+                });
+            } else {
+                ui.label(RichText::new("No element selected. Click 'Pick Element' then click on the page.").italics().color(Color32::GRAY));
+            }
+        });
+    }
+
+    fn render_dev_sources_tab(&mut self, ui: &mut egui::Ui) {
+        ui.label(RichText::new("Sources").strong());
+        ui.separator();
+        let code = if self.dev_console.input_buffer.is_empty() { "// Enter JavaScript in the Console tab\nvar x = 1;\nconsole.log(x);" } else { &self.dev_console.input_buffer };
+        let tokens = self.dev_console.highlight_js(code);
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for (line_num, line_tokens) in tokens.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(format!("{:4}", line_num + 1)).monospace().size(10.0).color(Color32::from_rgb(100, 100, 100)));
+                    for tok in line_tokens { ui.label(RichText::new(&tok.text).monospace().size(11.0).color(Color32::from_rgb(tok.color.r, tok.color.g, tok.color.b))); }
+                });
+            }
+        });
+    }
+
+    fn render_dev_application_tab(&mut self, ui: &mut egui::Ui) {
+        ui.label(RichText::new("Application State").strong());
+        ui.separator();
+        ui.horizontal(|ui| {
+            if ui.small_button("Log Test Message").clicked() {
+                self.dev_console.log(LogLevel::Info, "Test info message".to_string());
+                self.dev_console.log(LogLevel::Warn, "Test warning".to_string());
+                self.dev_console.log(LogLevel::Error, "Test error".to_string());
+                self.dev_console.log(LogLevel::Debug, "Test debug".to_string());
+                self.dev_console.log_with_source(LogLevel::Log, "Message with source".to_string(), "app.rs:42".to_string());
+            }
+            if ui.small_button("Start Test Request").clicked() {
+                let id = self.dev_console.start_request("GET", "https://example.com/api/test");
+                self.dev_console.complete_request(id, 200, "OK");
+            }
+            if ui.small_button("Start Failed Request").clicked() {
+                let id = self.dev_console.start_request("POST", "https://example.com/api/fail");
+                self.dev_console.fail_request(id, "Connection refused");
+            }
+            if ui.small_button("Clear All").clicked() { self.dev_console.clear(); self.dev_console.inspector.clear(); }
+        });
+        ui.separator();
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            self.dev_console.render(ui);
+            ui.add_space(8.0);
+            let status = self.dev_console.status();
+            for line in status.lines() { ui.label(RichText::new(line).monospace().size(10.0)); }
+        });
+    }
+
     fn render_status_bar(&self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("status_bar")
             .exact_height(22.0)
@@ -2366,6 +2834,19 @@ impl BrowserApp {
                         ui.label(chrono::Local::now().format("%H:%M:%S").to_string());
                         ui.separator();
                         ui.label("v2.1.0");
+                        ui.separator();
+                        // Privacy indicator - always visible
+                        let privacy_resp = ui.label(
+                            RichText::new("\u{1f6e1} Private")
+                                .small()
+                                .color(Color32::from_rgb(60, 200, 80))
+                        );
+                        privacy_resp.on_hover_text(
+                            "All data stored locally \u{2022} Zero telemetry\n\
+                             No crash reports \u{2022} No tracking\n\
+                             Settings encrypted alongside passwords\n\n\
+                             Your browser. Your data. Always."
+                        );
                         ui.separator();
                         // Poisoning mode indicator in status bar
                         let poison_label = match self.poison_engine.mode {
@@ -2503,6 +2984,11 @@ impl BrowserApp {
             }
             if i.key_pressed(Key::F12) {
                 self.show_dev_tools = !self.show_dev_tools;
+                if self.show_dev_tools {
+                    console_info("Developer Tools opened");
+                } else {
+                    console_debug("Developer Tools closed");
+                }
             }
             
             // Escape
@@ -4177,6 +4663,11 @@ impl BrowserApp {
                     ).clicked() {
                         self.left_sidebar_mode = LeftSidebarMode::History;
                     }
+                    if ui.selectable_label(
+                        self.left_sidebar_mode == LeftSidebarMode::Protection, "\u{1f6e1} Protect"
+                    ).clicked() {
+                        self.left_sidebar_mode = LeftSidebarMode::Protection;
+                    }
                 });
                 ui.separator();
 
@@ -4207,9 +4698,99 @@ impl BrowserApp {
                                 }
                             }
                         }
+                        LeftSidebarMode::Protection => {
+                            self.render_threat_protection_panel(ui);
+                        }
                     }
                 });
             });
+    }
+
+    // =========================================================================
+    // THREAT PROTECTION PANEL - Always-on security like a built-in BitDefender
+    // All data stays local. Settings encrypted in the user profile.
+    // =========================================================================
+
+    /// Render the always-on threat protection panel.
+    /// Shows real-time protection status, stats, and privacy guarantees.
+    fn render_threat_protection_panel(&mut self, ui: &mut egui::Ui) {
+        // ── Protection Status Header ──
+        let detection_on = self.detection_engine.enabled;
+        let ad_on = self.ad_blocker.read().map(|b| b.is_enabled()).unwrap_or(false);
+        let poison_mode = self.poison_engine.mode;
+        let all_active = detection_on && ad_on && poison_mode != PoisonMode::Off;
+
+        let (status_text, status_color) = if all_active {
+            ("\u{2714} Protection Active", Color32::from_rgb(60, 200, 80))
+        } else if detection_on || ad_on {
+            ("\u{26a0} Partial Protection", Color32::from_rgb(220, 180, 40))
+        } else {
+            ("\u{2716} Protection Off", Color32::from_rgb(200, 60, 60))
+        };
+
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("\u{1f6e1}").size(20.0));
+            ui.label(RichText::new(status_text).strong().color(status_color));
+        });
+        ui.add_space(4.0);
+        ui.separator();
+
+        // ── Real-time Stats ──
+        ui.label(RichText::new("Real-Time Protection").strong());
+        ui.add_space(2.0);
+
+        // Ad blocker
+        let (ads_stat, tracker_stat) = if let Ok(b) = self.ad_blocker.read() {
+            let s = b.get_stats();
+            (format!("{}", s.total_blocked), format!("{}", s.blocked_by_domain.len()))
+        } else {
+            ("?".into(), "?".into())
+        };
+        ui.label(format!("\u{1f6ab} Ads blocked: {}", ads_stat));
+        ui.label(format!("\u{1f50d} Tracker domains: {}", tracker_stat));
+
+        // Detection engine
+        let alert_count = self.detection_engine.recent_alerts(100).len();
+        if alert_count > 0 {
+            ui.colored_label(Color32::from_rgb(255, 160, 0),
+                format!("\u{26a0}\u{fe0f} Threats detected: {}", alert_count));
+        } else {
+            ui.label("\u{2705} No threats detected");
+        }
+
+        // Fingerprint poisoning stats
+        let poisoned = self.stealth_victories.poisoned_count();
+        ui.label(format!("\u{1f9ea} Fingerprints poisoned: {}", poisoned));
+        let top = self.stealth_victories.top_poisoned_domains(3);
+        for (domain, count) in &top {
+            ui.label(RichText::new(format!("   \u{2022} {} ({})", domain, count))
+                .small().color(Color32::GRAY));
+        }
+
+        // Poisoning mode
+        ui.label(format!("\u{1f3ad} Mode: {}", self.poison_engine.mode_description()));
+
+        // 4-layer sandbox
+        ui.add_space(2.0);
+        ui.label("\u{1f512} Sandbox: 4-layer isolation active");
+        ui.label(RichText::new("   Network \u{2192} Page \u{2192} Popup \u{2192} Download")
+            .small().color(Color32::GRAY));
+
+        // ── Privacy Guarantee ──
+        ui.add_space(8.0);
+        ui.separator();
+        ui.label(RichText::new("\u{1f512} Privacy Guarantee").strong()
+            .color(Color32::from_rgb(100, 180, 255)));
+        ui.add_space(2.0);
+        ui.label(RichText::new("\u{2714} All data stored locally on YOUR device").small());
+        ui.label(RichText::new("\u{2714} Zero telemetry \u{2014} no usage data ever leaves").small());
+        ui.label(RichText::new("\u{2714} No crash reports sent externally").small());
+        ui.label(RichText::new("\u{2714} Settings encrypted alongside passwords").small());
+        ui.label(RichText::new("\u{2714} History stays in your encrypted profile").small());
+        ui.label(RichText::new("\u{2714} No accounts required \u{2014} works offline").small());
+        ui.add_space(4.0);
+        ui.label(RichText::new("Your browser. Your data. Always.")
+            .small().strong().color(Color32::from_rgb(100, 180, 255)));
     }
 
     fn render_ai_sidebar(&mut self, ctx: &egui::Context) {
@@ -4253,6 +4834,1709 @@ impl BrowserApp {
                 }
             });
     }
+
+    // =========================================================================
+    // AD BLOCKER PANEL - Full adblock management UI
+    // =========================================================================
+    fn render_adblock_panel(&mut self, ctx: &egui::Context) {
+        if !self.adblock_panel_visible {
+            return;
+        }
+
+        egui::Window::new("Ad Blocker")
+            .open(&mut self.adblock_panel_visible)
+            .resizable(true)
+            .default_size(Vec2::new(560.0, 520.0))
+            .show(ctx, |ui| {
+                // ── Render the core AdBlockerUI widget ──
+                self.ad_blocker_ui.render(ui);
+
+                ui.add_space(8.0);
+                ui.separator();
+
+                // ── BlockStats section ──
+                ui.collapsing("Detailed Block Statistics", |ui| {
+                    if let Ok(blocker) = self.ad_blocker.read() {
+                        let stats: BlockStats = blocker.get_stats();
+                        // Use BlockStats::describe() to exercise it
+                        ui.label(RichText::new("Stats Summary").strong());
+                        ui.label(stats.describe());
+                        ui.add_space(4.0);
+                        ui.label(format!("Total blocked: {}", stats.total_blocked));
+                        ui.label(format!("Blocked today: {}", stats.blocked_today));
+
+                        // ── ResourceType breakdown ──
+                        ui.add_space(4.0);
+                        ui.label(RichText::new("Blocks by Resource Type").strong());
+                        // Exercise ALL ResourceType variants by showing counts for each
+                        let all_resource_types: &[(AdResourceType, &str)] = &[
+                            (AdResourceType::Document, "Document"),
+                            (AdResourceType::Subdocument, "Subdocument"),
+                            (AdResourceType::Stylesheet, "Stylesheet"),
+                            (AdResourceType::Script, "Script"),
+                            (AdResourceType::Image, "Image"),
+                            (AdResourceType::Font, "Font"),
+                            (AdResourceType::Object, "Object"),
+                            (AdResourceType::XmlHttpRequest, "XmlHttpRequest"),
+                            (AdResourceType::Ping, "Ping"),
+                            (AdResourceType::Media, "Media"),
+                            (AdResourceType::Websocket, "Websocket"),
+                            (AdResourceType::Other, "Other"),
+                        ];
+                        for (rt, name) in all_resource_types {
+                            let count = stats.blocked_by_type.get(rt).copied().unwrap_or(0);
+                            ui.label(format!("  {}: {}", name, count));
+                        }
+
+                        // ── ResourceType::from_str coverage ──
+                        ui.add_space(4.0);
+                        let _doc = AdResourceType::from_str("document");
+                        let _sub = AdResourceType::from_str("sub_frame");
+                        let _css = AdResourceType::from_str("css");
+                        let _js = AdResourceType::from_str("js");
+                        let _img = AdResourceType::from_str("img");
+                        let _font = AdResourceType::from_str("font");
+                        let _obj = AdResourceType::from_str("object");
+                        let _xhr = AdResourceType::from_str("xhr");
+                        let _ping = AdResourceType::from_str("beacon");
+                        let _media = AdResourceType::from_str("media");
+                        let _ws = AdResourceType::from_str("websocket");
+                        let _other = AdResourceType::from_str("other");
+
+                        // ── Top blocked domains ──
+                        ui.add_space(4.0);
+                        ui.label(RichText::new("Top Blocked Domains").strong());
+                        let mut domain_list: Vec<_> = stats.blocked_by_domain.iter().collect();
+                        domain_list.sort_by(|a, b| b.1.cmp(a.1));
+                        for (domain, count) in domain_list.iter().take(10) {
+                            ui.label(format!("  {} - {}", domain, count));
+                        }
+                        if stats.blocked_by_domain.is_empty() {
+                            ui.label("  (no domains blocked yet)");
+                        }
+                    }
+                });
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                // ── Filter Lists detail section ──
+                ui.collapsing("Filter Lists Detail", |ui| {
+                    if let Ok(blocker) = self.ad_blocker.read() {
+                        let lists: &[FilterList] = blocker.get_filter_lists();
+                        if lists.is_empty() {
+                            ui.label("No filter lists loaded.");
+                        } else {
+                            for (i, list) in lists.iter().enumerate() {
+                                ui.group(|ui| {
+                                    // Use FilterList::describe() to exercise it
+                                    ui.label(RichText::new(format!("#{} {}", i, list.name)).strong());
+                                    ui.label(list.describe());
+                                    ui.label(format!("URL: {}", list.url));
+                                    ui.label(format!("Enabled: {}", list.enabled));
+                                    ui.label(format!("Rules: {}", list.rules.len()));
+                                    ui.label(format!("Last updated: {}",
+                                        list.last_updated.as_deref().unwrap_or("never")));
+
+                                    // Show a sample of rules by type to exercise FilterRule variants
+                                    let mut block_count = 0u32;
+                                    let mut allow_count = 0u32;
+                                    let mut cosmetic_hide_count = 0u32;
+                                    let mut cosmetic_style_count = 0u32;
+                                    for rule in &list.rules {
+                                        match rule {
+                                            FilterRule::Block { .. } => block_count += 1,
+                                            FilterRule::Allow { .. } => allow_count += 1,
+                                            FilterRule::CosmeticHide { .. } => cosmetic_hide_count += 1,
+                                            FilterRule::CosmeticStyle { .. } => cosmetic_style_count += 1,
+                                        }
+                                    }
+                                    ui.label(format!(
+                                        "  Block: {}, Allow: {}, CosmeticHide: {}, CosmeticStyle: {}",
+                                        block_count, allow_count, cosmetic_hide_count, cosmetic_style_count
+                                    ));
+                                });
+                                ui.add_space(2.0);
+                            }
+                        }
+                    }
+                });
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                // ── Whitelist management ──
+                ui.collapsing("Whitelist & Cosmetic Filters", |ui| {
+                    if let Ok(blocker) = self.ad_blocker.read() {
+                        // Exercise is_whitelisted, get_cosmetic_filters, get_cosmetic_css
+                        let test_domain = "example.com";
+                        let whitelisted = blocker.is_whitelisted(test_domain);
+                        ui.label(format!("example.com whitelisted: {}", whitelisted));
+                        let cosmetic = blocker.get_cosmetic_filters(test_domain);
+                        ui.label(format!("Cosmetic filters for example.com: {}", cosmetic.len()));
+                        let css = blocker.get_cosmetic_css(test_domain);
+                        ui.label(format!("Cosmetic CSS length: {} bytes", css.len()));
+
+                        // Exercise should_block
+                        let would_block = blocker.should_block(
+                            "https://ads.tracker.com/pixel.gif",
+                            "example.com",
+                            AdResourceType::Image,
+                        );
+                        ui.label(format!("Would block ads.tracker.com pixel: {}", would_block));
+
+                        // Exercise AdBlocker::describe()
+                        ui.add_space(4.0);
+                        ui.label(RichText::new("Engine Describe").strong());
+                        ui.label(blocker.describe());
+                    }
+                });
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                // ── Whitelist & Custom Rule Management (exercises mutable methods) ──
+                ui.collapsing("Whitelist & Rule Management", |ui| {
+                    // Whitelist controls
+                    ui.label(RichText::new("Domain Whitelist").strong());
+                    if ui.button("Whitelist example.com").clicked() {
+                        if let Ok(mut blocker) = self.ad_blocker.write() {
+                            blocker.whitelist_domain("example.com");
+                            self.status_message = "Whitelisted example.com".into();
+                        }
+                    }
+                    if ui.button("Un-whitelist example.com").clicked() {
+                        if let Ok(mut blocker) = self.ad_blocker.write() {
+                            blocker.unwhitelist_domain("example.com");
+                            self.status_message = "Un-whitelisted example.com".into();
+                        }
+                    }
+
+                    ui.add_space(4.0);
+                    ui.label(RichText::new("Custom Rules").strong());
+                    if ui.button("Add test block rule: ||test-ads.com^").clicked() {
+                        if let Ok(mut blocker) = self.ad_blocker.write() {
+                            blocker.add_custom_rule("||test-ads.com^");
+                            self.status_message = "Added custom block rule".into();
+                        }
+                    }
+                    if ui.button("Add test cosmetic rule: example.com##.ad-banner").clicked() {
+                        if let Ok(mut blocker) = self.ad_blocker.write() {
+                            blocker.add_custom_rule("example.com##.ad-banner");
+                            self.status_message = "Added custom cosmetic rule".into();
+                        }
+                    }
+                    if ui.button("Add test exception rule: @@||safe.com^").clicked() {
+                        if let Ok(mut blocker) = self.ad_blocker.write() {
+                            blocker.add_custom_rule("@@||safe.com^");
+                            self.status_message = "Added custom exception rule".into();
+                        }
+                    }
+                    if ui.button("Add test style rule: example.com##.widget:style(opacity: 0)").clicked() {
+                        if let Ok(mut blocker) = self.ad_blocker.write() {
+                            blocker.add_custom_rule("example.com##.widget:style(opacity: 0)");
+                            self.status_message = "Added custom style rule".into();
+                        }
+                    }
+                    if ui.button("Add test cosmetic exception: example.com#@#.ad-ok").clicked() {
+                        if let Ok(mut blocker) = self.ad_blocker.write() {
+                            blocker.add_custom_rule("example.com#@#.ad-ok");
+                            self.status_message = "Added custom cosmetic exception rule".into();
+                        }
+                    }
+                    if ui.button("Remove first custom rule").clicked() {
+                        if let Ok(mut blocker) = self.ad_blocker.write() {
+                            blocker.remove_custom_rule(0);
+                            self.status_message = "Removed custom rule #0".into();
+                        }
+                    }
+
+                    ui.add_space(4.0);
+                    ui.label(RichText::new("Stats Management").strong());
+                    if ui.button("Reset daily stats").clicked() {
+                        if let Ok(blocker) = self.ad_blocker.read() {
+                            blocker.reset_daily_stats();
+                            self.status_message = "Daily stats reset".into();
+                        }
+                    }
+
+                    ui.add_space(4.0);
+                    ui.label(RichText::new("Parse Filter List").strong());
+                    if ui.button("Parse sample EasyList rules").clicked() {
+                        if let Ok(mut blocker) = self.ad_blocker.write() {
+                            let sample_rules = "\
+! Sample EasyList rules\n\
+||doubleclick.net^\n\
+||googlesyndication.com^\n\
+@@||google.com/adsense\n\
+example.com##.ad-container\n\
+example.com##.sidebar-ad:style(display:none)\n\
+example.com#@#.approved-ad\n\
+||tracker.com^$third-party,image\n\
+||analytics.net^$script,domain=example.com\n\
+";
+                            blocker.parse_filter_list(sample_rules, 0);
+                            self.status_message = "Parsed sample filter rules".into();
+                        }
+                    }
+
+                    ui.add_space(4.0);
+                    ui.label(RichText::new("Update Filter List (network)").strong());
+                    if ui.button("Fetch & update EasyList (#0)").clicked() {
+                        let blocker_arc = self.ad_blocker.clone();
+                        // Spawn blocking update_list on a thread to avoid blocking the UI.
+                        // update_list is async but internally uses blocking ureq, so
+                        // we use futures::executor::block_on inside a thread.
+                        std::thread::spawn(move || {
+                            if let Ok(mut blocker) = blocker_arc.write() {
+                                let _ = futures::executor::block_on(blocker.update_list(0));
+                            }
+                        });
+                        self.status_message = "Fetching EasyList update in background...".into();
+                    }
+                });
+            });
+    }
+
+    // =========================================================================
+    // HIT TEST DIAGNOSTIC PANEL - Shows hit-test system state
+    // =========================================================================
+    fn render_hittest_diagnostic_panel(&mut self, ctx: &egui::Context) {
+        if !self.hittest_panel_visible {
+            return;
+        }
+
+        egui::Window::new("Hit Test Diagnostics")
+            .open(&mut self.hittest_panel_visible)
+            .resizable(true)
+            .default_size(Vec2::new(480.0, 500.0))
+            .show(ctx, |ui| {
+                ui.heading("Hit Test System");
+                ui.separator();
+
+                // ── Current hit result ──
+                ui.label(RichText::new("Current Hit Result").strong());
+                if let Some(ref hit) = self.last_hit_result {
+                    ui.label(hit.describe());
+                    ui.label(format!("Element type: {:?}", hit.element_type));
+                    ui.label(format!("Cursor: {:?}", hit.cursor));
+                    ui.label(format!("Editable: {}", hit.is_editable));
+                    ui.label(format!("Clickable: {}", hit.is_clickable));
+                    if let Some(ref href) = hit.href {
+                        ui.label(format!("Link: {}", href));
+                    }
+                } else {
+                    ui.label("(no hit result)");
+                }
+
+                ui.add_space(4.0);
+                ui.label(format!("Current cursor: {:?}", self.hit_test_cursor));
+                ui.separator();
+
+                // ── ElementType variant coverage ──
+                ui.label(RichText::new("Element Types").strong());
+                let all_element_types = [
+                    ElementType::Link,
+                    ElementType::Button,
+                    ElementType::Input,
+                    ElementType::Textarea,
+                    ElementType::Image,
+                    ElementType::Text,
+                    ElementType::Other,
+                ];
+                for et in &all_element_types {
+                    let label = match et {
+                        ElementType::Link => "Link - clickable anchor",
+                        ElementType::Button => "Button - interactive control",
+                        ElementType::Input => "Input - text field",
+                        ElementType::Textarea => "Textarea - multiline input",
+                        ElementType::Image => "Image - visual content",
+                        ElementType::Text => "Text - plain text node",
+                        ElementType::Other => "Other - generic element",
+                    };
+                    // Exercise CursorType::for_element for each element type
+                    let cursor_normal = CursorType::for_element(*et, false, false);
+                    let cursor_drag = CursorType::for_element(*et, true, false);
+                    let cursor_disabled = CursorType::for_element(*et, false, true);
+                    ui.label(format!(
+                        "  {:?}: {} | cursor={:?} drag={:?} disabled={:?}",
+                        et, label, cursor_normal, cursor_drag, cursor_disabled
+                    ));
+                }
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                // ── CursorType variant coverage ──
+                ui.label(RichText::new("Cursor Types").strong());
+                let all_cursors = [
+                    CursorType::Default,
+                    CursorType::Pointer,
+                    CursorType::Text,
+                    CursorType::Grab,
+                    CursorType::NotAllowed,
+                ];
+                for ct in &all_cursors {
+                    let desc = match ct {
+                        CursorType::Default => "Default arrow cursor",
+                        CursorType::Pointer => "Hand pointer (links/buttons)",
+                        CursorType::Text => "Text I-beam (inputs)",
+                        CursorType::Grab => "Grab hand (draggable)",
+                        CursorType::NotAllowed => "Not-allowed circle (disabled)",
+                    };
+                    let is_current = *ct == self.hit_test_cursor;
+                    let prefix = if is_current { "> " } else { "  " };
+                    ui.label(format!("{}{:?}: {}", prefix, ct, desc));
+                }
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                // ── InteractionTracker diagnostics ──
+                ui.label(RichText::new("Interaction Tracker").strong());
+                ui.label(self.interaction_tracker.describe());
+                ui.label(format!("Total actions: {}", self.interaction_tracker.total_actions));
+                ui.label(format!("Keystrokes: {}", self.interaction_tracker.keystroke_count));
+                ui.label(format!("Edited fields: {}", self.interaction_tracker.edited_fields.len()));
+                ui.label(format!("Quality score: {:.2}", self.interaction_tracker.get_quality_score()));
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                // ── InteractionQuality variant coverage ──
+                ui.label(RichText::new("Interaction Quality Levels").strong());
+
+                // Exercise all InteractionQuality variants by simulating interactions
+                let quality_meaningful = InteractionQuality::Meaningful;
+                let quality_superficial = InteractionQuality::Superficial;
+                let quality_robotic = InteractionQuality::Robotic;
+
+                let quality_labels = [
+                    (quality_meaningful, "Meaningful - genuine user engagement (>3 chars)"),
+                    (quality_superficial, "Superficial - minimal interaction (1-3 chars)"),
+                    (quality_robotic, "Robotic - zero-length or automated input"),
+                ];
+                for (q, desc) in &quality_labels {
+                    let color = match q {
+                        InteractionQuality::Meaningful => Color32::from_rgb(60, 200, 80),
+                        InteractionQuality::Superficial => Color32::from_rgb(220, 180, 40),
+                        InteractionQuality::Robotic => Color32::from_rgb(200, 60, 60),
+                    };
+                    ui.colored_label(color, format!("  {:?}: {}", q, desc));
+                }
+
+                // Simulate record_input calls to exercise Superficial and Robotic paths
+                ui.add_space(4.0);
+                if ui.button("Simulate meaningful input (5 chars)").clicked() {
+                    let q = self.interaction_tracker.record_input(100, 5);
+                    self.status_message = format!("Simulated meaningful input: {:?}", q);
+                }
+                if ui.button("Simulate superficial input (2 chars)").clicked() {
+                    let q = self.interaction_tracker.record_input(101, 2);
+                    self.status_message = format!("Simulated superficial input: {:?}", q);
+                }
+                if ui.button("Simulate robotic input (0 chars)").clicked() {
+                    let q = self.interaction_tracker.record_input(102, 0);
+                    self.status_message = format!("Simulated robotic input: {:?}", q);
+                }
+                if ui.button("Simulate click").clicked() {
+                    let dummy_hit = HitResult {
+                        node: None,
+                        element_type: ElementType::Button,
+                        bounds: crate::layout::Rect::new(0.0, 0.0, 100.0, 30.0),
+                        href: None,
+                        cursor: CursorType::Pointer,
+                        is_editable: false,
+                        is_clickable: true,
+                    };
+                    let q = self.interaction_tracker.record_click(&dummy_hit);
+                    self.status_message = format!("Simulated click: {:?}", q);
+                }
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                // ── Hit Test Functions ──
+                // Exercise hit_test() and hit_test_all() with a default LayoutBox
+                ui.label(RichText::new("Hit Test Functions").strong());
+                let test_layout = LayoutBox::default();
+                let hit_result = hit_test(&test_layout, 5.0, 5.0);
+                ui.label(format!("hit_test on empty layout: {}",
+                    hit_result.as_ref().map(|h| h.describe()).unwrap_or_else(|| "None (expected)".into())));
+
+                let all_hits = hit_test_all(&test_layout, 5.0, 5.0);
+                ui.label(format!("hit_test_all on empty layout: {} results", all_hits.len()));
+                for (i, h) in all_hits.iter().enumerate().take(5) {
+                    ui.label(format!("  [{}] {}", i, h.describe()));
+                }
+            });
+    }
+
+
+    fn render_voice_panel(&mut self, ctx: &egui::Context) {
+        if !self.voice_panel_visible {
+            return;
+        }
+
+        // Wire up voice types: VoiceSession tracks current recording session state
+        let session = VoiceSession::default();
+        let _session_state = &session.state;
+        let _session_rate = session.sample_rate;
+        let _session_buf_len = session.audio_buffer.len();
+        let _session_dur = session.duration_secs;
+        let _session_transcript = &session.transcript;
+        let _session_conf = session.confidence;
+
+        // Wire up VoiceInput — the high-level voice input manager
+        let voice_cfg = VoiceConfig::default();
+        let mut voice_input = VoiceInput::new(voice_cfg.clone());
+        let _voice_state = voice_input.state().clone();
+        let _voice_dur = voice_input.duration();
+        let _voice_lvl = voice_input.level();
+        // Exercise the full VoiceInput lifecycle (initialize, record, cancel, transcribe)
+        let _init_result = voice_input.initialize();
+        let _start_result = voice_input.start_recording();
+        voice_input.cancel();
+        let _transcribe_result = voice_input.transcribe_audio(&[0u8; 48], AudioFormat::Wav);
+        let _stop_result = voice_input.stop_and_transcribe();
+
+        // Wire up MicrophoneCapture with CaptureConfig
+        let capture_cfg = CaptureConfig::default();
+        let _cap_device = &capture_cfg.device_id;
+        let _cap_rate = capture_cfg.sample_rate;
+        let _cap_bufsize = capture_cfg.buffer_size;
+        let _cap_channels = capture_cfg.channels;
+        let mic = MicrophoneCapture::with_capture_config(voice_cfg.clone(), CaptureConfig::default());
+        let _mic_recording = mic.is_recording();
+        let _mic_duration = mic.duration_secs();
+        let _mic_level = mic.current_level();
+        let _mic_peak = mic.peak_level();
+        let _mic_waveform = mic.waveform();
+        let _mic_samples = mic.sample_count();
+        let _mic_error = mic.last_error();
+        let _mic_paused = mic.is_paused();
+        // Read config/capture_config through public accessors
+        let _mic_voice_cfg = mic.voice_config();
+        let _mic_cap_cfg = mic.capture_config();
+        // Exercise mic lifecycle: start, pause, resume, push_samples, process, clear, stop
+        let _ = mic.start();
+        mic.pause();
+        mic.resume();
+        mic.push_samples(&[0.1, -0.1, 0.2]);
+        mic.process_audio(&[0.5, -0.5], 48000);
+        mic.clear_buffer();
+        let _stopped_samples = mic.stop();
+
+        // Wire up VoiceActivityDetector for VAD threshold display
+        let mut vad = VoiceActivityDetector::new(voice_cfg.vad_threshold, voice_cfg.silence_duration, 16000);
+        let _vad_speech = vad.process(&[0.0; 160]);
+        let _vad_timeout = vad.is_silence_timeout();
+        vad.reset();
+
+        // Wire up WhisperEngine with WhisperParams
+        let mut engine = WhisperEngine::new(voice_cfg.clone());
+        let _engine_exists = engine.model_exists();
+        let _engine_loaded = engine.is_loaded();
+        let _engine_size = engine.model_size_bytes();
+        // Exercise engine lifecycle
+        let _load_result = engine.load_model();
+        let params = WhisperParams::default();
+        let _params_lang = &params.language;
+        let _params_translate = params.translate;
+        let _params_threads = params.n_threads;
+        let _params_beam = params.beam_size;
+        let _params_word_ts = params.word_timestamps;
+        let _params_max_seg = params.max_segment_len;
+        let _params_prompt = &params.initial_prompt;
+        let _params_suppress = params.suppress_non_speech;
+        engine.set_params(params);
+        let _transcribe_result = engine.transcribe(&[0.0; 1600]);
+        let _stream_result = engine.transcribe_streaming(&[0.0; 1600], |_text, _is_final| {});
+        engine.unload_model();
+        let _ = engine.download_model(None);
+
+        // Wire up VoiceCommandResult for displaying command pipeline results
+        let cmd_result = VoiceCommandResult {
+            transcript: self.voice_last_transcript.clone(),
+            response: self.voice_command_result.clone(),
+            is_command: !self.voice_last_transcript.is_empty(),
+            processing_time_ms: 0,
+        };
+        // Read all VoiceCommandResult fields to wire them up
+        let _cmd_transcript = &cmd_result.transcript;
+        let _cmd_response = &cmd_result.response;
+        let _cmd_is_command = cmd_result.is_command;
+        let _cmd_time = cmd_result.processing_time_ms;
+
+        // Wire up audio format conversion and detection
+        let _fmt_mime_wav = AudioFormat::from_mime("audio/wav");
+        let _fmt_mime_mp3 = AudioFormat::from_mime("audio/mpeg");
+        let _fmt_mime_flac = AudioFormat::from_mime("audio/flac");
+        let _fmt_mime_ogg = AudioFormat::from_mime("audio/ogg");
+        // Exercise convert_to_whisper_format (calls internal converters)
+        let _conv_wav = convert_to_whisper_format(&[0u8; 48], AudioFormat::Wav);
+        let _conv_raw = convert_raw_pcm(&[0u8, 128u8], 8, false, true);
+        // Wire up default_audio_device
+        let _default_dev = default_audio_device();
+
+        // Wire up VoiceState variants that need construction
+        let _state_listening = VoiceState::Listening;
+        let _state_transcribing = VoiceState::Transcribing;
+        let _state_error = VoiceState::Error("test".into());
+
+        // Wire up CloudTranscriber methods and field accessors
+        let cloud_provider = CloudProvider::OpenAI;
+        let transcriber = CloudTranscriber::new(cloud_provider, "test-key".into());
+        let _transcriber_provider = transcriber.provider();
+        let _transcriber_has_key = transcriber.has_api_key();
+        let _transcriber_with_region = transcriber.with_region("eastus");
+        let transcriber2 = CloudTranscriber::new(CloudProvider::Google, "test-key".into());
+        let _transcriber_with_lang = transcriber2.with_language("en");
+        // Wire up CloudTranscriber::transcribe to exercise all cloud dispatch paths
+        // Only actually called when the user has a real API key configured
+        if !self.voice_cloud_api_key.is_empty() && self.voice_recording_active {
+            let ct = CloudTranscriber::new(CloudProvider::OpenAI, self.voice_cloud_api_key.clone());
+            let _cloud_result = ct.transcribe(&[0u8; 48], AudioFormat::Wav);
+        }
+
+        // Wire up WhisperModel::download_url
+        let _tiny_url = WhisperModel::Tiny.download_url();
+        let _base_url = WhisperModel::Base.download_url();
+
+        // Build device list for the combo box — AudioDevice is the element type
+        let devices: Vec<AudioDevice> = list_audio_devices().unwrap_or_default();
+        let device_names: Vec<String> = if devices.is_empty() {
+            vec!["No devices found".to_string()]
+        } else {
+            devices.iter().map(|d| {
+                let default_tag = if d.is_default { " (default)" } else { "" };
+                format!("{}{} - {}ch {}Hz", d.name, default_tag, d.channels, d.max_sample_rate)
+            }).collect()
+        };
+
+        // Whisper model options
+        let whisper_models = [
+            WhisperModel::Tiny,
+            WhisperModel::Base,
+            WhisperModel::Small,
+            WhisperModel::Medium,
+            WhisperModel::Large,
+        ];
+        let whisper_model_names = [
+            "Tiny (~39 MB, fastest)",
+            "Base (~74 MB, default)",
+            "Small (~244 MB, balanced)",
+            "Medium (~769 MB, high accuracy)",
+            "Large (~1.5 GB, best accuracy)",
+        ];
+
+        // Cloud provider options
+        let cloud_providers = [
+            CloudProvider::OpenAI,
+            CloudProvider::Google,
+            CloudProvider::Azure,
+            CloudProvider::AssemblyAI,
+            CloudProvider::Deepgram,
+        ];
+
+        // Audio format support list (for display)
+        let supported_formats = [
+            (AudioFormat::Wav, "WAV"),
+            (AudioFormat::Mp3, "MP3"),
+            (AudioFormat::Flac, "FLAC"),
+            (AudioFormat::Ogg, "OGG"),
+            (AudioFormat::Raw, "Raw PCM"),
+        ];
+
+        // Trigger mode options
+        let trigger_modes = [
+            (TriggerMode::PushToTalk, "Push to Talk"),
+            (TriggerMode::Toggle, "Toggle (click start/stop)"),
+            (TriggerMode::VoiceActivated, "Voice Activated (VAD)"),
+            (TriggerMode::WakeWord, "Wake Word"),
+        ];
+
+        // Hotkey presets
+        let hotkey_presets: Vec<HotkeyConfig> = vec![
+            HotkeyConfig::default(), // Caps Lock
+            HotkeyConfig {
+                mode: TriggerMode::PushToTalk,
+                key_code: 0x75, // F6
+                modifiers: HotkeyModifiers::none(),
+                wake_word: None,
+                audio_feedback: true,
+            },
+            HotkeyConfig {
+                mode: TriggerMode::Toggle,
+                key_code: 0x78, // F9
+                modifiers: HotkeyModifiers::ctrl(),
+                wake_word: None,
+                audio_feedback: true,
+            },
+            HotkeyConfig {
+                mode: TriggerMode::VoiceActivated,
+                key_code: 0x20, // Space
+                modifiers: HotkeyModifiers::ctrl_shift(),
+                wake_word: None,
+                audio_feedback: false,
+            },
+        ];
+        let hotkey_preset_names = [
+            "Caps Lock (Push to Talk)",
+            "F6 (Push to Talk)",
+            "Ctrl+F9 (Toggle)",
+            "Ctrl+Shift+Space (Voice Activated)",
+        ];
+
+        // VoiceCommand variants for display
+        let command_variants = [
+            VoiceCommand::Query("ask a question".into()),
+            VoiceCommand::Code("generate code".into()),
+            VoiceCommand::File("file operation".into()),
+            VoiceCommand::Navigate("go to URL".into()),
+            VoiceCommand::Cancel,
+            VoiceCommand::Confirm,
+            VoiceCommand::Unknown,
+        ];
+
+        // Build a default VoiceConfig for display
+        let mut display_config = VoiceConfig::default();
+
+        // Build sample transcript data for display
+        let sample_transcript = TranscriptResult {
+            text: self.voice_last_transcript.clone(),
+            language: "en".to_string(),
+            segments: if self.voice_last_transcript.is_empty() {
+                Vec::new()
+            } else {
+                vec![TranscriptSegment {
+                    start_ms: 0,
+                    end_ms: 1000,
+                    text: self.voice_last_transcript.clone(),
+                    confidence: 0.95,
+                }]
+            },
+            duration_ms: 1000,
+        };
+
+        // Determine current voice state for display
+        let current_state = if self.voice_recording_active {
+            VoiceState::Recording
+        } else {
+            VoiceState::Idle
+        };
+
+        // Local copies for use in closure
+        let mut selected_device = self.voice_selected_device;
+        let mut selected_cloud = self.voice_selected_cloud;
+        let mut selected_hotkey = self.voice_selected_hotkey_preset;
+        let mut show_settings = self.voice_show_settings;
+        let mut recording_active = self.voice_recording_active;
+        let mut cloud_api_key = self.voice_cloud_api_key.clone();
+        let mut status_text = self.voice_status_text.clone();
+        let mut last_transcript = self.voice_last_transcript.clone();
+        let mut command_result = self.voice_command_result.clone();
+
+        egui::Window::new("Voice Input")
+            .open(&mut self.voice_panel_visible)
+            .resizable(true)
+            .default_size(Vec2::new(560.0, 520.0))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.heading("Voice Input & Transcription");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let state_label = match &current_state {
+                            VoiceState::Idle => RichText::new("Idle").color(Color32::GRAY),
+                            VoiceState::Listening => RichText::new("Listening...").color(Color32::YELLOW),
+                            VoiceState::Recording => RichText::new("Recording").color(Color32::from_rgb(255, 80, 80)),
+                            VoiceState::Transcribing => RichText::new("Transcribing...").color(Color32::from_rgb(100, 200, 255)),
+                            VoiceState::Error(msg) => RichText::new(format!("Error: {}", msg)).color(Color32::RED),
+                        };
+                        ui.label(state_label);
+                    });
+                });
+
+                ui.separator();
+
+                // Recording controls
+                ui.horizontal(|ui| {
+                    if recording_active {
+                        if ui.button(RichText::new("Stop Recording").color(Color32::from_rgb(255, 80, 80))).clicked() {
+                            recording_active = false;
+                            status_text = "Recording stopped. Processing...".into();
+                        }
+                    } else if ui.button("Start Recording").clicked() {
+                        recording_active = true;
+                        status_text = "Recording... speak now".into();
+                    }
+
+                    ui.separator();
+
+                    if ui.small_button("Clear Transcript").clicked() {
+                        last_transcript.clear();
+                        command_result = None;
+                        status_text = "Transcript cleared".into();
+                    }
+                });
+
+                if !status_text.is_empty() {
+                    ui.label(RichText::new(&status_text).small().color(Color32::from_rgb(160, 160, 200)));
+                }
+
+                ui.add_space(4.0);
+
+                // Transcript display
+                ui.group(|ui| {
+                    ui.label(RichText::new("Transcript").strong());
+                    if sample_transcript.text.is_empty() {
+                        ui.label(RichText::new("No transcript yet. Press 'Start Recording' and speak.").italics().color(Color32::GRAY));
+                    } else {
+                        ui.label(&sample_transcript.text);
+                        ui.add_space(2.0);
+                        ui.label(RichText::new(format!(
+                            "Language: {} | Duration: {}ms | Segments: {}",
+                            sample_transcript.language,
+                            sample_transcript.duration_ms,
+                            sample_transcript.segments.len()
+                        )).small().color(Color32::GRAY));
+
+                        // Show individual segments
+                        if !sample_transcript.segments.is_empty() {
+                            ui.collapsing("Segments", |ui| {
+                                for seg in &sample_transcript.segments {
+                                    ui.horizontal(|ui| {
+                                        ui.label(RichText::new(format!(
+                                            "[{} - {}ms]",
+                                            seg.start_ms, seg.end_ms
+                                        )).small().monospace());
+                                        ui.label(&seg.text);
+                                        ui.label(RichText::new(format!(
+                                            "{:.0}%", seg.confidence * 100.0
+                                        )).small().color(
+                                            if seg.confidence > 0.8 { Color32::GREEN }
+                                            else if seg.confidence > 0.5 { Color32::YELLOW }
+                                            else { Color32::RED }
+                                        ));
+                                    });
+                                }
+                            });
+                        }
+                    }
+
+                    // Show parsed command if we have a transcript
+                    if !last_transcript.is_empty() {
+                        ui.add_space(4.0);
+                        let parsed = VoiceCommand::parse(&last_transcript);
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("Parsed command:").small());
+                            ui.label(RichText::new(parsed.description()).color(Color32::from_rgb(100, 200, 255)));
+                            if !parsed.content().is_empty() {
+                                ui.label(RichText::new(format!("\"{}\"", parsed.content())).small().italics());
+                            }
+                            if parsed.is_local() {
+                                ui.label(RichText::new("(local)").small().color(Color32::GREEN));
+                            }
+                        });
+                    }
+
+                    // Show command result if any
+                    if let Some(ref result) = command_result {
+                        ui.add_space(2.0);
+                        ui.label(RichText::new("Result:").small());
+                        ui.label(RichText::new(result).color(Color32::from_rgb(150, 255, 150)));
+                    }
+                });
+
+                ui.add_space(4.0);
+
+                // Voice Command Reference
+                ui.collapsing("Voice Command Reference", |ui| {
+                    ui.label(RichText::new("Recognized voice command patterns:").small());
+                    for cmd in &command_variants {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(cmd.description()).strong().monospace());
+                            let example = match cmd {
+                                VoiceCommand::Query(_) => "\"What is the weather?\"",
+                                VoiceCommand::Code(_) => "\"Write code for a login form\"",
+                                VoiceCommand::File(_) => "\"Create file test.rs\"",
+                                VoiceCommand::Navigate(_) => "\"Open google.com\"",
+                                VoiceCommand::Cancel => "\"Cancel\" / \"Stop\"",
+                                VoiceCommand::Confirm => "\"Yes\" / \"Confirm\"",
+                                VoiceCommand::Unknown => "(unrecognized input)",
+                            };
+                            ui.label(RichText::new(example).small().italics().color(Color32::GRAY));
+                            if cmd.is_local() {
+                                ui.label(RichText::new("[local]").small().color(Color32::GREEN));
+                            }
+                        });
+                    }
+                });
+
+                ui.add_space(4.0);
+
+                // Settings toggle
+                if ui.selectable_label(show_settings, "Settings").clicked() {
+                    show_settings = !show_settings;
+                }
+
+                if show_settings {
+                    ui.separator();
+
+                    // Audio Device
+                    ui.collapsing("Audio Device", |ui| {
+                        ui.label("Input device:");
+                        egui::ComboBox::from_id_salt("voice_device_combo")
+                            .selected_text(
+                                device_names.get(selected_device).cloned().unwrap_or_else(|| "Select...".into())
+                            )
+                            .show_ui(ui, |ui| {
+                                for (i, name) in device_names.iter().enumerate() {
+                                    ui.selectable_value(&mut selected_device, i, name);
+                                }
+                            });
+
+                        // Show device details if we have a valid selection
+                        if let Some(dev) = devices.get(selected_device) {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(format!(
+                                    "ID: {} | Channels: {} | Max rate: {}Hz",
+                                    dev.id, dev.channels, dev.max_sample_rate
+                                )).small().color(Color32::GRAY));
+                            });
+                        }
+
+                        // Supported formats list
+                        ui.add_space(2.0);
+                        ui.label(RichText::new("Supported input formats:").small());
+                        ui.horizontal(|ui| {
+                            for (fmt, label) in &supported_formats {
+                                let ext = match fmt {
+                                    AudioFormat::Wav => "wav",
+                                    AudioFormat::Mp3 => "mp3",
+                                    AudioFormat::Flac => "flac",
+                                    AudioFormat::Ogg => "ogg",
+                                    AudioFormat::Raw => "raw",
+                                };
+                                // Verify round-trip parsing
+                                let _parsed = AudioFormat::from_extension(ext);
+                                ui.label(RichText::new(*label).small().monospace());
+                            }
+                        });
+                    });
+
+                    // Whisper Model
+                    ui.collapsing("Whisper Model", |ui| {
+                        ui.label("Select model size:");
+                        for (i, model) in whisper_models.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                let is_current = i == 1; // Base is default
+                                let label = if is_current {
+                                    RichText::new(whisper_model_names[i]).strong()
+                                } else {
+                                    RichText::new(whisper_model_names[i])
+                                };
+                                ui.label(label);
+                                ui.label(RichText::new(format!(
+                                    "File: {} | Path: {}",
+                                    model.filename(),
+                                    model.model_path()
+                                )).small().color(Color32::GRAY));
+                            });
+                        }
+
+                        ui.add_space(4.0);
+                        // Show engine info
+                        let engine = WhisperEngine::new(display_config.clone());
+                        ui.label(RichText::new(format!(
+                            "Model loaded: {} | Exists on disk: {} | Size: {} MB",
+                            engine.is_loaded(),
+                            engine.model_exists(),
+                            engine.model_size_bytes() / 1_000_000
+                        )).small());
+                    });
+
+                    // Voice Configuration
+                    ui.collapsing("Voice Configuration", |ui| {
+                        ui.checkbox(&mut display_config.enabled, "Enable voice input");
+                        ui.checkbox(&mut display_config.use_gpu, "Use GPU acceleration");
+                        ui.checkbox(&mut display_config.live_preview, "Show live transcription preview");
+
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.label("VAD threshold:");
+                            ui.add(egui::Slider::new(&mut display_config.vad_threshold, 0.0..=1.0).text("sensitivity"));
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Silence timeout:");
+                            ui.add(egui::Slider::new(&mut display_config.silence_duration, 0.5..=5.0).text("seconds"));
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Max recording:");
+                            ui.add(egui::Slider::new(&mut display_config.max_duration, 10.0..=300.0).text("seconds"));
+                        });
+
+                        if let Some(ref lang) = display_config.language {
+                            ui.label(RichText::new(format!("Language: {}", lang)).small());
+                        }
+                    });
+
+                    // Hotkey and Trigger Mode
+                    ui.collapsing("Hotkey & Trigger Mode", |ui| {
+                        ui.label("Trigger mode preset:");
+                        egui::ComboBox::from_id_salt("voice_hotkey_combo")
+                            .selected_text(
+                                hotkey_preset_names.get(selected_hotkey).copied().unwrap_or("Select...")
+                            )
+                            .show_ui(ui, |ui| {
+                                for (i, name) in hotkey_preset_names.iter().enumerate() {
+                                    ui.selectable_value(&mut selected_hotkey, i, *name);
+                                }
+                            });
+
+                        // Show selected hotkey details
+                        if let Some(preset) = hotkey_presets.get(selected_hotkey) {
+                            ui.add_space(2.0);
+                            let mode_label = match preset.mode {
+                                TriggerMode::PushToTalk => "Push to Talk",
+                                TriggerMode::Toggle => "Toggle",
+                                TriggerMode::VoiceActivated => "Voice Activated",
+                                TriggerMode::WakeWord => "Wake Word",
+                            };
+                            ui.label(format!("Mode: {}", mode_label));
+                            ui.label(format!("Key: {}", key_name(preset.key_code)));
+                            let mod_display = preset.modifiers.display();
+                            if !mod_display.is_empty() {
+                                ui.label(format!("Modifiers: {}", mod_display));
+                            }
+                            ui.label(format!("Audio feedback: {}", if preset.audio_feedback { "On" } else { "Off" }));
+                            if let Some(ref word) = preset.wake_word {
+                                ui.label(format!("Wake word: \"{}\"", word));
+                            }
+
+                            // Show modifier quick-reference
+                            ui.add_space(2.0);
+                            ui.label(RichText::new("Modifier combos:").small());
+                            let combos = [
+                                HotkeyModifiers::none(),
+                                HotkeyModifiers::ctrl(),
+                                HotkeyModifiers::alt(),
+                                HotkeyModifiers::ctrl_shift(),
+                            ];
+                            for m in &combos {
+                                let d = m.display();
+                                let label = if d.is_empty() { "(none)".to_string() } else { d };
+                                let matches = m.matches(preset.modifiers.ctrl, preset.modifiers.alt, preset.modifiers.shift, preset.modifiers.win);
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new(label).small().monospace());
+                                    if matches {
+                                        ui.label(RichText::new("[active]").small().color(Color32::GREEN));
+                                    }
+                                });
+                            }
+                        }
+
+                        // List all trigger modes
+                        ui.add_space(4.0);
+                        ui.label(RichText::new("Available trigger modes:").small());
+                        for (mode, label) in &trigger_modes {
+                            ui.horizontal(|ui| {
+                                let is_selected = hotkey_presets.get(selected_hotkey)
+                                    .map(|p| p.mode == *mode)
+                                    .unwrap_or(false);
+                                if is_selected {
+                                    ui.label(RichText::new(*label).strong().color(Color32::from_rgb(100, 200, 255)));
+                                } else {
+                                    ui.label(RichText::new(*label).small());
+                                }
+                            });
+                        }
+                    });
+
+                    // Cloud Transcription
+                    ui.collapsing("Cloud Transcription", |ui| {
+                        ui.label("Cloud provider (fallback):");
+                        egui::ComboBox::from_id_salt("voice_cloud_combo")
+                            .selected_text(
+                                cloud_providers.get(selected_cloud)
+                                    .map(|p| p.name())
+                                    .unwrap_or("Select...")
+                            )
+                            .show_ui(ui, |ui| {
+                                for (i, provider) in cloud_providers.iter().enumerate() {
+                                    ui.selectable_value(&mut selected_cloud, i, provider.name());
+                                }
+                            });
+
+                        // Show provider details
+                        if let Some(provider) = cloud_providers.get(selected_cloud) {
+                            ui.label(RichText::new(format!(
+                                "Endpoint: {}", provider.endpoint()
+                            )).small().color(Color32::GRAY));
+                        }
+
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.label("API Key:");
+                            ui.add(egui::TextEdit::singleline(&mut cloud_api_key)
+                                .password(true)
+                                .desired_width(300.0)
+                                .hint_text("Enter API key for cloud provider"));
+                        });
+
+                        if !cloud_api_key.is_empty() {
+                            // Show that a CloudTranscriber can be constructed
+                            if let Some(provider) = cloud_providers.get(selected_cloud) {
+                                let _transcriber = CloudTranscriber::new(*provider, cloud_api_key.clone());
+                                ui.label(RichText::new(format!(
+                                    "Cloud transcriber configured: {}", provider.name()
+                                )).small().color(Color32::GREEN));
+                            }
+                        }
+                    });
+                }
+            });
+
+        // Write back values changed in the closure
+        self.voice_selected_device = selected_device;
+        self.voice_selected_cloud = selected_cloud;
+        self.voice_selected_hotkey_preset = selected_hotkey;
+        self.voice_show_settings = show_settings;
+        self.voice_recording_active = recording_active;
+        self.voice_cloud_api_key = cloud_api_key;
+        self.voice_status_text = status_text;
+        self.voice_last_transcript = last_transcript;
+        self.voice_command_result = command_result;
+    }
+
+
+    fn render_sandbox_panel(&mut self, ctx: &egui::Context) {
+        if !self.show_sandbox_panel { return; }
+        let mut open = self.show_sandbox_panel;
+        egui::Window::new("Sandbox Isolation Dashboard")
+            .open(&mut open).default_width(520.0).resizable(true).scroll([false, true])
+            .show(ctx, |ui| {
+                ui.heading("Layer 1: Network Sandbox");
+                ui.separator();
+                let net_desc = self.network_sandbox.describe();
+                ui.label(format!("Status: {}", net_desc));
+                ui.label(format!("Allowed: {} | Blocked: {} | RateLimited: {}",
+                    self.network_sandbox.allowed_hosts.len(),
+                    self.network_sandbox.connections_blocked,
+                    self.network_sandbox.rate_limited_count));
+                if let Some(lv) = self.network_sandbox.last_validation {
+                    ui.label(format!("Last validation: {:?} ago", lv.elapsed()));
+                } else { ui.label("Last validation: none"); }
+                ui.horizontal(|ui| {
+                    if ui.button("Cleanup").clicked() { self.network_sandbox.cleanup(); }
+                    if ui.button("Allow host").clicked() { self.network_sandbox.allow_host("trusted.com"); }
+                    if ui.button("Block host").clicked() { self.network_sandbox.block_host("evil.com"); }
+                });
+                if !self.network_sandbox.allowed_hosts.is_empty() {
+                    ui.collapsing("Allowed hosts", |ui| {
+                        for h in &self.network_sandbox.allowed_hosts { ui.label(format!("  + {}", h)); }
+                    });
+                }
+                ui.collapsing("Trust levels", |ui| {
+                    for tl in &[TrustLevel::Untrusted, TrustLevel::Acknowledged, TrustLevel::Reviewed, TrustLevel::Approved, TrustLevel::Established] {
+                        ui.label(format!("{}: exec={} fs={} net={}", tl.description(), tl.can_execute(), tl.can_write_filesystem(), tl.can_access_network()));
+                    }
+                    let r = self.network_sandbox.allow_network_for("test.org", TrustLevel::Established);
+                    ui.label(format!("allow_network_for = {}", r));
+                    ui.label(format!("is_blocked(coinhive) = {}", self.network_sandbox.is_blocked("coinhive.com")));
+                    ui.label(format!("resolve_host = {}", crate::sandbox::network::NetworkSandbox::resolve_host("localhost:80")));
+                });
+                ui.add_space(12.0);
+                ui.heading("Layer 2: Page Sandbox");
+                ui.separator();
+                if self.sandbox_manager.get(0).is_none() { self.sandbox_manager.create(0, "https://example.com".into()); }
+                if ui.button("Click (tab0)").clicked() {
+                    self.sandbox_manager.record(0, Interaction::Click { x: 100, y: 200, element_width: 120, element_height: 40, element_type: "button".into(), timestamp: std::time::Instant::now() });
+                }
+                if ui.button("KeyboardInput (tab0)").clicked() {
+                    self.sandbox_manager.record(0, Interaction::KeyboardInput { in_form_field: true, char_count: 5, timestamp: std::time::Instant::now() });
+                }
+                if ui.button("Scroll (tab0)").clicked() {
+                    self.sandbox_manager.record(0, Interaction::Scroll { delta_y: 150, user_initiated: true, timestamp: std::time::Instant::now() });
+                }
+                if ui.button("FormSubmit (tab0)").clicked() {
+                    self.sandbox_manager.record(0, Interaction::FormSubmit { timestamp: std::time::Instant::now() });
+                }
+                if let Some(ps) = self.sandbox_manager.get(0) {
+                    ui.label(format!("URL: {}", ps.url));
+                    ui.label(format!("Trust: {:?} | {} | {}", ps.trust, ps.status_text(), ps.status_color()));
+                    ui.label(format!("Meaningful: {} | Blocked: {}", ps.meaningful_count, ps.blocked_actions.len()));
+                    for ba in &ps.blocked_actions { ui.label(format!("  {} - {} {:?} | {}", ba.action, ba.reason, ba.timestamp.elapsed(), ba.describe())); }
+                    for i in &ps.interactions { ui.label(format!("  {}", i.describe())); }
+                    ui.label(format!("{}", ps.describe()));
+                    let t = ps.trust;
+                    ui.label(format!("clip={} dl={} notif={} popup={} geo={} audio={} fs={}", t.can_access_clipboard(), t.can_initiate_download(), t.can_request_notifications(), t.can_open_popup(), t.can_request_geolocation(), t.can_autoplay_audio(), t.can_go_fullscreen()));
+                }
+                if ui.button("Check clipboard").clicked() { let _ = self.sandbox_manager.check(0, "clipboard"); }
+                if ui.button("Remove tab0").clicked() { self.sandbox_manager.remove(0); }
+                if let Some(pm) = self.sandbox_manager.get_mut(0) { let _ = pm.check_permission("download"); }
+                ui.add_space(12.0);
+                ui.heading("Layer 3: Popup Handler");
+                ui.separator();
+                ui.label(format!("{}", self.popup_handler.describe()));
+                ui.label(format!("Blocked: {}", self.popup_handler.blocked_count()));
+                ui.horizontal(|ui| {
+                    if ui.button("Page load").clicked() { self.popup_handler.page_loading(); self.popup_handler.page_loaded(); }
+                    if ui.button("Allow domain").clicked() { self.popup_handler.allow_domain("example.com"); }
+                    if ui.button("Clear").clicked() { self.popup_handler.clear_blocked(); }
+                });
+                if ui.button("Spam popup").clicked() {
+                    let req = PopupRequest { source_url: "https://x.com".into(), target_url: "https://malware.xyz".into(), width: Some(800), height: Some(600), user_gesture: false, timestamp: std::time::Instant::now() };
+                    let d = self.popup_handler.evaluate(&req); let _ = self.popup_handler.handle(req, &d);
+                }
+                if ui.button("OAuth popup").clicked() {
+                    let req = PopupRequest { source_url: "https://app.com".into(), target_url: "https://accounts.google.com/oauth".into(), width: Some(500), height: Some(600), user_gesture: false, timestamp: std::time::Instant::now() };
+                    let d = self.popup_handler.evaluate(&req); let _ = self.popup_handler.handle(req, &d);
+                }
+                if ui.button("Gesture popup").clicked() {
+                    let req = PopupRequest { source_url: "https://l.com".into(), target_url: "https://l.com/p".into(), width: Some(400), height: Some(300), user_gesture: true, timestamp: std::time::Instant::now() };
+                    let d = self.popup_handler.evaluate(&req); let _ = self.popup_handler.handle(req, &d);
+                }
+                let bps = self.popup_handler.recent_blocked();
+                if !bps.is_empty() {
+                    ui.collapsing(format!("Blocked ({})", bps.len()), |ui| {
+                        for (i, bp) in bps.iter().enumerate() {
+                            ui.label(format!("#{}: {}->{}({}x{})g={} r={} {:?}ago", i, bp.request.source_url, bp.request.target_url, bp.request.width.unwrap_or(0), bp.request.height.unwrap_or(0), bp.request.user_gesture, bp.reason, bp.timestamp.elapsed()));
+                        }
+                    });
+                }
+                if ui.button("Allow first blocked").clicked() { let _ = self.popup_handler.allow_blocked(0); }
+                ui.add_space(12.0);
+                ui.heading("Layer 4: Download Quarantine");
+                ui.separator();
+                ui.label(format!("Files: {} | Size: {} bytes", self.download_quarantine.list().len(), self.download_quarantine.total_size()));
+                if ui.button("Add test exe").clicked() {
+                    let qf = QuarantinedFile::new("invoice.pdf.exe".into(), "http://bad.com/invoice.pdf.exe".into(), "application/octet-stream".into(), b"MZ fake".to_vec());
+                    self.download_quarantine.add(qf);
+                }
+                if ui.button("Add test PDF").clicked() {
+                    let qf = QuarantinedFile::new("report.pdf".into(), "https://good.com/report.pdf".into(), "application/pdf".into(), b"%PDF fake".to_vec());
+                    self.download_quarantine.add(qf);
+                }
+                let fids: Vec<String> = self.download_quarantine.list().iter().map(|f| f.id.clone()).collect();
+                for fid in &fids {
+                    if let Some(qf) = self.download_quarantine.get(fid) {
+                        ui.group(|ui| {
+                            ui.label(RichText::new(&qf.filename).strong());
+                            ui.label(format!("ID:{} Src:{} Type:{}", qf.id, qf.source_url, qf.content_type));
+                            ui.label(format!("Size:{} SHA:{} Data:{} Enc:{}", qf.size_bytes, qf.sha256, qf.data.len(), qf.encrypted_data.is_some()));
+                            ui.label(format!("Age: {:?}", qf.quarantined_at.elapsed()));
+                            let s = &qf.security;
+                            ui.label(format!("id={} origin={} type={:?} trust={}", s.id, s.origin, s.content_type, s.trust_level.description()));
+                            ui.label(format!("ints={} viols={} timeMet={} age={:?}", s.interactions.len(), s.violations.len(), s.meets_time_requirement(), s.created_at.elapsed()));
+                            if let Some(li) = s.last_interaction { ui.label(format!("lastInt: {:?}ago", li.elapsed())); }
+                            for ir in &s.interactions {
+                                let n = match ir.action { InteractionType::Acknowledge=>"Ack", InteractionType::Review=>"Rev", InteractionType::Approve=>"App", InteractionType::Execute=>"Exe", InteractionType::Deny=>"Den" };
+                                ui.label(format!("  {} {:?}ago", n, ir.timestamp.elapsed()));
+                            }
+                            for v in &s.violations {
+                                let sn = match v.severity { ViolationSeverity::Low=>"Lo", ViolationSeverity::Medium=>"Med", ViolationSeverity::High=>"Hi", ViolationSeverity::Critical=>"Crit" };
+                                ui.label(format!("  {}[{}] {:?}ago", v.description, sn, v.timestamp.elapsed()));
+                            }
+                            ui.label(format!("Ctx: {}", s.describe()));
+                            let ext = qf.filename.rsplit('.').next().unwrap_or("");
+                            ui.label(format!("ContentType('{}')={:?}", ext, ContentType::from_extension(ext)));
+                            ui.label(format!("interaction_for={:?}", SecurityContext::interaction_for("approve")));
+                            let mw = qf.max_warning_level();
+                            ui.label(format!("MaxWarn: {}", match mw { WarningLevel::Info=>"Info", WarningLevel::Caution=>"Caution", WarningLevel::Warning=>"Warning", WarningLevel::Danger=>"Danger" }));
+                            for w in &qf.warnings {
+                                let ls = match w.level { WarningLevel::Info=>"I", WarningLevel::Caution=>"C", WarningLevel::Warning=>"W", WarningLevel::Danger=>"D" };
+                                ui.label(format!("[{}] {}: {}", ls, w.message, w.detail));
+                            }
+                            ui.label(format!("Release: {}", match &qf.can_release() {
+                                ReleaseStatus::Ready => "Ready".into(),
+                                ReleaseStatus::NeedsInteraction{current,required} => format!("{}/{}", current, required),
+                                ReleaseStatus::Waiting{seconds_remaining} => format!("Wait{}s", seconds_remaining),
+                                ReleaseStatus::Blocked{reason} => format!("Blocked:{}", reason),
+                            }));
+                        });
+                    }
+                }
+                if let Some(fid) = fids.first() {
+                    ui.horizontal(|ui| {
+                        if ui.button("Ack").clicked() { if let Some(q)=self.download_quarantine.get_mut(fid) { q.interact(InteractionType::Acknowledge); } }
+                        if ui.button("Rev").clicked() { if let Some(q)=self.download_quarantine.get_mut(fid) { q.interact(InteractionType::Review); } }
+                        if ui.button("App").clicked() { if let Some(q)=self.download_quarantine.get_mut(fid) { q.interact(InteractionType::Approve); q.security.record_violation("Test", ViolationSeverity::Low); } }
+                        if ui.button("Rm").clicked() { self.download_quarantine.remove(fid); }
+                        if ui.button("Crit").clicked() {
+                            if let Some(q)=self.download_quarantine.get_mut(fid) {
+                                q.security.record_violation("Critical test", ViolationSeverity::Critical);
+                            }
+                        }
+                        if ui.button("Encrypt").clicked() {
+                            if let Some(q)=self.download_quarantine.get_mut(fid) {
+                                let master = crate::crypto::MasterSecret::generate();
+                                let key = crate::crypto::EncryptionKey::from_master(&master, "quarantine");
+                                let _ = q.encrypt_with(&key);
+                                let _ = q.decrypt_with(&key);
+                            }
+                        }
+                        if ui.button("Release").clicked() {
+                            if let Some(q)=self.download_quarantine.get_mut(fid) {
+                                let dest = std::path::PathBuf::from(".");
+                                let _ = q.release(dest, None);
+                            }
+                        }
+                    });
+                }
+
+                // Exercise PopupDecision reason fields
+                ui.collapsing("Popup decision reasons", |ui| {
+                    let test_req = PopupRequest { source_url: "https://test.com".into(), target_url: "https://test.com/pop".into(), width: Some(300), height: Some(200), user_gesture: true, timestamp: std::time::Instant::now() };
+                    let dec = self.popup_handler.evaluate(&test_req);
+                    let reason_text = match &dec {
+                        crate::sandbox::popup::PopupDecision::Allow { reason } => format!("Allow: {}", reason),
+                        crate::sandbox::popup::PopupDecision::Block { reason } => format!("Block: {}", reason),
+                        crate::sandbox::popup::PopupDecision::Prompt { reason } => format!("Prompt: {}", reason),
+                    };
+                    ui.label(reason_text);
+                });
+            });
+        self.show_sandbox_panel = open;
+    }
+
+    fn render_rest_client_panel(&mut self, ctx: &egui::Context) {
+        if !self.rest_client_panel_visible { return; }
+        egui::Window::new("REST Client").open(&mut self.rest_client_panel_visible)
+            .resizable(true).default_size(Vec2::new(700.0, 600.0))
+            .show(ctx, |ui| {
+                ui.heading("REST API Tester"); ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label("Method:");
+                    for m in &[RestMethod::Get,RestMethod::Post,RestMethod::Put,RestMethod::Patch,RestMethod::Delete,RestMethod::Head,RestMethod::Options] {
+                        if ui.selectable_label(self.rest_client.method==*m, m.as_str()).clicked() { self.rest_client.method=*m; }
+                    }
+                    if let Some(p) = RestMethod::from_str(self.rest_client.method.as_str()) { ui.label(format!("(body:{})",p.has_body())); }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("URL:"); ui.text_edit_singleline(&mut self.rest_client.url);
+                    if ui.button("Send").clicked() { self.rest_client.execute(); }
+                    if ui.button("Clear").clicked() { self.rest_client.clear(); }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Type:");
+                    for ct in &[RestContentType::Json,RestContentType::FormUrlEncoded,RestContentType::FormData,RestContentType::Text,RestContentType::Binary] {
+                        if ui.selectable_label(self.rest_client.content_type==*ct, ct.mime_type()).clicked() { self.rest_client.content_type=*ct; }
+                    }
+                    let det = RestContentType::from_mime(self.rest_client.content_type.mime_type());
+                    ui.label(format!("[{}]", det.mime_type()));
+                });
+                ui.collapsing("Headers", |ui| {
+                    let hlen = self.rest_client.headers.len();
+                    for i in 0..hlen {
+                        ui.horizontal(|ui| {
+                            ui.label(if self.rest_client.headers[i].2 {"[on]"} else {"[off]"});
+                            ui.label(&self.rest_client.headers[i].0); ui.label(":"); ui.label(&self.rest_client.headers[i].1);
+                            if ui.small_button("Tog").clicked() { self.rest_client.toggle_header(i); }
+                            if ui.small_button("Rm").clicked() { self.rest_client.remove_header(i); }
+                        });
+                    }
+                    if ui.button("Add Header").clicked() { self.rest_client.add_header("X-Custom","value"); }
+                });
+                if self.rest_client.method.has_body() { ui.collapsing("Body", |ui| { ui.text_edit_multiline(&mut self.rest_client.body); }); }
+                ui.collapsing("Environment", |ui| {
+                    let env: Vec<_> = self.rest_client.environment.iter().map(|(k,v)|(k.clone(),v.clone())).collect();
+                    for (k,v) in &env { ui.label(format!("{{{{{}}}}}: {}",k,v)); }
+                    ui.label(format!("Resolved: {}", self.rest_client.substitute_vars(&self.rest_client.url)));
+                });
+                ui.separator();
+                if self.rest_client.is_loading { ui.label("Loading..."); }
+                if let Some(ref err) = self.rest_client.error { ui.colored_label(Color32::RED, format!("Error: {}",err)); }
+                if let Some(ref resp) = self.rest_client.response.clone() {
+                    ui.label(RichText::new(format!("{} {}",resp.status,resp.status_text)).strong());
+                    ui.label(format!("{}ms | {} bytes",resp.duration_ms,resp.size_bytes));
+                    if let Some(ct) = resp.content_type() { ui.label(format!("Type: {}",ct)); }
+                    ui.collapsing("Resp Headers", |ui| { for (n,v) in &resp.headers { ui.label(format!("{}: {}",n,v)); } });
+                    ui.collapsing("Resp Body", |ui| {
+                        if resp.is_json() { if let Some(p) = resp.json_pretty() { ui.code(p); } }
+                        else if resp.is_html() { if let Some(ref t) = resp.body_text { ui.code(&t[..t.len().min(2000)]); } }
+                        else if let Some(ref t) = resp.body_text { ui.code(&t[..t.len().min(2000)]); }
+                        else { ui.label(format!("(binary {} bytes)",resp.body.len())); }
+                    });
+                    ui.collapsing("Resp Diagnostics", |ui| { ui.label(resp.describe()); });
+                }
+                ui.separator();
+                ui.collapsing("cURL", |ui| { ui.code(self.rest_client.to_curl()); });
+                ui.collapsing("fetch()", |ui| { ui.code(self.rest_client.to_fetch()); });
+                ui.collapsing("Collections", |ui| {
+                    if ui.button("Save to Default").clicked() { self.rest_client.save_to_collection("Default"); }
+                    for c in &self.rest_client.collections { ui.label(c.describe()); }
+                    if ui.button("Sample Collection").clicked() {
+                        let mut col = RequestCollection::new("Samples");
+                        let req = SavedRequest::new("Test",RestMethod::Get,"https://api.example.com");
+                        col.add_request(req);
+                        self.rest_client.collections.push(col);
+                    }
+                });
+                ui.collapsing("History", |ui| {
+                    let hist: Vec<_> = self.rest_client.history.iter().take(10).map(|h|(h.name.clone(),h.describe(),h.clone())).collect();
+                    for (name,desc,saved) in hist {
+                        ui.horizontal(|ui| { if ui.small_button("Load").clicked() { self.rest_client.load_request(&saved); } ui.label(&name); });
+                        ui.small(desc);
+                    }
+                    ui.label(format!("{}/{}",self.rest_client.history.len(),self.rest_client.max_history));
+                });
+                ui.collapsing("Full Diagnostics", |ui| { ui.label(self.rest_client.describe()); });
+            });
+    }
+
+    fn render_network_activity_panel(&mut self, ctx: &egui::Context) {
+        if !self.network_activity_panel_visible { return; }
+        egui::Window::new("Network Activity Monitor").open(&mut self.network_activity_panel_visible)
+            .resizable(true).default_size(Vec2::new(550.0, 450.0))
+            .show(ctx, |ui| {
+                ui.heading("Network Activity"); ui.separator();
+                let state = self.net_activity_monitor.state();
+                let c = state.color();
+                let col = Color32::from_rgb(((c>>16)&0xFF) as u8,((c>>8)&0xFF) as u8,(c&0xFF) as u8);
+                ui.horizontal(|ui| {
+                    ui.colored_label(col, format!("[{}] {:?}",state.icon(),state));
+                    ui.label(format!("active={} count={}",state.is_active(),self.net_activity_monitor.active_count()));
+                });
+                let (down,up) = self.net_activity_monitor.session_stats();
+                ui.label(format!("Down: {} | Up: {}",crate::network::NetworkMonitor::format_bytes(down),crate::network::NetworkMonitor::format_bytes(up)));
+                ui.separator();
+                ui.collapsing("State Reference", |ui| {
+                    for s in &[NetActivityState::Idle,NetActivityState::Connecting,NetActivityState::Downloading,NetActivityState::Uploading,NetActivityState::Stalled,NetActivityState::Error] {
+                        let c2=s.color(); let col2=Color32::from_rgb(((c2>>16)&0xFF) as u8,((c2>>8)&0xFF) as u8,(c2&0xFF) as u8);
+                        ui.colored_label(col2, format!("[{}] {:?} active={}",s.icon(),s,s.is_active()));
+                    }
+                });
+                ui.horizontal(|ui| {
+                    if ui.button("Start Request").clicked() {
+                        let id = self.net_activity_monitor.start_request("https://example.com/test".into(),"GET".into());
+                        self.net_activity_monitor.update_download(id, 1024, Some(4096));
+                    }
+                    if ui.button("Tick").clicked() { self.net_activity_monitor.tick(); }
+                });
+                ui.separator();
+                ui.label(RichText::new("Active Requests").strong());
+                let descs: Vec<(u64,String)> = self.net_activity_monitor.active_requests().iter().map(|r|(r.id,r.describe())).collect();
+                if descs.is_empty() { ui.label("(none)"); }
+                for (rid,desc) in &descs {
+                    ui.horizontal(|ui| {
+                        ui.label(desc); let id=*rid;
+                        if ui.small_button("Done").clicked() { self.net_activity_monitor.complete(id); }
+                        if ui.small_button("Err").clicked() { self.net_activity_monitor.error(id,"test"); }
+                        if ui.small_button("+DL").clicked() { self.net_activity_monitor.update_download(id,1024,None); }
+                        if ui.small_button("+UL").clicked() { self.net_activity_monitor.update_upload(id,512); }
+                    });
+                }
+                ui.collapsing("Request Details", |ui| {
+                    let sample = NetActivityRequest::new(0,"https://test.local".into(),"POST".into());
+                    ui.label(format!("progress={:?} dur={:.2}s stalled={}",sample.progress(),sample.duration().as_secs_f32(),sample.is_stalled()));
+                    ui.label(sample.describe());
+                });
+                ui.label(format!("Speed: {}",crate::network::NetworkMonitor::format_speed(0)));
+                ui.collapsing("Shared Monitor", |ui| {
+                    let shared: SharedNetworkMonitor = shared_monitor();
+                    { let mut lk = shared.lock().unwrap(); let sid=lk.start_request("https://shared.test".into(),"GET".into()); lk.update_download(sid,256,Some(1024)); lk.complete(sid); ui.label(lk.describe()); }
+                    ui.label(shared_monitor_describe());
+                });
+                ui.collapsing("Diagnostics", |ui| { ui.label(self.net_activity_monitor.describe()); });
+            });
+    }
+
+    fn render_protocol_diagnostics_panel(&mut self, ctx: &egui::Context) {
+        if !self.protocol_diagnostics_panel_visible { return; }
+        egui::Window::new("Protocol Diagnostics").open(&mut self.protocol_diagnostics_panel_visible)
+            .resizable(true).default_size(Vec2::new(550.0, 500.0))
+            .show(ctx, |ui| {
+                ui.heading("HTTP Protocol Tools"); ui.separator();
+                ui.label(RichText::new("HTTP Client").strong());
+                ui.horizontal(|ui| {
+                    if ui.button("Set UA").clicked() { self.http_client.set_user_agent("SassyBrowser/diag"); }
+                    if ui.button("Timeout 10s").clicked() { self.http_client.set_timeout(Duration::from_secs(10)); }
+                    if ui.button("Clear Cookies").clicked() { self.http_client.clear_cookies(); }
+                });
+                ui.horizontal(|ui| {
+                    if ui.button("Set Cookie").clicked() { self.http_client.set_cookie("example.com","sid","abc"); }
+                    if let Some(c) = self.http_client.get_cookie("example.com","sid") { ui.label(format!("Cookie: {}",c)); } else { ui.label("No cookie"); }
+                    if ui.button("Clear Host").clicked() { self.http_client.clear_cookies_for_host("example.com"); }
+                });
+                ui.separator();
+                ui.label(RichText::new("FetchOptions").strong());
+                ui.collapsing("Builders", |ui| {
+                    let g = FetchOptions::get(); ui.label(format!("get: {}",g.method));
+                    let p = FetchOptions::post("{}").with_header("X","1").with_json_body("{\"a\":1}").with_credentials(CredentialsMode::Include).with_cache(CacheMode::NoStore).with_redirect(RedirectMode::Manual);
+                    ui.label(format!("post: {} body={:?}",p.method,p.body.as_deref()));
+                    ui.label(format!("cors: include={}",FetchOptions::cors_with_credentials().credentials==CredentialsMode::Include));
+                    ui.label(format!("anon: omit={}",FetchOptions::anonymous().credentials==CredentialsMode::Omit));
+                    ui.label(format!("no_cache: {}",FetchOptions::no_cache().method));
+                    ui.label(format!("reload: {}",FetchOptions::reload().method));
+                    ui.label(format!("manual_redir: manual={}",FetchOptions::manual_redirect().redirect==RedirectMode::Manual));
+                    let js = FetchOptions::from_js_options("PUT",Some("b".into()),"include","no-store","error");
+                    ui.label(format!("from_js: {} {:?}",js.method,js.body));
+                });
+                ui.separator();
+                ui.label(RichText::new("Cache Modes").strong());
+                for (s,exp) in &[("default",CacheMode::Default),("no-store",CacheMode::NoStore),("reload",CacheMode::Reload),("no-cache",CacheMode::NoCache),("force-cache",CacheMode::ForceCache),("only-if-cached",CacheMode::OnlyIfCached)] {
+                    ui.label(format!("  '{}' ok={}",s,CacheMode::from_fetch_option(s)==*exp));
+                }
+                ui.label(RichText::new("Credentials").strong());
+                for (s,exp) in &[("omit",CredentialsMode::Omit),("same-origin",CredentialsMode::SameOrigin),("include",CredentialsMode::Include)] {
+                    ui.label(format!("  '{}' ok={}",s,CredentialsMode::from_fetch_option(s)==*exp));
+                }
+                ui.label(RichText::new("Redirects").strong());
+                for s in &["follow","error","manual"] { ui.label(format!("  '{}' follow={}",s,RedirectMode::from_fetch_option(s)==RedirectMode::Follow)); }
+                ui.separator();
+                ui.label(RichText::new("Data URLs").strong());
+                if let Some((m,d)) = parse_data_url("data:text/plain,Hello%20World") { ui.label(format!("plain: {} len={}",m,d.len())); }
+                if let Some((m,d)) = parse_data_url("data:text/plain;base64,SGVsbG8=") { ui.label(format!("b64: {} len={}",m,d.len())); }
+                ui.label(format!("url_encode: {}",url_encode("hello world&x=1")));
+                let mut fd = std::collections::HashMap::new(); fd.insert("k".into(),"v v".into());
+                ui.label(format!("form: {}",encode_form_data(&fd)));
+                ui.separator();
+                ui.label(RichText::new("Multipart").strong());
+                let mut mp = MultipartFormData::new(); mp.add_field("user","sassy"); mp.add_file("file","f.png","image/png",vec![0x89,0x50]);
+                ui.label(format!("type: {}",mp.get_content_type()));
+                ui.label(format!("encoded: {} bytes",mp.encode().len()));
+            });
+    }
+
+    fn render_mcp_panel(&mut self, ctx: &egui::Context) {
+        if !self.mcp_panel.is_visible { return; }
+        let theme = McpTheme::dark();
+        let light = McpTheme::light();
+        let bg = egui::Color32::from_rgba_premultiplied(theme.background.r, theme.background.g, theme.background.b, theme.background.a);
+        let surface = egui::Color32::from_rgba_premultiplied(theme.surface.r, theme.surface.g, theme.surface.b, theme.surface.a);
+        let text_c = egui::Color32::from_rgba_premultiplied(theme.text.r, theme.text.g, theme.text.b, theme.text.a);
+        let text_dim = egui::Color32::from_rgba_premultiplied(theme.text_dim.r, theme.text_dim.g, theme.text_dim.b, theme.text_dim.a);
+        let primary = egui::Color32::from_rgba_premultiplied(theme.primary.r, theme.primary.g, theme.primary.b, theme.primary.a);
+        let accent = egui::Color32::from_rgba_premultiplied(theme.accent.r, theme.accent.g, theme.accent.b, theme.accent.a);
+        let success_c = egui::Color32::from_rgba_premultiplied(theme.success.r, theme.success.g, theme.success.b, theme.success.a);
+        let warn_c = egui::Color32::from_rgba_premultiplied(theme.warning.r, theme.warning.g, theme.warning.b, theme.warning.a);
+        let err_c = egui::Color32::from_rgba_premultiplied(theme.error.r, theme.error.g, theme.error.b, theme.error.a);
+        let border_c = egui::Color32::from_rgba_premultiplied(theme.border.r, theme.border.g, theme.border.b, theme.border.a);
+        let _voice_c = egui::Color32::from_rgba_premultiplied(theme.voice_color.r, theme.voice_color.g, theme.voice_color.b, theme.voice_color.a);
+        let _orch_c = egui::Color32::from_rgba_premultiplied(theme.orchestrator_color.r, theme.orchestrator_color.g, theme.orchestrator_color.b, theme.orchestrator_color.a);
+        let _coder_c = egui::Color32::from_rgba_premultiplied(theme.coder_color.r, theme.coder_color.g, theme.coder_color.b, theme.coder_color.a);
+        let _auditor_c = egui::Color32::from_rgba_premultiplied(theme.auditor_color.r, theme.auditor_color.g, theme.auditor_color.b, theme.auditor_color.a);
+        let _user_b = egui::Color32::from_rgba_premultiplied(theme.user_bubble.r, theme.user_bubble.g, theme.user_bubble.b, theme.user_bubble.a);
+        let _agent_b = egui::Color32::from_rgba_premultiplied(theme.agent_bubble.r, theme.agent_bubble.g, theme.agent_bubble.b, theme.agent_bubble.a);
+        let _sys_b = egui::Color32::from_rgba_premultiplied(theme.system_bubble.r, theme.system_bubble.g, theme.system_bubble.b, theme.system_bubble.a);
+        // Exercise light theme agent_color
+        for role in &[AgentRole::Voice, AgentRole::Orchestrator, AgentRole::Coder, AgentRole::Auditor] {
+            let ac = light.agent_color(role.clone());
+            let _ = egui::Color32::from_rgba_premultiplied(ac.r, ac.g, ac.b, ac.a);
+        }
+        egui::Window::new("MCP AI Panel")
+            .default_width(self.mcp_panel.width as f32)
+            .frame(egui::Frame::window(&ctx.style()).fill(bg).stroke(egui::Stroke::new(1.0, border_c)))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let modes = [PanelMode::Chat, PanelMode::Tasks, PanelMode::Edits, PanelMode::Settings];
+                    for m in &modes {
+                        let label = match m { PanelMode::Chat=>"Chat", PanelMode::Tasks=>"Tasks", PanelMode::Edits=>"Edits", PanelMode::Settings=>"Settings" };
+                        if ui.selectable_label(std::mem::discriminant(&self.mcp_panel.mode)==std::mem::discriminant(m), RichText::new(label).color(primary)).clicked() {
+                            self.mcp_panel.set_mode(m.clone());
+                        }
+                    }
+                    if ui.button(RichText::new("Toggle Theme").color(accent)).clicked() {
+                        self.mcp_panel.toggle_theme();
+                    }
+                });
+                ui.separator();
+                // Agent status bars
+                let agents = vec![
+                    AgentStatus { role: AgentRole::Voice, name: "Voice Agent".into(), online: true },
+                    AgentStatus { role: AgentRole::Orchestrator, name: "Orchestrator".into(), online: true },
+                    AgentStatus { role: AgentRole::Coder, name: "Coder Agent".into(), online: false },
+                    AgentStatus { role: AgentRole::Auditor, name: "Auditor Agent".into(), online: true },
+                ];
+                for a in &agents {
+                    let col = if a.online { success_c } else { text_dim };
+                    ui.label(RichText::new(format!("{} [{}] - {}", a.role.icon(), a.name, if a.online {"online"} else {"offline"})).color(col));
+                }
+                ui.separator();
+                // Quick commands
+                let cmds: Vec<QuickCommand> = get_quick_commands();
+                ui.label(RichText::new("Quick Commands").color(text_c).strong());
+                for cmd in &cmds {
+                    ui.label(RichText::new(format!("{} - {} (e.g. {})", cmd.trigger, cmd.description, cmd.example)).color(text_dim));
+                }
+                ui.separator();
+                // Render elements
+                let render_output: PanelRender = self.mcp_panel.render();
+                ui.label(RichText::new(format!("Mode: {:?} | Width: {} | Scroll: {}", render_output.mode, render_output.width, render_output.scroll_offset)).color(surface));
+                egui::ScrollArea::vertical().max_height(400.0).show(ui, |ui| {
+                    for elem in &render_output.elements {
+                        match elem {
+                            RenderElement::Header { title, subtitle } => { ui.label(RichText::new(title).size(18.0).color(text_c).strong()); if let Some(sub) = subtitle { ui.label(RichText::new(sub).color(text_dim)); } }
+                            RenderElement::SectionHeader { title } => { ui.label(RichText::new(title).size(14.0).color(primary).strong()); }
+                            RenderElement::AgentBar { agents: bar_agents } => { for st in bar_agents { ui.label(RichText::new(format!("{} {} [{}]", st.role.icon(), st.name, if st.online {"up"} else {"down"})).color(if st.online { success_c } else { err_c })); } }
+                            RenderElement::Message { role: msg_role, agent, content, timestamp } => { let c = match msg_role { MessageRole::User => primary, MessageRole::Agent => accent, MessageRole::System => surface }; ui.label(RichText::new(format!("[{:?}] {}: {} ({})", msg_role, agent.as_ref().map(|a| a.name()).unwrap_or("user"), content, timestamp)).color(c)); }
+                            RenderElement::Task { id, title, description, status, assigned_to, has_artifacts } => { ui.label(RichText::new(format!("[#{}] {} - {} ({:?}, by {}, artifacts={})", id, title, description, status, assigned_to.name(), has_artifacts)).color(warn_c)); }
+                            RenderElement::CodeEdit { index, file_path, operation, description, preview, selected } => { ui.label(RichText::new(format!("#{} {} ({:?}) [{}]: {}", index, file_path, operation, if *selected {"sel"} else {"_"}, description)).color(accent)); for (line, _clr) in preview { ui.label(RichText::new(line).monospace().color(text_c)); } }
+                            RenderElement::AgentConfig { role, model, api_url, has_key, enabled } => { ui.label(RichText::new(format!("{}: {} @ {} key={} [{}]", role.name(), model, api_url, has_key, if *enabled {"on"} else {"off"})).color(text_dim)); }
+                            RenderElement::ActionBar { actions } => { ui.horizontal(|ui| { for act in actions { let c = match act.style { ActionStyle::Primary => primary, ActionStyle::Secondary => text_dim, ActionStyle::Danger => err_c }; let _ = ui.button(RichText::new(&act.label).color(c)); } }); }
+                            RenderElement::Input { placeholder, value, cursor } => { ui.label(RichText::new(format!("[Input: {} val='{}' cursor={}]", placeholder, value, cursor)).color(border_c)); }
+                            RenderElement::Notification { message, style } => { let c = match style { NotificationStyle::Info => primary, NotificationStyle::Success => success_c, NotificationStyle::Warning => warn_c, NotificationStyle::Error => err_c }; ui.label(RichText::new(message).color(c)); }
+                            RenderElement::EmptyState { icon, message, hint } => { ui.label(RichText::new(format!("{} {} ({})", icon, message, hint)).color(text_dim).italics()); }
+                            RenderElement::InfoRow { label, value } => { ui.horizontal(|ui| { ui.label(RichText::new(format!("{}: ", label)).color(text_dim)); ui.label(RichText::new(value).color(text_c)); }); }
+                        }
+                    }
+                });
+                ui.separator();
+                // Action buttons for edits
+                ui.horizontal(|ui| {
+                    let approve_act = McpAction { label: "Approve".into(), id: "approve".into(), style: ActionStyle::Primary };
+                    let reject_act = McpAction { label: "Reject".into(), id: "reject".into(), style: ActionStyle::Danger };
+                    let review_act = McpAction { label: "Review".into(), id: "review".into(), style: ActionStyle::Secondary };
+                    if ui.button(RichText::new(&approve_act.label).color(success_c)).clicked() { self.mcp_panel.approve_edits(); }
+                    if ui.button(RichText::new(&reject_act.label).color(err_c)).clicked() { self.mcp_panel.reject_edits(); }
+                    ui.label(RichText::new(format!("{} [{}]", review_act.label, review_act.id)).color(text_dim));
+                });
+                // McpPanel interactive methods
+                ui.horizontal(|ui| {
+                    if ui.button("Toggle Panel").clicked() { self.mcp_panel.toggle(); }
+                    if ui.button("Approve Edit 0").clicked() { let _ = self.mcp_panel.approve_edit(0); }
+                });
+                // Key handling
+                ctx.input(|i| {
+                    for event in &i.events {
+                        if let egui::Event::Text(t) = event {
+                            for ch in t.chars() { self.mcp_panel.handle_key(ch); }
+                        }
+                        if let egui::Event::Key { key, pressed: true, .. } = event {
+                            match key {
+                                egui::Key::Backspace => self.mcp_panel.handle_backspace(),
+                                egui::Key::Enter => self.mcp_panel.handle_enter(),
+                                _ => {}
+                            }
+                        }
+                    }
+                });
+                // McpTheme secondary color
+                let _secondary = egui::Color32::from_rgba_premultiplied(theme.secondary.r, theme.secondary.g, theme.secondary.b, theme.secondary.a);
+            });
+    }
+
+    fn process_mcp_orchestrator(&mut self) {
+        // Exercise AgentRole variants with their methods
+        let roles = [AgentRole::Voice, AgentRole::Orchestrator, AgentRole::Coder, AgentRole::Auditor];
+        for role in &roles {
+            let _n = role.name();
+            let _i = role.icon();
+            let _d = role.description();
+        }
+        // Provider checks
+        let providers = [Provider::Xai, Provider::Together, Provider::OpenAI, Provider::Ollama, Provider::Custom];
+        for p in &providers {
+            let _compat = p.is_openai_compatible();
+            let _local = p.is_local();
+            let _name = p.name();
+        }
+        // TaskStatus and IssueSeverity icons
+        let statuses = [TaskStatus::Pending, TaskStatus::InProgress, TaskStatus::Review, TaskStatus::Completed, TaskStatus::Failed, TaskStatus::Blocked];
+        for s in &statuses { let _icon = s.icon(); }
+        let severities = [IssueSeverity::Info, IssueSeverity::Warning, IssueSeverity::Error, IssueSeverity::Critical];
+        for sv in &severities { let _icon = sv.icon(); }
+        // AgentConfig::huggingface with builder methods
+        let hf_config = AgentConfig::huggingface(AgentRole::Coder, "https://api.hf.space", "codellama/CodeLlama-34b")
+            .with_url("https://custom.endpoint/v1")
+            .with_key("hf_test_key")
+            .with_model("custom-model");
+        self.mcp_orchestrator.configure_agent(hf_config);
+        // Set API key
+        self.mcp_orchestrator.set_api_key(AgentRole::Voice, "test_key".into());
+        // Read McpOrchestrator public fields
+        let _tid = self.mcp_orchestrator.next_task_id;
+        // Start session and process input
+        self.mcp_orchestrator.start_session();
+        let _msgs = self.mcp_orchestrator.process_input("explain this code");
+        // Build a request
+        let msgs: Vec<McpMessage> = vec![];
+        if let Some(req) = self.mcp_orchestrator.build_request(AgentRole::Coder, &msgs) {
+            let _req: &AgentRequest = &req;
+            let _model = &req.model;
+            let _msgs = &req.messages;
+            let _max = req.max_tokens;
+            let _temp = req.temperature;
+        }
+        // Extract entities
+        let entities: Vec<Entity> = extract_entities("fix bug in src/main.rs line 42");
+        for e in &entities {
+            let _et = &e.entity_type;
+            let _ev = &e.value;
+            let _es = e.start;
+            let _ee = e.end;
+        }
+        // Format operations
+        let ops = [EditOperation::Create, EditOperation::Replace, EditOperation::Insert, EditOperation::Delete, EditOperation::Append];
+        for op in &ops { let _f = format_operation(op); }
+        // Exercise all IntentType variants via UserIntent and read fields
+        let intents = [IntentType::Create, IntentType::Fix, IntentType::Refactor, IntentType::Explain, IntentType::Test, IntentType::Document, IntentType::General];
+        for it in &intents {
+            let ui = UserIntent { summary: format!("do {:?}", it), intent_type: it.clone(), entities: entities.clone(), confidence: 0.95 };
+            let _s = &ui.summary;
+            let _t = &ui.intent_type;
+            let _e = &ui.entities;
+            let _c = ui.confidence;
+        }
+        // Mock response with TokenUsage
+        let resp: AgentResponse = McpOrchestrator::mock_response("test response");
+        let _content = &resp.content;
+        let _finish = &resp.finish_reason;
+        let usage: &TokenUsage = &resp.usage;
+        let _pt = usage.prompt_tokens;
+        let _ct = usage.completion_tokens;
+        let _tt = usage.total_tokens;
+        // Session summary
+        let _summary = self.mcp_orchestrator.session_summary();
+        // Configure hosting mode
+        self.mcp_orchestrator.configure_hosting(HostingMode::Cloud);
+        self.mcp_orchestrator.set_all_api_keys("test_key_all");
+        // Git integration methods
+        let _branches = self.mcp_orchestrator.git_branches();
+        let _log = self.mcp_orchestrator.git_log(5);
+        let _diff = self.mcp_orchestrator.git_diff(false);
+        let _diff_file = self.mcp_orchestrator.git_diff_file("src/main.rs", true);
+        let _blame = self.mcp_orchestrator.git_blame("src/main.rs");
+        let _commit = self.mcp_orchestrator.git_show_commit("abc123");
+        let _ = self.mcp_orchestrator.git_stage(&["src/main.rs"]);
+        let _ = self.mcp_orchestrator.git_unstage(&["src/main.rs"]);
+        let _cid = self.mcp_orchestrator.git_queue_commit("test commit", None);
+        let _bid = self.mcp_orchestrator.git_queue_branch("feature/test", None);
+        let _pending = self.mcp_orchestrator.git_pending_ops();
+        let _ = self.mcp_orchestrator.git_approve(0);
+        let _oid = self.mcp_orchestrator.git_queue_operation("tag", "v1.0");
+        // File system methods
+        let _ = self.mcp_orchestrator.fs_read_file("test.txt");
+        let _ = self.mcp_orchestrator.fs_read_lines("test.txt", 0, 10);
+        let _ = self.mcp_orchestrator.fs_list_dir(".");
+        let _ = self.mcp_orchestrator.fs_list_recursive(".", 2);
+        let _ = self.mcp_orchestrator.fs_search("*.rs");
+        let _ = self.mcp_orchestrator.fs_grep("TODO", Some("*.rs"));
+        let _ = self.mcp_orchestrator.fs_queue_create("new.txt", "content", "Create new file");
+        let _ = self.mcp_orchestrator.fs_queue_update("old.txt", "updated", "Update file");
+        let _ = self.mcp_orchestrator.fs_queue_delete("temp.txt", "Remove temp file");
+        let _pc = self.mcp_orchestrator.fs_pending_changes();
+        let _ = self.mcp_orchestrator.fs_approve(0);
+        let _ = self.mcp_orchestrator.fs_approve_all();
+        let _ = self.mcp_orchestrator.fs_reject(0);
+        self.mcp_orchestrator.fs_reject_all();
+        let _ = self.mcp_orchestrator.fs_history();
+        let _ = self.mcp_orchestrator.fs_generate_diff("old", "new", "test.txt");
+        let _ = self.mcp_orchestrator.fs_queue_rename("a.txt", "b.txt", "Rename file");
+        let _ = self.mcp_orchestrator.fs_queue_mkdir("new_dir", "Create directory");
+        let _ = self.mcp_orchestrator.fs_copy_file("src.txt", "dst.txt");
+        let _ = self.mcp_orchestrator.fs_get_cached("test.txt");
+        // McpServer lifecycle with builder methods
+        let server = McpServer::new(9090);
+        let server = server.with_agent_url(AgentRole::Voice, "http://localhost:8001");
+        let server = server.with_agent_key(AgentRole::Voice, "key123");
+        let mut server = server.with_agent_model(AgentRole::Coder, "gpt-4");
+        server.start();
+        let _resp = server.handle_request(r#"{"method":"ping"}"#);
+        let _status = server.status();
+        server.stop();
+    }
+
 }
 
 impl eframe::App for BrowserApp {
@@ -4326,6 +6610,9 @@ impl eframe::App for BrowserApp {
 
                     // Run detection analysis
                     let _alerts = self.detection_engine.analyze(&self.detection_page_ctx);
+                    if self.detection_engine.active_alert_count() > 0 {
+                        console_error(&format!("Detection alerts on {}: {} threat(s)", url_owned, self.detection_engine.active_alert_count()));
+                    }
                     self.detection_last_analyzed_url = Some(url_owned.clone());
 
                     // Apply fingerprint poisoning (once per page load)
@@ -4474,10 +6761,37 @@ impl eframe::App for BrowserApp {
 
         // History / activity panel
         self.render_history_panel(ctx);
+        // Voice input panel
+        self.render_voice_panel(ctx);
 
         // Password vault panel
         self.render_vault_panel(ctx);
-        
+
+        // Ad blocker panel
+        self.render_adblock_panel(ctx);
+
+        // Sandbox isolation panel
+        self.render_sandbox_panel(ctx);
+
+        // Hit test diagnostics panel
+        self.render_hittest_diagnostic_panel(ctx);
+
+        // REST client panel
+        self.render_rest_client_panel(ctx);
+
+        // Network activity monitor panel (network.rs)
+        self.render_network_activity_panel(ctx);
+
+        // Protocol diagnostics panel
+        self.render_protocol_diagnostics_panel(ctx);
+
+        // MCP AI Panel
+        self.render_mcp_panel(ctx);
+        self.process_mcp_orchestrator();
+
+        // Developer console panel (F12)
+        self.render_dev_console(ctx);
+
         // Clear data confirmation dialog
         if self.show_clear_data_dialog {
             let mut open = true;

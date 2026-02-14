@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(deprecated)]
 //! eBook Viewer - EPUB, MOBI reader with chapter navigation
 //! 
 //! Features:
@@ -9,8 +9,8 @@
 //! - Font size adjustment
 //! - Night mode / sepia mode support
 
-use crate::file_handler::{OpenFile, EbookContent, EbookChapter};
-use eframe::egui::{self, Color32, FontId, RichText, Stroke, Vec2};
+use crate::file_handler::OpenFile;
+use eframe::egui::{self, Color32, RichText, Vec2};
 
 /// Reading theme
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,7 +44,7 @@ impl EbookViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, _zoom: f32, _icons: &crate::icons::Icons) {
         let available = ui.available_size();
         
         // Theme colors
@@ -283,7 +283,7 @@ impl EbookViewer {
             // Search
             ui.separator();
             ui.label("");
-            let search_resp = ui.add(egui::TextEdit::singleline(&mut self.search_query)
+            let _search_resp = ui.add(egui::TextEdit::singleline(&mut self.search_query)
                 .desired_width(150.0)
                 .hint_text("Search..."));
         });

@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(deprecated)]
 //! PDF Viewer - Pure Rust PDF viewing with visual rendering
 //!
 //! REPLACES: Adobe Acrobat ($240/yr), Foxit PDF ($140/yr)

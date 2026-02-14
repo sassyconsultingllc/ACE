@@ -1,7 +1,7 @@
-#![allow(dead_code, unused_imports, unused_variables, deprecated)]
+#![allow(deprecated)]
 //! Chemical/Biological Viewer - PDB, MOL, SDF molecular structure viewer
 
-use crate::file_handler::{Atom, Bond, ChemicalContent, FileContent, OpenFile};
+use crate::file_handler::{Atom, ChemicalContent, FileContent, OpenFile};
 use eframe::egui::{self, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashMap;
 
@@ -71,7 +71,7 @@ impl ChemicalViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32, icons: &crate::icons::Icons) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32, _icons: &crate::icons::Icons) {
         if let FileContent::Chemical(chem) = &file.content {
             // Toolbar
             self.render_toolbar(ui, chem, global_zoom);
@@ -93,7 +93,7 @@ impl ChemicalViewer {
         }
     }
     
-    fn render_toolbar(&mut self, ui: &mut egui::Ui, chem: &ChemicalContent, global_zoom: f32) {
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, chem: &ChemicalContent, _global_zoom: f32) {
         ui.horizontal(|ui| {
             // Render mode
             ui.label("Render:");
@@ -445,6 +445,13 @@ impl ChemicalViewer {
     }
 }
 
+/// Access backbone display setting
+impl ChemicalViewer {
+    pub fn show_backbone(&self) -> bool {
+        self.show_backbone
+    }
+}
+
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> Color32 {
     let c = v * s;
     let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
@@ -469,4 +476,21 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> Color32 {
         ((g + m) * 255.0) as u8,
         ((b + m) * 255.0) as u8,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_render_mode_cartoon() {
+        let mode = RenderMode::Cartoon;
+        assert_eq!(mode, RenderMode::Cartoon);
+    }
+
+    #[test]
+    fn test_show_backbone() {
+        let viewer = ChemicalViewer::new();
+        assert!(!viewer.show_backbone());
+    }
 }

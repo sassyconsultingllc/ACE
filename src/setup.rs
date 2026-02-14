@@ -2,7 +2,6 @@
 //!
 //! WHAT HAPPENS ON FIRST RUN:
 //! ==============================================================================
-#![allow(dead_code)]
 //! 1. User enters their name
 //! 2. Optionally sets a PIN
 //! 3. Cryptographic keys generated:
@@ -14,7 +13,6 @@
 //! 5. Profile saved to disk (encrypted if PIN set)
 
 use crate::data::{init_dirs, is_first_run, Config, UserData};
-#[allow(unused_imports)]
 use crate::sync::{UserManager, TailscaleInfo};
 
 /// Setup result
