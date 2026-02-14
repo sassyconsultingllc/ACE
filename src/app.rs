@@ -2384,18 +2384,15 @@ impl BrowserApp {
                         if self.mcp_bridge.running.load(std::sync::atomic::Ordering::Relaxed) {
                             ui.label(RichText::new("MCP").small().color(Color32::from_rgb(100, 200, 100)));
                         }
-                        // Ad blocker stats
-                        ui.separator();
-                        let ads_blocked = self.ad_blocker.read()
-                            .map(|b| b.get_stats().total_blocked)
-                            .unwrap_or(0);
-                        if ads_blocked > 0 {
-                            ui.label(RichText::new(format!("Ads: {}", ads_blocked))
-                                .small()
-                                .color(Color32::from_rgb(255, 120, 80)));
-                        }
                         // Stealth victories counter
                         ui.separator();
+                        // Ad/tracker blocker stats
+                                                let blocked = self.network_monitor.blocked_count();
+                                                if blocked > 0 {
+                                                    ui.label(RichText::new(format!("Blocked: {}", blocked))
+                                                        .small()
+                                                        .color(Color32::from_rgb(255, 100, 100)));
+                                                }
                         let poisoned = self.stealth_victories.poisoned_count();
                         if poisoned > 0 {
                             ui.label(RichText::new(format!("Sites poisoned: {}", poisoned))
