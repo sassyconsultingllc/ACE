@@ -12,3 +12,10 @@ target/
 *tempwarn*
 tempwarn_lines.txt
 NUL
+# Rust
+/target
+
+# Temp / problematic filenames that break Git on Windows
+NUL
+tempwarn_lines.txt
+*Ctempwarn*
