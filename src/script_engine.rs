@@ -227,13 +227,7 @@ impl ScriptEngine {
     pub fn add_timer(&mut self, callback: String, delay_ms: u64, repeat: bool) -> u32 {
         let id = self.next_timer_id;
         self.next_timer_id += 1;
-        self.pending_timers.push(Timer {
-            id,
-            callback,
-            delay_ms,
-            created_at: std::time::Instant::now(),
-            repeat,
-        });
+        self.pending_timers.push(Timer::new(id, callback, delay_ms, repeat));
         id
     }
 
@@ -555,7 +549,13 @@ fn element_set_attribute(args: Vec<Value>) -> Value {
 
 fn element_remove_attribute(args: Vec<Value>) -> Value {
     if args.is_empty() { return Value::Undefined; }
-    let _attr_name = args[0].to_string_value();
+    let attr_name = args[0].to_string_value();
+    // If we have the element's node ref, remove the attribute on the real DOM node
+    if args.len() > 1 {
+        if let Some(node_ref) = get_node_from_value(&args[1]) {
+            node_ref.borrow_mut().remove_attribute(&attr_name);
+        }
+    }
     // Signal DOM mutation for re-layout
     DOM_MUTATED.with(|d| *d.borrow_mut() = true);
     Value::Undefined
@@ -563,8 +563,13 @@ fn element_remove_attribute(args: Vec<Value>) -> Value {
 
 fn element_has_attribute(args: Vec<Value>) -> Value {
     if args.is_empty() { return Value::Boolean(false); }
-    let _attr_name = args[0].to_string_value();
-    // Without element reference, we can't check - return false
+    let attr_name = args[0].to_string_value();
+    // If we have the element's node ref, check on the real DOM node
+    if args.len() > 1 {
+        if let Some(node_ref) = get_node_from_value(&args[1]) {
+            return Value::Boolean(node_ref.borrow().has_attribute(&attr_name));
+        }
+    }
     Value::Boolean(false)
 }
 
@@ -616,20 +621,27 @@ fn element_contains(args: Vec<Value>) -> Value {
 }
 fn element_add_event_listener(args: Vec<Value>) -> Value {
     // element.addEventListener(type, callback)
-    // Args: [this_element, event_type, callback]
+    // Args: [event_type, callback, ...optional_element]
     if args.len() < 2 { return Value::Undefined; }
     let event_type = match &args[0] {
         Value::String(s) => s.clone(),
         _ => return Value::Undefined,
     };
     let callback = if args.len() > 1 { args[1].clone() } else { return Value::Undefined; };
-    
+
     // Use a generic element ID since we don't have element identity
     let element_id = format!("elem_{}", std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0));
-    
+
+    // If we have the element's node ref, also register on the DOM node
+    if args.len() > 2 {
+        if let Some(node_ref) = get_node_from_value(&args[2]) {
+            node_ref.borrow_mut().add_event_listener(&event_type, element_id.clone());
+        }
+    }
+
     EVENT_REGISTRY.with(|reg| {
         let mut registry = reg.borrow_mut();
         let elem_listeners = registry.entry(element_id).or_insert_with(std::collections::HashMap::new);

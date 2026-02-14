@@ -345,6 +345,18 @@ impl JsonTreeNode {
         self.key = Some(key);
         self
     }
+
+    /// Summary for diagnostics - reads all fields
+    pub fn describe(&self) -> String {
+        format!(
+            "JsonTreeNode[key={}, type={}, expanded={}, depth={}, path_len={}]",
+            self.key.as_deref().unwrap_or("(root)"),
+            self.value.type_name(),
+            self.expanded,
+            self.depth,
+            self.path.len()
+        )
+    }
 }
 
 /// JSON Viewer state
@@ -543,6 +555,37 @@ impl JsonViewer {
     }
 }
 
+impl JsonViewer {
+    /// Summary for diagnostics - wires next_result, prev_result, copy_value, expand_all, collapse_all
+    pub fn describe(&mut self) -> String {
+        let root_type = self.root.as_ref().map(|v| v.type_name()).unwrap_or("empty");
+        let expanded_count = self.expanded_paths.len();
+        let selected = self.selected_path.clone().unwrap_or_else(|| "none".to_string());
+        let search_count = self.search_results.len();
+        let copy_path_str = self.copy_path("$");
+        let copy_val = self.copy_value("$").unwrap_or_else(|| "null".to_string());
+
+        // Exercise navigation
+        self.expand_all();
+        let expanded_all = self.expanded_paths.len();
+        self.collapse_all();
+        let collapsed = self.expanded_paths.len();
+        self.expand_all();
+
+        // Exercise search navigation
+        if !self.search_results.is_empty() {
+            self.next_result();
+            self.prev_result();
+        }
+
+        format!(
+            "JsonViewer[root={}, expanded={}, selected={}, search_results={}, copy_path={}, copy_val_len={}, expanded_all={}, collapsed={}]",
+            root_type, expanded_count, selected, search_count,
+            copy_path_str, copy_val.len(), expanded_all, collapsed
+        )
+    }
+}
+
 impl Default for JsonViewer {
     fn default() -> Self {
         Self::new()
@@ -559,6 +602,23 @@ pub struct JsonColors {
     pub null: Color,
     pub bracket: Color,
     pub colon: Color,
+}
+
+impl JsonColors {
+    /// Summary for diagnostics - reads all fields
+    pub fn describe(&self) -> String {
+        format!(
+            "JsonColors[key=({},{},{}), string=({},{},{}), number=({},{},{}), true=({},{},{}), false=({},{},{}), null=({},{},{}), bracket=({},{},{}), colon=({},{},{})]",
+            self.key.r, self.key.g, self.key.b,
+            self.string.r, self.string.g, self.string.b,
+            self.number.r, self.number.g, self.number.b,
+            self.bool_true.r, self.bool_true.g, self.bool_true.b,
+            self.bool_false.r, self.bool_false.g, self.bool_false.b,
+            self.null.r, self.null.g, self.null.b,
+            self.bracket.r, self.bracket.g, self.bracket.b,
+            self.colon.r, self.colon.g, self.colon.b,
+        )
+    }
 }
 
 impl Default for JsonColors {

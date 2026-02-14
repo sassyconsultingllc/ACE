@@ -1,9 +1,9 @@
 //! AI Assistant Integration
-//! 
+//!
 //! Off by default. When enabled, provides contextual help like Windows XP's "?" button.
 //! Easter eggs throughout encourage exploration and learning.
+#![allow(dead_code)]
 
- 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::fs;
@@ -86,6 +86,26 @@ pub struct EasterEggReward {
     pub redeem_url: String,
 }
 
+impl EasterEggReward {
+    /// Summary of the reward
+    pub fn describe(&self) -> String {
+        format!("EasterEggReward[msg={}, code={}, url={}]", self.message, self.code, self.redeem_url)
+    }
+}
+
+impl AiRuntime {
+    /// Summary of the AI runtime configuration
+    pub fn describe(&self) -> String {
+        format!("AiRuntime[enabled={}, provider={:?}, openai={}, anthropic={}, local_endpoint={}, local_model={}]",
+            self.config.enabled,
+            self.config.provider,
+            self.openai_key.is_some(),
+            self.anthropic_key.is_some(),
+            self.local_endpoint.as_deref().unwrap_or("none"),
+            self.local_model.as_deref().unwrap_or("none"))
+    }
+}
+
 impl AiConfig {
     pub fn enable_with_key(&mut self, provider: AiProvider, key: String) {
         self.provider = provider;
@@ -112,6 +132,11 @@ impl AiConfig {
     
     pub fn eggs_found(&self) -> usize {
         self.easter_eggs_found.len()
+    }
+
+    /// URL for the Foodie Finder main page
+    pub fn foodie_finder_url() -> &'static str {
+        FOODIE_FINDER_URL
     }
     
     pub fn total_eggs() -> usize {
@@ -150,12 +175,36 @@ pub fn load_runtime() -> AiRuntime {
         ..Default::default()
     };
 
+    // Log optional config values
+    if let Some(ref pos) = parsed.help.position {
+        eprintln!("AI help button position: {}", pos);
+    }
+    if parsed.learning.easter_eggs_notifications {
+        eprintln!("Easter egg notifications enabled");
+    }
+
     AiRuntime {
         config,
         openai_key: parsed.ai.keys.openai.clone().filter(|s| !s.is_empty()),
         anthropic_key: parsed.ai.keys.anthropic.clone().filter(|s| !s.is_empty()),
         local_endpoint: Some(parsed.ai.local.endpoint.clone()).filter(|s| !s.is_empty()),
         local_model: Some(parsed.ai.local.model.clone()).filter(|s| !s.is_empty()),
+    }
+}
+
+/// Build a help query from a context string, choosing the appropriate variant
+pub fn help_query_for_context(context: &str, url: &str) -> HelpQuery {
+    let lower = crate::fontcase::ascii_lower(context);
+    if lower.starts_with("what is") || lower.starts_with("explain") {
+        HelpQuery::WhatIsThis { element: context.to_string() }
+    } else if lower.starts_with("safe") || lower.starts_with("is this safe") {
+        HelpQuery::IsThisSafe { url: url.to_string() }
+    } else if lower.starts_with("how do i") || lower.starts_with("how to") {
+        HelpQuery::HowDoI { action: context.to_string() }
+    } else if lower.starts_with("egg:") || lower.starts_with("easter") {
+        HelpQuery::EasterEgg { trigger: context.to_string() }
+    } else {
+        HelpQuery::ExplainPage { url: url.to_string() }
     }
 }
 

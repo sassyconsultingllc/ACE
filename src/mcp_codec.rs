@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! MCP Codec — Length-Prefixed Bincode Framing for tokio-util
 //!
 //! Implements a tokio-util Encoder/Decoder for framing MCP messages

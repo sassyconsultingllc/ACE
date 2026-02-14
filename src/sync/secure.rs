@@ -1,5 +1,6 @@
+#![allow(dead_code)]
 //! Secure sync via Tailscale/WireGuard mesh
-//! 
+//!
 //! Instead of exposing a port on the local network:
 //! 1. Bind ONLY to Tailscale interface (100.x.x.x) or localhost
 //! 2. Phone connects via Tailscale IP

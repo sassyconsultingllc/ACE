@@ -12,6 +12,8 @@
 //!
 //! Supports streaming responses for real-time feedback.
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;

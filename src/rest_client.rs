@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// HTTP method
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[allow(clippy::upper_case_acronyms)] // These are HTTP method names
 pub enum Method {
@@ -60,7 +59,6 @@ impl Method {
 }
 
 /// Content type for request body
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ContentType {
     Json,
@@ -71,6 +69,22 @@ pub enum ContentType {
 }
 
 impl ContentType {
+    /// Build a ContentType from a MIME string
+    pub fn from_mime(mime: &str) -> Self {
+        let lower = crate::fontcase::ascii_lower(mime);
+        if lower.contains("json") {
+            ContentType::Json
+        } else if lower.contains("form-urlencoded") {
+            ContentType::FormUrlEncoded
+        } else if lower.contains("form-data") || lower.contains("multipart") {
+            ContentType::FormData
+        } else if lower.contains("octet-stream") || lower.contains("binary") {
+            ContentType::Binary
+        } else {
+            ContentType::Text
+        }
+    }
+
     pub fn mime_type(&self) -> &'static str {
         match self {
             ContentType::Json => "application/json",
@@ -83,7 +97,6 @@ impl ContentType {
 }
 
 /// A saved request
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedRequest {
     pub id: String,
@@ -98,6 +111,16 @@ pub struct SavedRequest {
 }
 
 impl SavedRequest {
+    /// Summary of the saved request
+    pub fn describe(&self) -> String {
+        format!("SavedRequest[id={}, name={}, method={}, url={}, headers={}, body={}, type={}, created={}, updated={}]",
+            self.id, self.name, self.method.as_str(), self.url,
+            self.headers.len(),
+            self.body.as_ref().map(|b| b.len()).unwrap_or(0),
+            self.content_type.mime_type(),
+            self.created, self.updated)
+    }
+
     pub fn new(name: &str, method: Method, url: &str) -> Self {
         let now = chrono::Utc::now();
         SavedRequest {
@@ -115,7 +138,6 @@ impl SavedRequest {
 }
 
 /// Collection of saved requests
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestCollection {
     pub id: String,
@@ -125,6 +147,12 @@ pub struct RequestCollection {
 }
 
 impl RequestCollection {
+    /// Summary of the collection
+    pub fn describe(&self) -> String {
+        format!("RequestCollection[id={}, name={}, requests={}, vars={}]",
+            self.id, self.name, self.requests.len(), self.variables.len())
+    }
+
     pub fn new(name: &str) -> Self {
         RequestCollection {
             id: uuid_v4(),
@@ -178,6 +206,22 @@ impl RestResponse {
         self.content_type()
             .map(|ct| ct.contains("html"))
             .unwrap_or(false)
+    }
+
+    /// Summary of the response for diagnostics
+    pub fn describe(&self) -> String {
+        let body_preview = if self.is_json() {
+            self.json_pretty().unwrap_or_default()
+        } else if self.is_html() {
+            self.body_text.as_deref().unwrap_or("").chars().take(100).collect()
+        } else {
+            self.body_text.as_deref().unwrap_or("(binary)").chars().take(100).collect()
+        };
+        format!("RestResponse[status={} {}, headers={}, size={}, raw_body={}, duration={}ms, type={}, preview={}]",
+            self.status, self.status_text, self.headers.len(),
+            self.size_bytes, self.body.len(), self.duration_ms,
+            self.content_type().unwrap_or("unknown"),
+            body_preview.len())
     }
 }
 
@@ -484,6 +528,47 @@ impl RestClient {
         lines.push(".catch(error => console.error(error));".to_string());
         
         lines.join("\n")
+    }
+}
+
+impl RestClient {
+    /// Summary of the client state for diagnostics
+    pub fn describe(&self) -> String {
+        let resp_desc = self.response.as_ref().map(|r| r.describe()).unwrap_or_default();
+        let fetch_code = self.to_fetch();
+        let curl_code = self.to_curl();
+        let collection_descs: Vec<_> = self.collections.iter()
+            .map(|c| c.describe()).collect();
+        let history_descs: Vec<_> = self.history.iter().take(3)
+            .map(|h| h.describe()).collect();
+        format!("RestClient[method={}, url={}, headers={}, body={}, type={}, \
+                 response={}, error={:?}, loading={}, collections=[{}], \
+                 env={}, history={}/{}, recent=[{}], curl_len={}, fetch_len={}]",
+            self.method.as_str(), self.url, self.headers.len(), self.body.len(),
+            self.content_type.mime_type(),
+            resp_desc, self.error, self.is_loading,
+            collection_descs.join("; "),
+            self.environment.len(), self.history.len(), self.max_history,
+            history_descs.join("; "),
+            curl_code.len(), fetch_code.len())
+    }
+
+    /// Save current request to a collection, creating it if needed
+    pub fn save_to_collection(&mut self, collection_name: &str) {
+        let request = SavedRequest::new(
+            &format!("{} {}", self.method.as_str(), self.url),
+            self.method,
+            &self.url,
+        );
+        let collection = self.collections.iter_mut()
+            .find(|c| c.name == collection_name);
+        if let Some(col) = collection {
+            col.add_request(request);
+        } else {
+            let mut new_col = RequestCollection::new(collection_name);
+            new_col.add_request(request);
+            self.collections.push(new_col);
+        }
     }
 }
 

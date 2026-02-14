@@ -42,6 +42,8 @@ pub use quarantine::{Quarantine, QuarantinedFile, ReleaseStatus, Warning, Warnin
 pub use page::{PageSandbox, PageTrust, SandboxManager, Interaction};
 #[allow(unused_imports)]
 pub use popup::{PopupHandler, PopupRequest, PopupDecision, BlockedPopup};
+#[allow(unused_imports)]
+pub use network::NetworkSandbox;
 
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
@@ -133,6 +135,19 @@ pub enum ViolationSeverity {
     Critical,
 }
 
+impl ContentType {
+    /// Classify content by file extension or MIME prefix
+    pub fn from_extension(ext: &str) -> Self {
+        match crate::fontcase::ascii_lower(ext).as_str() {
+            "js" | "mjs" | "ts" => ContentType::Script,
+            "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "ico" => ContentType::Image,
+            "woff" | "woff2" | "ttf" | "otf" | "eot" => ContentType::Font,
+            "crx" | "xpi" => ContentType::Extension,
+            _ => ContentType::Download,
+        }
+    }
+}
+
 impl SecurityContext {
     pub fn new(origin: String, content_type: ContentType) -> Self {
         use std::collections::hash_map::DefaultHasher;
@@ -212,5 +227,58 @@ impl SecurityContext {
     
     pub fn meets_time_requirement(&self) -> bool {
         self.created_at.elapsed() >= Duration::from_secs(5)
+    }
+
+    /// Map a user action string to the appropriate interaction type
+    pub fn interaction_for(action: &str) -> InteractionType {
+        match action {
+            "approve" => InteractionType::Approve,
+            "review"  => InteractionType::Review,
+            "ack"     => InteractionType::Acknowledge,
+            "execute" => InteractionType::Execute,
+            "deny"    => InteractionType::Deny,
+            _         => InteractionType::Acknowledge,
+        }
+    }
+
+    /// Human-readable summary of this context's current state
+    pub fn describe(&self) -> String {
+        let time_ok = if self.meets_time_requirement() { "met" } else { "pending" };
+        let last_action = self.interactions.last().map(|i| {
+            let action_name = match i.action {
+                InteractionType::Acknowledge => "ack",
+                InteractionType::Review => "review",
+                InteractionType::Approve => "approve",
+                InteractionType::Execute => "exec",
+                InteractionType::Deny => "deny",
+            };
+            format!("{}@{:?}", action_name, i.timestamp.elapsed())
+        }).unwrap_or_default();
+        let last_violation = self.violations.last().map(|v| {
+            let sev = match v.severity {
+                ViolationSeverity::Low => "low",
+                ViolationSeverity::Medium => "med",
+                ViolationSeverity::High => "high",
+                ViolationSeverity::Critical => "crit",
+            };
+            format!("{}({})@{:?}", v.description, sev, v.timestamp.elapsed())
+        }).unwrap_or_default();
+        let last_int_ago = self.last_interaction.map(|t| format!("{:?}", t.elapsed())).unwrap_or_default();
+        let content = format!("{:?}", self.content_type);
+        let age = format!("{:?}", self.created_at.elapsed());
+        format!(
+            "[{}] origin={} type={} trust={} interactions={} violations={} time_req={} age={} last_int={} last_action={} last_violation={}",
+            self.id,
+            self.origin,
+            content,
+            self.trust_level.description(),
+            self.interactions.len(),
+            self.violations.len(),
+            time_ok,
+            age,
+            last_int_ago,
+            last_action,
+            last_violation,
+        )
     }
 }

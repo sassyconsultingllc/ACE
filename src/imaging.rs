@@ -21,6 +21,11 @@ pub struct ImageData {
 }
 
 impl ImageData {
+    /// Summary of image dimensions and data size
+    pub fn describe(&self) -> String {
+        format!("ImageData[{}x{}, {} bytes]", self.width, self.height, self.pixels.len())
+    }
+
     pub fn new(width: u32, height: u32) -> Self {
         let pixels = vec![0u8; (width * height * 4) as usize];
         ImageData { width, height, pixels }
@@ -127,6 +132,12 @@ impl ImageCache {
         self.order.push_back(url);
     }
     
+    /// Summary of cache state
+    pub fn describe(&self) -> String {
+        format!("ImageCache[entries={}, size={}/{} bytes, eviction_queue={}]",
+            self.cache.len(), self.current_size, self.max_size, self.order.len())
+    }
+
     /// Clear the cache
     pub fn clear(&mut self) {
         self.cache.clear();
@@ -451,6 +462,14 @@ pub fn load_image_background(url: &str) -> ImageState {
     cache_insert_global(url, ImageState::Loading);
     enqueue_image_request(url, 0);
     ImageState::Loading
+}
+
+/// Load or return a broken-image placeholder for a failed URL.
+pub fn load_or_broken(url: &str, w: u32, h: u32) -> ImageData {
+    match load_image_blocking(url) {
+        Ok(img) => resize_image(&img, w, h),
+        Err(_) => broken_image_icon(w, h),
+    }
 }
 
 /// Resize an image (simple nearest-neighbor for now)

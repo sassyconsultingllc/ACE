@@ -54,6 +54,8 @@ pub struct HtmlRenderer {
     js: JsInterpreter,
     dom: DomBridge,
     style_engine: StyleEngine,
+    /// JS-level CSS engine for specificity-aware style resolution
+    css_engine: crate::js::CssEngine,
     scroll_offset: f32,
     hover_link: Option<String>,
     font_size_base: f32,
@@ -71,6 +73,7 @@ impl HtmlRenderer {
             js,
             dom,
             style_engine: StyleEngine::new(),
+            css_engine: crate::js::CssEngine::new(),
             scroll_offset: 0.0,
             hover_link: None,
             font_size_base: 16.0,
@@ -80,9 +83,11 @@ impl HtmlRenderer {
         }
     }
 
-    /// Add a CSS stylesheet to the style engine
+    /// Add a CSS stylesheet to the style engine (both native and JS-level)
     pub fn add_stylesheet(&mut self, css: &str) {
         self.style_engine.add_stylesheet(css);
+        // Also feed into the JS-level CSS engine for specificity resolution
+        self.css_engine.add_stylesheet(css);
     }
 
     /// Parse CSS using the style engine (for compatibility)
@@ -130,6 +135,14 @@ impl HtmlRenderer {
         // Get all layouts for potential rendering use
         let layouts = tree.flatten_layouts();
         tracing::debug!("Layout tree has {} nodes", layouts.len());
+
+        // Log visual style info from layout nodes
+        for (_, _, node) in &layouts {
+            tracing::trace!("  {} - {}", node.describe(), node.style.describe_visual());
+        }
+
+        // Log full tree description
+        tracing::debug!("{}", tree.describe());
 
         Some(tree)
     }
@@ -337,6 +350,11 @@ impl HtmlRenderer {
     }
     
     /// Parse full HTML and populate cached_doc
+    /// Render an HTML string directly (parse and cache it for next render frame).
+    pub fn render_string(&mut self, html: &str) {
+        self.parse_html(html);
+    }
+
     pub fn parse_html(&mut self, html: &str) {
         let html = html.to_string();
 

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# refuse commits that include reserved / suspicious filenames
+while IFS= read -r f; do
+  b="$(basename "$f")"
+  if [ "$b" = "NUL" ] || echo "$b" | grep -qE "tempwarn|[[:cntrl:]]"; then
+    echo "ERROR: refusing to commit invalid/suspicious filename: $f" >&2
+    exit 1
+  fi
+done < <(git diff --cached --name-only -z | tr '\0' '\n')
+exit 0

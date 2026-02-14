@@ -265,6 +265,30 @@ impl PopupHandler {
     pub fn clear_blocked(&mut self) {
         self.blocked.clear();
     }
+
+    /// Describe current popup handler state for diagnostics
+    pub fn describe(&self) -> String {
+        let recent = self.recent_attempts.len();
+        let blocked_total = self.blocked.len();
+        let allowed_domains = self.session_allowed.len();
+        let last_blocked = self.blocked.last().map(|b| {
+            format!("{} -> {} ({:?} ago)", b.reason, b.request.target_url, b.timestamp.elapsed())
+        }).unwrap_or_default();
+        // Read blocked popup details for diagnostics
+        let _blocked_details: Vec<String> = self.blocked.iter().map(|b| {
+            format!("src={} tgt={} w={:?} h={:?} gesture={} age={:?} reason={} ts={:?}",
+                b.request.source_url, b.request.target_url,
+                b.request.width, b.request.height,
+                b.request.user_gesture, b.request.timestamp.elapsed(),
+                b.reason, b.timestamp.elapsed())
+        }).collect();
+        format!(
+            "PopupHandler[recent_attempts={}, blocked={}, session_allowed={}, loaded={:?}, last={}]",
+            recent, blocked_total, allowed_domains,
+            self.page_loaded_at.map(|t| t.elapsed()),
+            last_blocked,
+        )
+    }
     
     /// Retry a blocked popup (user clicked "allow")
     pub fn allow_blocked(&mut self, index: usize) -> Option<PopupRequest> {

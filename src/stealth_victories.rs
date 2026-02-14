@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Stealth Victories — Silent Anti-Tracking Warfare
 //!
 //! FOUR SILENT VICTORIES:

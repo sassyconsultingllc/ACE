@@ -141,6 +141,23 @@ impl Node {
             .push(callback_id);
     }
 
+    /// Describe this node for diagnostics, reading all fields
+    pub fn describe(&self) -> String {
+        let tag = self.tag_name.as_deref().unwrap_or("(none)");
+        let text_len = self.text_content.as_ref().map(|t| t.len()).unwrap_or(0);
+        let attrs_count = self.attributes.len();
+        let children_count = self.children.len();
+        let styles_count = self.styles.len();
+        let listeners_count: usize = self.event_listeners.values().map(|v| v.len()).sum();
+        let has_parent = self.parent.is_some();
+        let has_id = self.has_attribute("id");
+        format!(
+            "Node[type={:?}, tag={}, text_len={}, attrs={}, children={}, styles={}, listeners={}, parent={}, has_id={}]",
+            self.node_type, tag, text_len, attrs_count, children_count,
+            styles_count, listeners_count, has_parent, has_id,
+        )
+    }
+
     pub fn get_inner_text(&self) -> String {
         let mut text = String::new();
         self.collect_text(&mut text);
@@ -509,6 +526,23 @@ impl FormData {
         } else {
             format!("{}?{}", action, encoded)
         }
+    }
+}
+
+impl Document {
+    /// Describe document state for diagnostics, reading title and base_url
+    pub fn describe(&self) -> String {
+        let links = self.get_links().len();
+        let images = self.get_images().len();
+        let forms = self.get_forms().len();
+        let scripts = self.get_scripts().len();
+        let styles_count = self.get_stylesheets().len();
+        format!(
+            "Document[title={}, base_url={}, links={}, images={}, forms={}, scripts={}, stylesheets={}]",
+            if self.title.is_empty() { "(empty)" } else { &self.title },
+            self.base_url.as_deref().unwrap_or("(none)"),
+            links, images, forms, scripts, styles_count,
+        )
     }
 }
 

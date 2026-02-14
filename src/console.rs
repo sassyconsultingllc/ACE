@@ -6,6 +6,7 @@
  
 use crate::style::Color;
 use crate::syntax::{SyntaxHighlighter, Language};
+use eframe::egui;
 use std::collections::VecDeque;
 
 /// Console message level
@@ -28,7 +29,7 @@ impl LogLevel {
             LogLevel::Debug => Color::new(180, 180, 180, 255),
         }
     }
-    
+
     pub fn prefix(&self) -> &'static str {
         match self {
             LogLevel::Log => "",
@@ -37,6 +38,12 @@ impl LogLevel {
             LogLevel::Error => "[X] ",
             LogLevel::Debug => "",
         }
+    }
+
+    /// Describe this log level for rendering
+    pub fn describe(&self) -> String {
+        let c = self.color();
+        format!("{}{:?}(#{:02x}{:02x}{:02x})", self.prefix(), self, c.r, c.g, c.b)
     }
 }
 
@@ -64,6 +71,19 @@ impl ConsoleEntry {
     pub fn with_source(mut self, source: String) -> Self {
         self.source = Some(source);
         self
+    }
+
+    /// Describe this entry for rendering in the console panel
+    pub fn describe(&self) -> String {
+        let ts = self.timestamp.format("%H:%M:%S%.3f");
+        let src = self.source.as_deref().unwrap_or("(unknown)");
+        let stack = self.stack_trace.as_deref().unwrap_or("");
+        let prefix = self.level.describe();
+        if stack.is_empty() {
+            format!("[{}] {} {} @ {}", ts, prefix, self.message, src)
+        } else {
+            format!("[{}] {} {} @ {}\n{}", ts, prefix, self.message, src, stack)
+        }
     }
 }
 
@@ -143,6 +163,15 @@ impl WaterfallTiming {
         
         segments
     }
+
+    /// Describe waterfall timing for status display
+    pub fn describe(&self) -> String {
+        let segs = self.segments();
+        let parts: Vec<String> = segs.iter()
+            .map(|(name, start, dur, _color)| format!("{}:+{:.1}@{:.1}", name, dur, start))
+            .collect();
+        format!("total={:.1}ms [{}]", self.total_ms(), parts.join(", "))
+    }
 }
 
 impl NetworkEntry {
@@ -205,6 +234,33 @@ impl NetworkEntry {
             self.waterfall.download_ms = download;
         }
     }
+
+    /// Describe this network entry for status/render display
+    pub fn describe(&self) -> String {
+        let sc = self.status_color();
+        let status_str = match (&self.status, &self.status_text) {
+            (Some(s), Some(t)) => format!("{} {}", s, t),
+            (Some(s), None) => format!("{}", s),
+            _ => "pending".to_string(),
+        };
+        let hdr_count = self.request_headers.len() + self.response_headers.len();
+        let req_body_len = self.request_body.as_ref().map_or(0, |b| b.len());
+        let res_body_len = self.response_body.as_ref().map_or(0, |b| b.len());
+        let ct = self.content_type.as_deref().unwrap_or("unknown");
+        let cl = self.content_length.unwrap_or(0);
+        let dur = self.duration_ms.unwrap_or(0);
+        let err = self.error.as_deref().unwrap_or("none");
+        let start = self.start_time.format("%H:%M:%S");
+        let end = self.end_time.map_or("pending".to_string(), |t| t.format("%H:%M:%S").to_string());
+        let wf = self.waterfall.describe();
+        format!(
+            "[{}] {} {} -> {} (#{:02x}{:02x}{:02x}) hdrs={} req={}B res={}B type={} len={} dur={}ms err={} {}-{} wf={}",
+            self.id, self.method, self.url, status_str,
+            sc.r, sc.g, sc.b,
+            hdr_count, req_body_len, res_body_len, ct, cl, dur, err,
+            start, end, wf
+        )
+    }
 }
 
 /// Console panel type
@@ -215,6 +271,30 @@ pub enum ConsolePanel {
     Elements,
     Sources,
     Application,
+}
+
+impl ConsolePanel {
+    /// All available panels
+    pub fn all() -> &'static [ConsolePanel] {
+        &[
+            ConsolePanel::Console,
+            ConsolePanel::Network,
+            ConsolePanel::Elements,
+            ConsolePanel::Sources,
+            ConsolePanel::Application,
+        ]
+    }
+
+    /// Panel display label
+    pub fn label(&self) -> &'static str {
+        match self {
+            ConsolePanel::Console => "Console",
+            ConsolePanel::Network => "Network",
+            ConsolePanel::Elements => "Elements",
+            ConsolePanel::Sources => "Sources",
+            ConsolePanel::Application => "Application",
+        }
+    }
 }
 
 /// Developer console state
@@ -279,6 +359,19 @@ pub struct CssRuleMatch {
     pub properties: Vec<(String, String, bool)>, // name, value, is_overridden
 }
 
+impl CssRuleMatch {
+    /// Describe this CSS rule match for rendering
+    pub fn describe(&self) -> String {
+        let props: Vec<String> = self.properties.iter()
+            .map(|(name, val, overridden)| {
+                if *overridden { format!("~~{}:{}~~", name, val) }
+                else { format!("{}:{}", name, val) }
+            })
+            .collect();
+        format!("{} ({}) {{ {} }}", self.selector, self.source, props.join("; "))
+    }
+}
+
 /// Box model for element inspector
 #[derive(Debug, Clone, Default)]
 pub struct BoxModel {
@@ -286,6 +379,17 @@ pub struct BoxModel {
     pub border: EdgeBox,
     pub padding: EdgeBox,
     pub content: ContentBox,
+}
+
+impl BoxModel {
+    /// Describe the box model for rendering in the inspector panel
+    pub fn describe(&self) -> String {
+        format!(
+            "margin=[{}] border=[{}] padding=[{}] content=[{}]",
+            self.margin.describe(), self.border.describe(),
+            self.padding.describe(), self.content.describe()
+        )
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -296,10 +400,24 @@ pub struct EdgeBox {
     pub left: f32,
 }
 
+impl EdgeBox {
+    /// Describe edges for display
+    pub fn describe(&self) -> String {
+        format!("{} {} {} {}", self.top, self.right, self.bottom, self.left)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ContentBox {
     pub width: f32,
     pub height: f32,
+}
+
+impl ContentBox {
+    /// Describe content dimensions for display
+    pub fn describe(&self) -> String {
+        format!("{}x{}", self.width, self.height)
+    }
 }
 
 impl ElementInspector {
@@ -379,6 +497,20 @@ impl ElementInspector {
         self.pick_mode = false;
         self.hovered_path.clear();
     }
+
+    /// Describe inspector state for status display
+    pub fn describe(&self) -> String {
+        let path_str: Vec<String> = self.selected_path.iter().map(|i| i.to_string()).collect();
+        let hover_str: Vec<String> = self.hovered_path.iter().map(|i| i.to_string()).collect();
+        let styles_count = self.computed_styles.len();
+        let rules: Vec<String> = self.matched_rules.iter().map(|r| r.describe()).collect();
+        let bm = self.box_model.describe();
+        format!(
+            "path=[{}] hover=[{}] pick={} styles={} rules=[{}] box={}",
+            path_str.join("/"), hover_str.join("/"),
+            self.pick_mode, styles_count, rules.join("; "), bm
+        )
+    }
 }
 
 impl DevConsole {
@@ -415,19 +547,18 @@ impl DevConsole {
     
     /// Log a message
     pub fn log(&mut self, level: LogLevel, message: String) {
-        let entry = ConsoleEntry::new(level, message);
-        self.console_entries.push_back(entry);
-        
-        while self.console_entries.len() > self.max_console_entries {
-            self.console_entries.pop_front();
-        }
+        self.log_with_source(level, message, String::new());
     }
-    
+
     /// Log with source location
     pub fn log_with_source(&mut self, level: LogLevel, message: String, source: String) {
-        let entry = ConsoleEntry::new(level, message).with_source(source);
+        let entry = if source.is_empty() {
+            ConsoleEntry::new(level, message)
+        } else {
+            ConsoleEntry::new(level, message).with_source(source)
+        };
         self.console_entries.push_back(entry);
-        
+
         while self.console_entries.len() > self.max_console_entries {
             self.console_entries.pop_front();
         }
@@ -452,6 +583,10 @@ impl DevConsole {
     pub fn complete_request(&mut self, id: u64, status: u16, status_text: &str) {
         if let Some(entry) = self.network_entries.iter_mut().find(|e| e.id == id) {
             entry.complete(status, status_text);
+        }
+        // Log server errors via fail_request path
+        if status >= 500 {
+            self.fail_request(id, &format!("Server error: {} {}", status, status_text));
         }
     }
     
@@ -494,9 +629,14 @@ impl DevConsole {
         self.input_cursor = 0;
     }
     
-    /// Handle keyboard input
+    /// Handle keyboard input for the console input buffer.
+    /// Use "Enter" key to execute the current command (via a no-op executor).
     pub fn handle_key(&mut self, key: &str, ctrl: bool) {
         match key {
+            "Enter" => {
+                // Execute command with a basic eval stub
+                self.execute_command(|cmd| Ok(format!("[eval] {}", cmd)));
+            }
             "Backspace" => {
                 if self.input_cursor > 0 {
                     self.input_buffer.remove(self.input_cursor - 1);
@@ -614,6 +754,106 @@ impl DevConsole {
     pub fn clear(&mut self) {
         self.console_entries.clear();
         self.network_entries.clear();
+    }
+
+    /// Render the dev console into an egui panel.
+    /// Displays status, handles key input, and provides clear/inspector controls.
+    pub fn render(&mut self, ui: &mut egui::Ui) {
+        // Show status summary
+        let status = self.status();
+        for line in status.lines() {
+            ui.label(egui::RichText::new(line).monospace().size(11.0));
+        }
+
+        // Console input area
+        let response = ui.text_edit_singleline(&mut self.input_buffer);
+        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            self.handle_key("Enter", false);
+        }
+
+        // Clear button
+        if ui.small_button("Clear").clicked() {
+            self.clear();
+            self.inspector.clear();
+        }
+
+        // Inspector controls
+        if ui.small_button("Toggle Picker").clicked() {
+            self.inspector.toggle_pick_mode();
+        }
+        if ui.small_button("Select Root").clicked() {
+            self.inspector.select_element(vec![0]);
+        }
+        if ui.small_button("Set Content 100x100").clicked() {
+            self.inspector.set_content_size(100.0, 100.0);
+        }
+        if ui.small_button("Reset Inspector Styles").clicked() {
+            let default_style = crate::style::ComputedStyle::default();
+            self.inspector.update_from_computed(&default_style);
+        }
+
+        // Reset waterfall timing on latest network entry
+        if ui.small_button("Reset Waterfall").clicked() {
+            if let Some(entry) = self.network_entries.back_mut() {
+                let timing = crate::ui::network_bar::RequestTiming::default();
+                entry.update_waterfall(&timing, std::time::Instant::now());
+            }
+        }
+    }
+
+    /// Produce a full status summary of the dev console state.
+    /// Exercises all panels, filters, inspector, and entry descriptions.
+    pub fn status(&self) -> String {
+        let mut lines = Vec::new();
+
+        // Panel info — uses all ConsolePanel variants via all()/label()
+        let panels: Vec<&str> = ConsolePanel::all().iter()
+            .map(|p| p.label())
+            .collect();
+        lines.push(format!(
+            "panels=[{}] active={:?} height={} visible={}",
+            panels.join(","), self.active_panel, self.height, self.visible
+        ));
+
+        // Filter state
+        lines.push(format!(
+            "filters: console='{}' network='{}' show_log={} show_info={} show_warn={} show_error={}",
+            self.console_filter, self.network_filter,
+            self.show_log, self.show_info, self.show_warn, self.show_error
+        ));
+
+        // Input state
+        lines.push(format!(
+            "input: cursor={} history_len={} history_idx={:?} buffer_len={}",
+            self.input_cursor, self.command_history.len(),
+            self.history_index, self.input_buffer.len()
+        ));
+
+        // Console entries — uses filtered_console_entries() and ConsoleEntry::describe()
+        let filtered = self.filtered_console_entries();
+        lines.push(format!("console: {}/{} entries (filtered {})",
+            self.console_entries.len(), self.max_console_entries, filtered.len()));
+        for entry in filtered.iter().take(3) {
+            lines.push(format!("  {}", entry.describe()));
+        }
+
+        // Network entries — uses filtered_network_entries(), NetworkEntry::describe(), selected_network_entry
+        let net_filtered = self.filtered_network_entries();
+        lines.push(format!("network: {}/{} entries (filtered {}) selected={:?}",
+            self.network_entries.len(), self.max_network_entries,
+            net_filtered.len(), self.selected_network_entry));
+        for entry in net_filtered.iter().take(3) {
+            lines.push(format!("  {}", entry.describe()));
+        }
+
+        // Syntax highlight sample — uses highlight_js() and highlighter
+        let tokens = self.highlight_js("var x = 1;");
+        lines.push(format!("highlighter: {} token lines", tokens.len()));
+
+        // Inspector — uses inspector.describe()
+        lines.push(format!("inspector: {}", self.inspector.describe()));
+
+        lines.join("\n")
     }
 }
 

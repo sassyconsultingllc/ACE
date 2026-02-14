@@ -141,6 +141,17 @@ pub enum TextAlign {
 }
 
 impl ComputedStyle {
+    /// Describe visual style properties for diagnostics
+    pub fn describe_visual(&self) -> String {
+        format!(
+            "Visual[color=({},{},{},{}), bg=({},{},{},{}), font_size={}, weight={}, align={:?}, line_height={}, overflow=({:?},{:?})]",
+            self.color[0], self.color[1], self.color[2], self.color[3],
+            self.background_color[0], self.background_color[1], self.background_color[2], self.background_color[3],
+            self.font_size, self.font_weight, self.text_align, self.line_height,
+            self.overflow_x, self.overflow_y,
+        )
+    }
+
     /// Convert to taffy Style
     pub fn to_taffy_style(&self) -> Style {
         Style {
@@ -164,6 +175,10 @@ impl ComputedStyle {
             inset: self.inset,
             gap: self.gap,
             overflow: Point { x: self.overflow_x, y: self.overflow_y },
+            grid_template_columns: self.grid_template_columns.clone(),
+            grid_template_rows: self.grid_template_rows.clone(),
+            grid_column: self.grid_column,
+            grid_row: self.grid_row,
             ..Default::default()
         }
     }
@@ -705,6 +720,18 @@ pub struct LayoutNode {
     pub children: Vec<usize>, // Indices into LayoutTree.nodes
 }
 
+impl LayoutNode {
+    /// Summary for diagnostics - reads tag, text, and style fields
+    pub fn describe(&self) -> String {
+        format!("LayoutNode[tag={}, text={}, font_size={}, display={:?}]",
+            self.tag,
+            self.text.as_deref().unwrap_or("(none)"),
+            self.style.font_size,
+            self.style.display,
+        )
+    }
+}
+
 /// The full layout tree
 pub struct LayoutTree {
     pub taffy: TaffyTree<()>,
@@ -791,6 +818,17 @@ impl LayoutTree {
         }
 
         result
+    }
+
+    /// Summary for diagnostics - reads tag, text, and style from LayoutNode
+    pub fn describe(&self) -> String {
+        let flat = self.flatten_layouts();
+        let descs: Vec<String> = flat.iter().map(|(_, _, node)| node.describe()).collect();
+        format!("LayoutTree[nodes={}, root={:?}, items=[{}]]",
+            self.nodes.len(),
+            self.root,
+            descs.join(", "),
+        )
     }
 }
 

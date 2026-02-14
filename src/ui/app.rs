@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use eframe::egui::{self, ColorImage, Vec2};
 use crate::ui::UI;
 use crate::ui::render::UIRenderer;

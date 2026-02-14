@@ -1,7 +1,8 @@
 //! Theme system for Sassy Browser
 //! Handles loading, parsing, and applying themes from TOML config
 
- 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;

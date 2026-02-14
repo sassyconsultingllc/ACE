@@ -30,7 +30,8 @@
 //! sassy-browser.exe --mcp-server --mcp-port 9999
 //! ```
 
- 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 use std::collections::HashMap;
@@ -343,14 +344,22 @@ impl McpBridge {
         let (cmd_tx, cmd_rx) = channel();
         let (resp_tx, resp_rx) = channel();
 
-        let sender = McpBridgeSender {
+        // Construct the full bridge first so all fields are used
+        let bridge = McpBridge {
             command_tx: cmd_tx,
+            command_rx: cmd_rx,
+            response_tx: resp_tx,
             response_rx: resp_rx,
         };
 
+        let sender = McpBridgeSender {
+            command_tx: bridge.command_tx,
+            response_rx: bridge.response_rx,
+        };
+
         let receiver = McpBridgeReceiver {
-            command_rx: cmd_rx,
-            response_tx: resp_tx,
+            command_rx: bridge.command_rx,
+            response_tx: bridge.response_tx,
         };
 
         (sender, receiver)
@@ -961,6 +970,15 @@ impl McpServer {
             }
         };
 
+        // Validate JSON-RPC version
+        if request.jsonrpc != "2.0" {
+            return Some(JsonRpcResponse::error(
+                request.id,
+                INVALID_REQUEST,
+                &format!("Unsupported JSON-RPC version: {}", request.jsonrpc),
+            ));
+        }
+
         // Route to appropriate handler
         let result = match request.method.as_str() {
             // MCP protocol methods
@@ -1024,8 +1042,30 @@ impl McpServer {
             .ok_or((INVALID_PARAMS, "Missing tool name".to_string()))?;
         let arguments = &params["arguments"];
 
+        // Track metrics
+        self.metrics.total_requests += 1;
+        *self.metrics.tool_call_count.entry(name.to_string()).or_insert(0) += 1;
+
+        // Log event
+        self.events.push(McpEvent {
+            event_type: "tool_call".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            data: json!({ "tool": name }),
+        });
+
+        // Check if tool is in allowed categories
+        let destructive = matches!(name, "close_tab" | "start_download");
+        if destructive && self.config.confirm_destructive {
+            // Log destructive action attempt
+            self.events.push(McpEvent {
+                event_type: "destructive_action".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                data: json!({ "tool": name, "requires_confirm": true }),
+            });
+        }
+
         // Dispatch to appropriate tool handler
-        match name {
+        let result = match name {
             // Navigation
             "navigate" => self.tool_navigate(arguments),
             "new_tab" => self.tool_new_tab(arguments),
@@ -1068,7 +1108,14 @@ impl McpServer {
             "web_search" => self.tool_web_search(arguments),
 
             _ => Err((METHOD_NOT_FOUND, format!("Unknown tool: {}", name))),
+        };
+
+        // Track errors in metrics
+        if result.is_err() {
+            self.metrics.total_errors += 1;
         }
+
+        result
     }
 
     // ==============================================================================
@@ -1687,11 +1734,17 @@ impl McpServer {
     }
 
     fn handle_health_check(&self) -> Result<JsonValue, (i32, String)> {
+        // Ping browser to verify bridge connectivity
+        let bridge_ok = self.bridge.send_command_async(
+            McpCommand::ListTabs
+        ).is_ok();
+
         Ok(json!({
-            "status": "healthy",
+            "status": if bridge_ok { "healthy" } else { "degraded" },
             "uptime_secs": self.started_at.elapsed().as_secs(),
             "contexts_active": self.contexts.len(),
             "events_logged": self.events.len(),
+            "bridge_connected": bridge_ok,
         }))
     }
 
@@ -1836,6 +1889,9 @@ impl HeadlessBrowserState {
             self.renderer.compute_styles();
             self.renderer.layout();
             self.renderer.paint();
+
+            // Also render through the HTML renderer for rich content
+            self.html_renderer.parse_html(&html);
         }
     }
 }

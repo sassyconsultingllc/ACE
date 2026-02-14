@@ -1,6 +1,7 @@
 //! Behavioral Mimicry Engine — Human-Like Input Simulation
 //!
 //! ANTI-FINGERPRINTING THROUGH BEHAVIORAL POISONING
+#![allow(dead_code)]
 //!
 //! PURPOSE:
 //! ─────────────────────────────────────────────────────────────────────────

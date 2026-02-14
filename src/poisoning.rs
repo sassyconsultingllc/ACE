@@ -1,6 +1,7 @@
 //! Fingerprint Poisoning Engine
 //!
 //! ANTI-FINGERPRINTING THROUGH DATA POISONING — NOT BLOCKING.
+#![allow(dead_code)]
 //!
 //! PHILOSOPHY:
 //! ─────────────────────────────────────────────────────────────────────────

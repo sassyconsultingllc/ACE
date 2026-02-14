@@ -1,5 +1,6 @@
+#![allow(dead_code)]
 //! Family device management
-//! 
+//!
 //! Philosophy: Approve devices, not monitor sessions.
 //! - Parent approves which devices can connect (one-time)
 //! - No content surveillance - that breaks trust

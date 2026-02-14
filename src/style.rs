@@ -352,7 +352,13 @@ impl StyleEngine {
             let props = Self::parse_inline_style(&inline);
             self.apply_properties(&mut style, &props);
         }
-        
+
+        // Apply programmatically-set styles from the node's styles map
+        // (e.g. set by JavaScript via element.style.xxx)
+        if !n.styles.is_empty() {
+            self.apply_properties(&mut style, &n.styles);
+        }
+
         style
     }
 

@@ -29,21 +29,38 @@ impl HttpClient {
     pub fn fetch_with_options(&mut self, url: &Url, options: &FetchOptions) -> Result<HttpResponse, String> {
         let mut current_url = url.clone();
         let mut redirect_count = 0;
-        
+
+        // Check redirect mode before entering loop
+        if options.redirect == RedirectMode::Error {
+            // In Error mode, we do a single request and fail on any redirect
+            let response = self.make_request(&current_url, options)?;
+            if response.status >= 300 && response.status < 400 {
+                return Err("Redirect not allowed (redirect mode: error)".to_string());
+            }
+            return Ok(response);
+        }
+
         loop {
             let response = self.make_request(&current_url, options)?;
-            
-            // Store cookies
-            for cookie in &response.cookies {
-                self.store_cookie(&current_url, cookie);
+
+            // Store cookies (respecting credentials mode)
+            if options.credentials != CredentialsMode::Omit {
+                for cookie in &response.cookies {
+                    self.store_cookie(&current_url, cookie);
+                }
             }
-            
+
             // Handle redirects
             if response.status >= 300 && response.status < 400 {
+                // In Manual mode, return the redirect response as-is
+                if options.redirect == RedirectMode::Manual {
+                    return Ok(response);
+                }
+
                 if redirect_count >= self.max_redirects {
                     return Err("Too many redirects".to_string());
                 }
-                
+
                 if let Some(location) = response.headers.get("location") {
                     current_url = current_url.join(location)
                         .map_err(|e| format!("Invalid redirect URL: {}", e))?;
@@ -51,11 +68,11 @@ impl HttpClient {
                     continue;
                 }
             }
-            
+
             if response.status >= 400 {
                 return Err(format!("HTTP error: {}", response.status));
             }
-            
+
             return Ok(response);
         }
     }
@@ -64,18 +81,45 @@ impl HttpClient {
         let mut request = ureq::request(&options.method, url.as_str())
             .set("User-Agent", &self.user_agent)
             .timeout(self.timeout);
-        
-        // Add cookies
-        if let Some(cookies) = self.cookies.get(url.host_str().unwrap_or("")) {
-            let cookie_header: String = cookies.iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<_>>()
-                .join("; ");
-            if !cookie_header.is_empty() {
-                request = request.set("Cookie", &cookie_header);
+
+        // Apply cache mode headers
+        match options.cache {
+            CacheMode::NoStore => {
+                request = request.set("Cache-Control", "no-store");
+            }
+            CacheMode::NoCache => {
+                request = request.set("Cache-Control", "no-cache");
+            }
+            CacheMode::Reload => {
+                request = request.set("Cache-Control", "no-cache");
+                request = request.set("Pragma", "no-cache");
+            }
+            CacheMode::ForceCache | CacheMode::OnlyIfCached => {
+                request = request.set("Cache-Control", "max-stale");
+            }
+            CacheMode::Default => {}
+        }
+
+        // Add cookies based on credentials mode
+        if options.credentials != CredentialsMode::Omit {
+            let should_send = match options.credentials {
+                CredentialsMode::Include => true,
+                CredentialsMode::SameOrigin => true,
+                CredentialsMode::Omit => false,
+            };
+            if should_send {
+                if let Some(cookies) = self.cookies.get(url.host_str().unwrap_or("")) {
+                    let cookie_header: String = cookies.iter()
+                        .map(|(k, v)| format!("{}={}", k, v))
+                        .collect::<Vec<_>>()
+                        .join("; ");
+                    if !cookie_header.is_empty() {
+                        request = request.set("Cookie", &cookie_header);
+                    }
+                }
             }
         }
-        
+
         // Add custom headers
         for (key, value) in &options.headers {
             request = request.set(key, value);
@@ -213,6 +257,73 @@ impl FetchOptions {
         self.headers.insert("Content-Type".to_string(), "application/json".to_string());
         self
     }
+
+    /// Build FetchOptions from JavaScript fetch() API parameters
+    pub fn from_js_options(method: &str, body: Option<String>, credentials: &str, cache: &str, redirect: &str) -> Self {
+        FetchOptions {
+            method: method.to_uppercase(),
+            headers: HashMap::new(),
+            body,
+            credentials: CredentialsMode::from_fetch_option(credentials),
+            cache: CacheMode::from_fetch_option(cache),
+            redirect: RedirectMode::from_fetch_option(redirect),
+        }
+    }
+
+    pub fn with_credentials(mut self, mode: CredentialsMode) -> Self {
+        self.credentials = mode;
+        self
+    }
+
+    pub fn with_cache(mut self, mode: CacheMode) -> Self {
+        self.cache = mode;
+        self
+    }
+
+    pub fn with_redirect(mut self, mode: RedirectMode) -> Self {
+        self.redirect = mode;
+        self
+    }
+
+    /// Build a cross-origin request with full credentials
+    pub fn cors_with_credentials() -> Self {
+        FetchOptions {
+            credentials: CredentialsMode::Include,
+            ..Default::default()
+        }
+    }
+
+    /// Build a request that omits credentials
+    pub fn anonymous() -> Self {
+        FetchOptions {
+            credentials: CredentialsMode::Omit,
+            ..Default::default()
+        }
+    }
+
+    /// Build a request that bypasses caches
+    pub fn no_cache() -> Self {
+        FetchOptions {
+            cache: CacheMode::NoCache,
+            ..Default::default()
+        }
+    }
+
+    /// Build a request that forces reload from server
+    pub fn reload() -> Self {
+        FetchOptions {
+            cache: CacheMode::Reload,
+            ..Default::default()
+        }
+    }
+
+    /// Build a request that returns redirect responses without following
+    pub fn manual_redirect() -> Self {
+        FetchOptions {
+            redirect: RedirectMode::Manual,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -220,6 +331,17 @@ pub enum CredentialsMode {
     Omit,
     SameOrigin,
     Include,
+}
+
+impl CredentialsMode {
+    /// Parse credentials mode from a JavaScript fetch() options string
+    pub fn from_fetch_option(s: &str) -> Self {
+        match s {
+            "omit" => CredentialsMode::Omit,
+            "include" => CredentialsMode::Include,
+            _ => CredentialsMode::SameOrigin,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -232,11 +354,36 @@ pub enum CacheMode {
     OnlyIfCached,
 }
 
+impl CacheMode {
+    /// Parse cache mode from a JavaScript fetch() options string
+    pub fn from_fetch_option(s: &str) -> Self {
+        match s {
+            "no-store" => CacheMode::NoStore,
+            "reload" => CacheMode::Reload,
+            "no-cache" => CacheMode::NoCache,
+            "force-cache" => CacheMode::ForceCache,
+            "only-if-cached" => CacheMode::OnlyIfCached,
+            _ => CacheMode::Default,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum RedirectMode {
     Follow,
     Error,
     Manual,
+}
+
+impl RedirectMode {
+    /// Parse redirect mode from a JavaScript fetch() options string
+    pub fn from_fetch_option(s: &str) -> Self {
+        match s {
+            "error" => RedirectMode::Error,
+            "manual" => RedirectMode::Manual,
+            _ => RedirectMode::Follow,
+        }
+    }
 }
 
 // Data URLs

@@ -42,6 +42,37 @@ pub enum CursorType {
     NotAllowed,
 }
 
+impl CursorType {
+    /// Map element type to the appropriate cursor
+    pub fn for_element(element: ElementType, is_draggable: bool, is_disabled: bool) -> Self {
+        if is_disabled {
+            return CursorType::NotAllowed;
+        }
+        if is_draggable {
+            return CursorType::Grab;
+        }
+        match element {
+            ElementType::Link | ElementType::Button => CursorType::Pointer,
+            ElementType::Input | ElementType::Textarea => CursorType::Text,
+            _ => CursorType::Default,
+        }
+    }
+}
+
+impl HitResult {
+    /// Summary of the hit result for diagnostics
+    pub fn describe(&self) -> String {
+        format!("HitResult[type={:?}, bounds=({},{},{},{}), href={}, cursor={:?}, editable={}, clickable={}, node={}]",
+            self.element_type,
+            self.bounds.x, self.bounds.y, self.bounds.width, self.bounds.height,
+            self.href.as_deref().unwrap_or("none"),
+            self.cursor,
+            self.is_editable,
+            self.is_clickable,
+            self.node.is_some())
+    }
+}
+
 /// Perform hit test - find what element is at (x, y)
 pub fn hit_test(layout: &LayoutBox, x: f32, y: f32) -> Option<HitResult> {
     // Check if point is in this box's bounds (including padding/border)
@@ -189,24 +220,37 @@ impl InteractionTracker {
     
     pub fn record_click(&mut self, _hit: &HitResult) -> InteractionQuality {
         self.total_actions += 1;
+        self.interacted.push(self.total_actions);
         InteractionQuality::Meaningful
     }
-    
-    pub fn record_input(&mut self, _node_id: usize, char_count: usize) -> InteractionQuality {
+
+    pub fn record_input(&mut self, node_id: usize, char_count: usize) -> InteractionQuality {
         self.keystroke_count += char_count;
+        if !self.edited_fields.contains(&node_id) {
+            self.edited_fields.push(node_id);
+        }
         if char_count > 3 {
             InteractionQuality::Meaningful
+        } else if char_count == 0 {
+            InteractionQuality::Robotic
         } else {
             InteractionQuality::Superficial
         }
     }
-    
+
     pub fn get_quality_score(&self) -> f32 {
         if self.total_actions == 0 {
             return 0.0;
         }
         let meaningful = self.edited_fields.len() + (self.keystroke_count / 10);
         meaningful as f32 / self.total_actions.max(1) as f32
+    }
+
+    /// Summary of tracker state for diagnostics
+    pub fn describe(&self) -> String {
+        format!("InteractionTracker[actions={}, interacted={}, edited={}, keystrokes={}, score={:.2}]",
+            self.total_actions, self.interacted.len(), self.edited_fields.len(),
+            self.keystroke_count, self.get_quality_score())
     }
 }
 

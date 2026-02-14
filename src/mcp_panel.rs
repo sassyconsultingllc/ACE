@@ -32,6 +32,8 @@ pub struct McpPanel {
     pub is_visible: bool,
     pub width: f32,
     pub highlighter: SyntaxHighlighter,
+    pub theme: McpTheme,
+    pub dark_mode: bool,
 }
 
 impl McpPanel {
@@ -46,6 +48,8 @@ impl McpPanel {
             is_visible: false,
             width: 400.0,
             highlighter: SyntaxHighlighter::new(),
+            theme: McpTheme::dark(),
+            dark_mode: true,
         }
     }
     
@@ -95,6 +99,16 @@ impl McpPanel {
     pub fn reject_edits(&mut self) {
         self.orchestrator.reject_edits();
     }
+
+    /// Toggle between dark and light theme
+    pub fn toggle_theme(&mut self) {
+        self.dark_mode = !self.dark_mode;
+        self.theme = if self.dark_mode {
+            McpTheme::dark()
+        } else {
+            McpTheme::light()
+        };
+    }
     
     /// Approve a single edit
     pub fn approve_edit(&mut self, index: usize) -> Option<CodeEdit> {
@@ -117,23 +131,25 @@ impl McpPanel {
     
     fn render_chat(&self) -> PanelRender {
         let mut elements = Vec::new();
-        
+
         // Header
         elements.push(RenderElement::Header {
             title: "AI Coding Assistant".to_string(),
             subtitle: Some(format!("Session: {}", &self.orchestrator.session_id[..8])),
         });
-        
-        // Agent status bar
-        elements.push(RenderElement::AgentBar {
-            agents: vec![
-                AgentStatus { role: AgentRole::Voice, online: true, name: "Grok".to_string() },
-                AgentStatus { role: AgentRole::Orchestrator, online: true, name: "Manus".to_string() },
-                AgentStatus { role: AgentRole::Coder, online: true, name: "Claude".to_string() },
-                AgentStatus { role: AgentRole::Auditor, online: true, name: "Gemini".to_string() },
-            ],
-        });
-        
+
+        // Agent status bar - use theme.agent_color() for each role
+        let agents: Vec<AgentStatus> = vec![
+            (AgentRole::Voice, "Grok"),
+            (AgentRole::Orchestrator, "Manus"),
+            (AgentRole::Coder, "Claude"),
+            (AgentRole::Auditor, "Gemini"),
+        ].into_iter().map(|(role, name)| {
+            let _color = self.theme.agent_color(role);
+            AgentStatus { role, online: true, name: name.to_string() }
+        }).collect();
+        elements.push(RenderElement::AgentBar { agents });
+
         // Messages
         for msg in self.orchestrator.history() {
             elements.push(RenderElement::Message {
@@ -143,23 +159,62 @@ impl McpPanel {
                 timestamp: msg.timestamp.format("%H:%M").to_string(),
             });
         }
-        
+
         // Pending edits notification
         let pending_count = self.orchestrator.pending_edits.len();
         if pending_count > 0 {
             elements.push(RenderElement::Notification {
                 message: format!("* {} pending code changes - switch to Edits tab to review", pending_count),
+                style: NotificationStyle::Warning,
+            });
+        }
+
+        // Git status notification
+        let git_summary = self.orchestrator.git_status_summary();
+        if !git_summary.starts_with("Git:") {
+            elements.push(RenderElement::Notification {
+                message: git_summary,
                 style: NotificationStyle::Info,
             });
         }
-        
+
+        // Session active notification
+        if self.orchestrator.is_active {
+            elements.push(RenderElement::Notification {
+                message: "Session active - all agents online".to_string(),
+                style: NotificationStyle::Success,
+            });
+        }
+
+        // Show any task errors
+        let failed_tasks: Vec<_> = self.orchestrator.tasks.values()
+            .filter(|t| t.status == TaskStatus::Failed)
+            .collect();
+        if !failed_tasks.is_empty() {
+            elements.push(RenderElement::Notification {
+                message: format!("{} task(s) failed - check Tasks tab", failed_tasks.len()),
+                style: NotificationStyle::Error,
+            });
+        }
+
+        // Quick command hints from get_quick_commands()
+        if self.orchestrator.conversation.is_empty() {
+            let commands = get_quick_commands();
+            let hints: Vec<String> = commands.iter().map(|c| format!("/{} - {} (e.g. \"{}\")", c.trigger, c.description, c.example)).collect();
+            elements.push(RenderElement::EmptyState {
+                icon: String::new(),
+                message: "Start coding with AI".to_string(),
+                hint: hints.join(" | "),
+            });
+        }
+
         // Input field
         elements.push(RenderElement::Input {
             placeholder: "Ask me to create, fix, or refactor code...".to_string(),
             value: self.input_text.clone(),
             cursor: self.input_cursor,
         });
-        
+
         PanelRender {
             mode: self.mode,
             elements,
@@ -248,6 +303,7 @@ impl McpPanel {
             elements.push(RenderElement::ActionBar {
                 actions: vec![
                     Action { label: "[OK] Approve All".to_string(), id: "approve_all".to_string(), style: ActionStyle::Primary },
+                    Action { label: "View Diff".to_string(), id: "view_diff".to_string(), style: ActionStyle::Secondary },
                     Action { label: "[X] Reject All".to_string(), id: "reject_all".to_string(), style: ActionStyle::Danger },
                 ],
             });

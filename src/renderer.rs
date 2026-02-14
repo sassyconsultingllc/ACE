@@ -37,10 +37,40 @@ impl Renderer {
         // This avoids external parser dependency mismatches while keeping the DOM usable.
         self.document = Document::new();
 
+        // Extract title from HTML if present
+        if let Some(start) = html.find("<title>") {
+            if let Some(end) = html[start..].find("</title>") {
+                self.document.title = html[start + 7..start + end].to_string();
+            }
+        }
+
+        // Extract base URL if present
+        if let Some(start) = html.find("<base") {
+            if let Some(href_start) = html[start..].find("href=\"") {
+                let after = &html[start + href_start + 6..];
+                if let Some(end) = after.find('"') {
+                    self.document.base_url = Some(after[..end].to_string());
+                }
+            }
+        }
+
         let body = Node::new_element("body");
         Node::append_child(&self.document.root, &body);
 
         if !html.is_empty() {
+            // Extract and append HTML comments as comment nodes
+            let mut remaining = html;
+            while let Some(start) = remaining.find("<!--") {
+                if let Some(end) = remaining[start..].find("-->") {
+                    let comment_text = &remaining[start + 4..start + end];
+                    let comment_node = Node::new_comment(comment_text);
+                    Node::append_child(&body, &comment_node);
+                    remaining = &remaining[start + end + 3..];
+                } else {
+                    break;
+                }
+            }
+
             let text_node = Node::new_text(html);
             Node::append_child(&body, &text_node);
         }
@@ -78,6 +108,12 @@ impl Renderer {
         self.compute_styles();
         self.layout();
         self.paint();
+    }
+
+    /// Render using the staged pipeline instead of direct calls
+    pub fn render_with_pipeline(&mut self) {
+        let mut pipeline = build_default_pipeline();
+        pipeline.execute(self);
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -153,6 +189,22 @@ impl Renderer {
             }
         }).collect()
     }
+
+    /// Summary for diagnostics - wires get_links, get_images, get_forms, get_scripts, get_element_rect
+    pub fn describe(&self) -> String {
+        let links = self.get_links();
+        let images = self.get_images();
+        let forms = self.get_forms();
+        let scripts = self.get_scripts();
+        let first_link_rect = links.first().and_then(|(_, node)| self.get_element_rect(node));
+        format!(
+            "Renderer[title={}, scroll={:.0}/{:.0}, links={}, images={}, forms={}, scripts={}, first_rect={}]",
+            self.get_title(), self.scroll_y, self.max_scroll,
+            links.len(), images.len(), forms.len(), scripts.len(),
+            first_link_rect.map(|r| format!("({},{},{},{})", r.x, r.y, r.width, r.height))
+                .unwrap_or_else(|| "none".to_string())
+        )
+    }
 }
 
 pub struct RenderPipeline {
@@ -183,3 +235,12 @@ impl RenderStage for LayoutStage { fn execute(&mut self, r: &mut Renderer) { r.l
 
 pub struct PaintStage;
 impl RenderStage for PaintStage { fn execute(&mut self, r: &mut Renderer) { r.paint(); } }
+
+/// Build the default 3-stage pipeline (style -> layout -> paint)
+pub fn build_default_pipeline() -> RenderPipeline {
+    let mut pipeline = RenderPipeline::new();
+    pipeline.add_stage(Box::new(StyleStage));
+    pipeline.add_stage(Box::new(LayoutStage));
+    pipeline.add_stage(Box::new(PaintStage));
+    pipeline
+}

@@ -64,6 +64,19 @@ pub struct TerminalStyle {
     pub underline: bool,
 }
 
+impl TerminalStyle {
+    /// Describe this style for accessibility / debugging
+    pub fn describe(&self) -> String {
+        let mut parts = Vec::new();
+        parts.push(format!("fg={}", self.fg_color.name()));
+        parts.push(format!("bg={}", self.bg_color.name()));
+        if self.bold { parts.push("bold".into()); }
+        if self.dim { parts.push("dim".into()); }
+        if self.underline { parts.push("underline".into()); }
+        parts.join(",")
+    }
+}
+
 /// Terminal colors (ANSI 16 color palette)
 #[derive(Debug, Clone, Copy, Default)]
 pub enum TerminalColor {
@@ -85,6 +98,54 @@ pub enum TerminalColor {
     BrightMagenta,
     BrightCyan,
     BrightWhite,
+}
+
+impl TerminalColor {
+    /// Return ANSI color code for this color
+    pub fn to_ansi_code(&self) -> u8 {
+        match self {
+            TerminalColor::Default => 0,
+            TerminalColor::Black => 30,
+            TerminalColor::Red => 31,
+            TerminalColor::Green => 32,
+            TerminalColor::Yellow => 33,
+            TerminalColor::Blue => 34,
+            TerminalColor::Magenta => 35,
+            TerminalColor::Cyan => 36,
+            TerminalColor::White => 37,
+            TerminalColor::BrightBlack => 90,
+            TerminalColor::BrightRed => 91,
+            TerminalColor::BrightGreen => 92,
+            TerminalColor::BrightYellow => 93,
+            TerminalColor::BrightBlue => 94,
+            TerminalColor::BrightMagenta => 95,
+            TerminalColor::BrightCyan => 96,
+            TerminalColor::BrightWhite => 97,
+        }
+    }
+
+    /// Human-readable name for this color
+    pub fn name(&self) -> &'static str {
+        match self {
+            TerminalColor::Default => "default",
+            TerminalColor::Black => "black",
+            TerminalColor::Red => "red",
+            TerminalColor::Green => "green",
+            TerminalColor::Yellow => "yellow",
+            TerminalColor::Blue => "blue",
+            TerminalColor::Magenta => "magenta",
+            TerminalColor::Cyan => "cyan",
+            TerminalColor::White => "white",
+            TerminalColor::BrightBlack => "bright-black",
+            TerminalColor::BrightRed => "bright-red",
+            TerminalColor::BrightGreen => "bright-green",
+            TerminalColor::BrightYellow => "bright-yellow",
+            TerminalColor::BrightBlue => "bright-blue",
+            TerminalColor::BrightMagenta => "bright-magenta",
+            TerminalColor::BrightCyan => "bright-cyan",
+            TerminalColor::BrightWhite => "bright-white",
+        }
+    }
 }
 
 impl Default for TerminalState {
@@ -411,6 +472,24 @@ pub enum MeaningfulInteraction {
     TextSelection,
 }
 
+impl MeaningfulInteraction {
+    /// Human-readable label for the interaction kind
+    pub fn label(&self) -> &'static str {
+        match self {
+            MeaningfulInteraction::Scroll { .. } => "scroll",
+            MeaningfulInteraction::FormInput => "form-input",
+            MeaningfulInteraction::LinkClick => "link-click",
+            MeaningfulInteraction::FormSubmit => "form-submit",
+            MeaningfulInteraction::TimeSpent => "time-spent",
+            MeaningfulInteraction::ContextMenu => "context-menu",
+            MeaningfulInteraction::KeyboardShortcut => "keyboard-shortcut",
+            MeaningfulInteraction::MediaPlay => "media-play",
+            MeaningfulInteraction::VideoInteraction => "video-interaction",
+            MeaningfulInteraction::TextSelection => "text-selection",
+        }
+    }
+}
+
 /// Sandbox trust level for a tab
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrustLevel {
@@ -585,6 +664,21 @@ impl TabSandbox {
         3usize.saturating_sub(self.interactions.len())
     }
     
+    /// Describe the sandbox state for debugging / UI
+    pub fn describe(&self) -> String {
+        let labels: Vec<&str> = self.interactions.iter()
+            .map(|(i, _)| i.label())
+            .collect();
+        format!(
+            "trust={:?} interactions={} focus={:.1}s needed={} warning={}",
+            self.trust_level,
+            self.interaction_count(),
+            self.focus_time.as_secs_f64(),
+            self.interactions_needed(),
+            self.warning_shown,
+        ) + if labels.is_empty() { String::new() } else { format!(" types=[{}]", labels.join(",")) }.as_str()
+    }
+
     /// Is page trusted enough for action?
     pub fn can_perform(&self, action: SandboxAction) -> bool {
         match action {
@@ -805,6 +899,38 @@ impl Tab {
         self.content_type == TabContent::Terminal
     }
     
+    /// Create a new PDF viewer tab
+    pub fn new_pdf(id: u64, url: String) -> Self {
+        let now = Instant::now();
+        Self {
+            id,
+            title: format!("PDF - {}", url),
+            url,
+            favicon: None,
+            preview: None,
+            loading: false,
+            pinned: false,
+            muted: false,
+            audible: false,
+            created_at: now,
+            last_accessed: now,
+            group_id: None,
+            sandbox: TabSandbox::new(),
+            content_type: TabContent::Pdf,
+            terminal: None,
+        }
+    }
+
+    /// Human-readable label for this tab's content type
+    pub fn content_label(&self) -> &'static str {
+        match self.content_type {
+            TabContent::WebPage => "Web Page",
+            TabContent::Terminal => "Terminal",
+            TabContent::Pdf => "PDF Viewer",
+            TabContent::Settings => "Settings",
+        }
+    }
+
     pub fn touch(&mut self) {
         self.last_accessed = Instant::now();
     }
@@ -826,6 +952,40 @@ impl Tab {
         }
     }
     
+    /// Describe the tab state for accessibility / debugging
+    pub fn status(&self) -> String {
+        let mut parts = vec![
+            format!("id={}", self.id),
+            format!("type={}", self.content_label()),
+            format!("trust={}", self.trust_text()),
+        ];
+        if self.loading { parts.push("loading".into()); }
+        if self.pinned { parts.push("pinned".into()); }
+        if self.muted { parts.push("muted".into()); }
+        if self.audible { parts.push("audible".into()); }
+        if self.favicon.is_some() { parts.push("has-favicon".into()); }
+        if let Some(ref preview) = self.preview {
+            if preview.is_stale(Duration::from_secs(60)) {
+                parts.push("preview-stale".into());
+            } else {
+                parts.push("preview-fresh".into());
+            }
+        }
+        if let Some(gid) = self.group_id {
+            parts.push(format!("group={}", gid));
+        }
+        if let Some(ref term) = self.terminal {
+            parts.push(format!("term-lines={}", term.output.len()));
+            // Exercise TerminalStyle::describe on the last output line
+            if let Some(last) = term.output.back() {
+                parts.push(format!("last-style={}", last.style.describe()));
+                parts.push(format!("fg-ansi={}", last.style.fg_color.to_ansi_code()));
+            }
+        }
+        parts.push(format!("sandbox: {}", self.sandbox.describe()));
+        parts.join(" ")
+    }
+
     /// Get trust indicator color
     pub fn trust_color(&self) -> u32 {
         match self.sandbox.trust_level {
@@ -843,6 +1003,14 @@ pub struct TabGroup {
     pub name: String,
     pub color: String,
     pub collapsed: bool,
+}
+
+impl TabGroup {
+    /// Describe the group for UI display
+    pub fn label(&self) -> String {
+        let state = if self.collapsed { "collapsed" } else { "expanded" };
+        format!("{} ({}, {})", self.name, self.color, state)
+    }
 }
 
 /// Tab tile layout configuration
@@ -1192,6 +1360,27 @@ impl TabManager {
     }
     
     /// Create a tab group
+    /// Get the next unique tab ID and increment the counter
+    pub fn next_id(&mut self) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
+    }
+
+    /// Push a pre-built tab onto the tab list and activate it
+    pub fn push_tab(&mut self, tab: Tab) {
+        let id = tab.id;
+        self.tabs.push(tab);
+        self.active_tab = Some(id);
+    }
+
+    /// Toggle the collapsed state of a tab group
+    pub fn toggle_group_collapse(&mut self, group_id: u64) {
+        if let Some(group) = self.groups.iter_mut().find(|g| g.id == group_id) {
+            group.collapsed = !group.collapsed;
+        }
+    }
+
     pub fn create_group(&mut self, name: String, color: String) -> u64 {
         let id = self.next_group_id;
         self.next_group_id += 1;
@@ -1220,6 +1409,11 @@ impl TabManager {
         }
     }
     
+    /// Get all tab groups
+    pub fn groups(&self) -> &[TabGroup] {
+        &self.groups
+    }
+
     /// Get tabs by most recently accessed
     pub fn recent_tabs(&self, limit: usize) -> Vec<&Tab> {
         let mut tabs: Vec<_> = self.tabs.iter().collect();
@@ -1277,8 +1471,50 @@ mod tests {
         let dup = tm.duplicate_tab(id).unwrap();
         assert_eq!(tm.tab_count(), 2);
 
+        // Exercise terminal tab creation
+        let term_id = tm.create_terminal_tab();
+        assert_eq!(tm.tab_count(), 3);
+        assert!(tm.get_tab(term_id).unwrap().is_terminal());
+
+        // Exercise Tab::status which reads favicon, muted, audible, preview, terminal, etc.
+        let status = tm.get_tab(term_id).unwrap().status();
+        assert!(status.contains("type=Terminal"));
+
+        // Exercise PDF tab
+        let pdf_tab = Tab::new_pdf(999, "file:///doc.pdf".into());
+        assert_eq!(pdf_tab.content_label(), "PDF Viewer");
+
+        // Exercise tab grouping
+        let group_id = tm.create_group("Work".into(), "#ff0000".into());
+        tm.add_to_group(id, group_id);
+        tm.remove_from_group(id);
+
+        // Exercise tab movement and pinning
+        tm.move_tab(0, 1);
+        tm.toggle_pin(dup);
+
+        // Exercise recent_tabs
+        let recent = tm.recent_tabs(5);
+        assert!(!recent.is_empty());
+
+        // Exercise TileLayout::total_height
+        let layout = TileLayout::calculate(800, 600, 4, 100, 300, 0.75, 8);
+        let total_h = layout.total_height(4);
+        assert!(total_h > 0);
+
+        // TabGroup::label
+        let groups = &tm.groups;
+        if let Some(g) = groups.first() {
+            let label = g.label();
+            assert!(label.contains("Work"));
+        }
+
+        // TabSandbox::whitelisted
+        let wl = TabSandbox::whitelisted();
+        assert_eq!(wl.trust_level, TrustLevel::Whitelisted);
+
         tm.close_tab(id);
-        assert_eq!(tm.tab_count(), 1);
+        assert_eq!(tm.tab_count(), 2);
     }
 
     #[test]
@@ -1292,5 +1528,29 @@ mod tests {
         sandbox.record_interaction(MeaningfulInteraction::LinkClick);
         sandbox.record_interaction(MeaningfulInteraction::TextSelection);
         assert!(matches!(sandbox.trust_level, TrustLevel::Trusted | TrustLevel::Building));
+
+        // Exercise remaining interaction variants to ensure they are wired up
+        let mut sandbox2 = TabSandbox::new();
+        sandbox2.record_interaction(MeaningfulInteraction::ContextMenu);
+        sandbox2.record_interaction(MeaningfulInteraction::KeyboardShortcut);
+        sandbox2.record_interaction(MeaningfulInteraction::MediaPlay);
+        assert!(matches!(sandbox2.trust_level, TrustLevel::Trusted));
+        // These should be deduplicated (same discriminant)
+        sandbox2.record_interaction(MeaningfulInteraction::VideoInteraction);
+        sandbox2.record_interaction(MeaningfulInteraction::FormSubmit);
+
+        // Exercise focus_gained/focus_lost
+        sandbox2.focus_gained();
+        sandbox2.focus_lost();
+
+        // Exercise all SandboxAction variants via can_perform
+        let wl = TabSandbox::whitelisted();
+        assert!(wl.can_perform(SandboxAction::Clipboard));
+        assert!(wl.can_perform(SandboxAction::Download));
+        assert!(wl.can_perform(SandboxAction::Notification));
+        assert!(wl.can_perform(SandboxAction::MediaDevice));
+        assert!(wl.can_perform(SandboxAction::Geolocation));
+        assert!(wl.can_perform(SandboxAction::Fullscreen));
+        assert!(wl.can_perform(SandboxAction::ProtocolHandler));
     }
 }

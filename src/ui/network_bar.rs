@@ -3,7 +3,8 @@
 //! Shows when the browser is doing network activity, so users know
 //! something is happening even when the page looks static.
 
- 
+#![allow(dead_code)]
+
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
@@ -118,6 +119,36 @@ impl RequestTiming {
     pub fn total_duration_ms(&self, started: Instant) -> f64 {
         let end = self.receive_end.unwrap_or_else(Instant::now);
         end.duration_since(started).as_secs_f64() * 1000.0
+    }
+}
+
+impl NetworkRequest {
+    /// Summarize timing phases for this request
+    pub fn timing_summary(&self) -> String {
+        let mut parts = Vec::new();
+        if let Some(dns) = self.timing.dns_duration_ms() {
+            parts.push(format!("dns={:.1}ms", dns));
+        }
+        if let Some(conn) = self.timing.connect_duration_ms() {
+            parts.push(format!("conn={:.1}ms", conn));
+        }
+        if let Some(send) = self.timing.send_duration_ms() {
+            parts.push(format!("send={:.1}ms", send));
+        }
+        if let Some(wait) = self.timing.wait_duration_ms() {
+            parts.push(format!("wait={:.1}ms", wait));
+        }
+        if let Some(recv) = self.timing.receive_duration_ms() {
+            parts.push(format!("recv={:.1}ms", recv));
+        }
+        parts.push(format!("total={:.1}ms", self.timing.total_duration_ms(self.started)));
+        if let Some(ref ct) = self.content_type {
+            parts.push(format!("type={}", ct));
+        }
+        if let Some(total) = self.bytes_total {
+            parts.push(format!("size={}", format_bytes(total)));
+        }
+        format!("{} {} [{}] {}", self.method, self.host, state_text(self.state), parts.join(" "))
     }
 }
 
@@ -600,5 +631,58 @@ mod tests {
         assert!(short_url.len() <= 23);
 
         assert_eq!(state_text(RequestState::Connecting), "Connecting");
+    }
+
+    #[test]
+    fn test_network_bar_lifecycle() {
+        let mut bar = NetworkBar::new();
+
+        // Start a request and exercise all state transitions
+        bar.start_request(1, "https://example.com/page", "GET");
+        assert_eq!(bar.active_count(), 1);
+
+        bar.set_content_length(1, 4096);
+        bar.set_content_type(1, "text/html");
+
+        bar.update_request(1, RequestState::Sending);
+        bar.update_request(1, RequestState::Waiting);
+        bar.update_request(1, RequestState::Receiving);
+        bar.add_bytes(1, 2048);
+
+        // Exercise timing_summary on the active request
+        if let Some(req) = bar.requests.first() {
+            let summary = req.timing_summary();
+            assert!(summary.contains("example.com"));
+        }
+
+        bar.complete_request(1);
+
+        // Start another to test cancel
+        bar.start_request(2, "https://other.example/api", "POST");
+        bar.cancel_request(2);
+        assert_eq!(bar.active_count(), 0);
+
+        // Exercise toggle and hover
+        bar.toggle_expanded();
+        assert!(bar.expanded);
+        bar.toggle_expanded();
+        assert!(!bar.expanded);
+
+        let hovered = bar.is_hovered(10, 10, 0, 0, 100, 20);
+        assert!(hovered);
+        let not_hovered = bar.is_hovered(200, 200, 0, 0, 100, 20);
+        assert!(!not_hovered);
+
+        // Exercise status and activity
+        bar.update();
+        let _ = bar.status_text();
+        let _ = bar.activity_level();
+        let _ = bar.hover_tooltip();
+        let _ = bar.visible_requests();
+
+        // Exercise both color themes
+        let dark = NetworkBarColors::dark();
+        let light = NetworkBarColors::light();
+        assert_ne!(dark.background, light.background);
     }
 }

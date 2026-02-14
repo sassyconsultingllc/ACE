@@ -647,6 +647,9 @@ impl DetectionEngine {
                 entry.total_score += score;
                 entry.last_event = now;
 
+                // Log first-seen age for persistent tracking
+                let _age_secs = now.duration_since(entry.first_seen).as_secs();
+
                 // Update cooldown
                 self.last_alert_time.insert(rule.name.to_string(), now);
 

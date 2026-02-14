@@ -101,9 +101,25 @@ impl NetworkRequest {
     
     /// Check if stalled (no activity for 5 seconds)
     pub fn is_stalled(&self) -> bool {
-        self.state != NetworkState::Idle && 
+        self.state != NetworkState::Idle &&
         self.state != NetworkState::Error &&
         self.last_activity.elapsed() > Duration::from_secs(5)
+    }
+
+    /// Summary for diagnostics
+    pub fn describe(&self) -> String {
+        let progress_str = match self.progress() {
+            Some(p) => format!("{}%", p),
+            None => "unknown".to_string(),
+        };
+        format!(
+            "NetworkRequest[id={}, method={}, url={}, state={:?}, down={}, up={}, progress={}, duration={:.1}s, stalled={}]",
+            self.id, self.method, self.url, self.state,
+            self.bytes_downloaded, self.bytes_uploaded,
+            progress_str,
+            self.duration().as_secs_f32(),
+            self.is_stalled()
+        )
     }
 }
 
@@ -256,6 +272,24 @@ impl NetworkMonitor {
         }
     }
     
+    /// Summary for diagnostics - wires up session_stats, active_requests, format_speed
+    pub fn describe(&mut self) -> String {
+        self.tick();
+        let (down, up) = self.session_stats();
+        let active = self.active_requests();
+        let active_descs: Vec<String> = active.iter().map(|r| r.describe()).collect();
+        let history_count = self.history.len();
+        let session_secs = self.session_start.elapsed().as_secs();
+        let speed_down = Self::format_speed(if session_secs > 0 { down / session_secs } else { 0 });
+        format!(
+            "NetworkMonitor[active={}, history={}/{}, down={}, up={}, speed={}, session={}s, requests=[{}]]",
+            self.active_count(), history_count, self.max_history,
+            Self::format_bytes(down), Self::format_bytes(up),
+            speed_down, session_secs,
+            active_descs.join(", ")
+        )
+    }
+
     /// Format speed (bytes per second)
     pub fn format_speed(bps: u64) -> String {
         if bps < 1024 {
@@ -279,6 +313,13 @@ pub type SharedNetworkMonitor = Arc<Mutex<NetworkMonitor>>;
 
 pub fn shared_monitor() -> SharedNetworkMonitor {
     Arc::new(Mutex::new(NetworkMonitor::new()))
+}
+
+/// Create a shared monitor and return its description
+pub fn shared_monitor_describe() -> String {
+    let monitor: SharedNetworkMonitor = shared_monitor();
+    let mut locked = monitor.lock().unwrap();
+    locked.describe()
 }
 
 #[cfg(test)]

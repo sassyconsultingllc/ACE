@@ -99,6 +99,13 @@ pub struct FilterList {
 }
 
 impl FilterList {
+    /// Summary of the filter list
+    pub fn describe(&self) -> String {
+        format!("FilterList[name={}, url={}, enabled={}, rules={}, updated={}]",
+            self.name, self.url, self.enabled, self.rules.len(),
+            self.last_updated.as_deref().unwrap_or("never"))
+    }
+
     pub fn new(name: &str, url: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -123,6 +130,17 @@ pub struct BlockStats {
 }
 
 impl BlockStats {
+    /// Summary of blocking statistics
+    pub fn describe(&self) -> String {
+        let top_domains: Vec<_> = self.blocked_by_domain.iter().take(5)
+            .map(|(d, c)| format!("{}:{}", d, c)).collect();
+        let type_counts: Vec<_> = self.blocked_by_type.iter()
+            .map(|(t, c)| format!("{:?}:{}", t, c)).collect();
+        format!("BlockStats[total={}, today={}, domains=[{}], types=[{}]]",
+            self.total_blocked, self.blocked_today,
+            top_domains.join(","), type_counts.join(","))
+    }
+
     pub fn record_block(&mut self, domain: &str, resource_type: ResourceType) {
         self.total_blocked += 1;
         self.blocked_today += 1;
@@ -175,7 +193,70 @@ struct CosmeticRule {
     style: Option<String>,
 }
 
+impl CompiledRule {
+    /// Summary of compiled rule for diagnostics
+    pub fn describe(&self) -> String {
+        format!("CompiledRule[pattern={}, domains={}, except={}, types={}, 3p={:?}]",
+            self.pattern,
+            self.domains.as_ref().map(|d| d.len()).unwrap_or(0),
+            self.except_domains.as_ref().map(|d| d.len()).unwrap_or(0),
+            self.resource_types.as_ref().map(|t| t.len()).unwrap_or(0),
+            self.third_party)
+    }
+}
+
+impl CosmeticRule {
+    /// Summary of cosmetic rule for diagnostics
+    pub fn describe(&self) -> String {
+        format!("CosmeticRule[sel={}, domains={}, except={}, style={}]",
+            self.selector,
+            self.domains.as_ref().map(|d| d.len()).unwrap_or(0),
+            self.except_domains.as_ref().map(|d| d.len()).unwrap_or(0),
+            self.style.is_some())
+    }
+}
+
 impl AdBlocker {
+    /// Summary of the ad blocker state for diagnostics
+    pub fn describe(&self) -> String {
+        let stats = self.get_stats();
+        let top_domains: Vec<_> = stats.blocked_by_domain.iter().take(5)
+            .map(|(d, c)| format!("{}={}", d, c))
+            .collect();
+        let top_types: Vec<_> = stats.blocked_by_type.iter().take(5)
+            .map(|(t, c)| format!("{:?}={}", t, c))
+            .collect();
+        let list_info: Vec<_> = self.filter_lists.iter()
+            .map(|l| format!("{} (updated: {}, rules: {})",
+                l.name,
+                l.last_updated.as_deref().unwrap_or("never"),
+                l.rules.len()))
+            .collect();
+        let compiled_info: Vec<_> = self.block_patterns.iter().take(3)
+            .map(|r| r.describe())
+            .collect();
+        let cosmetic_info: Vec<_> = self.cosmetic_rules.iter().take(3)
+            .map(|r| r.describe())
+            .collect();
+        format!(
+            "AdBlocker[enabled={}, lists={}, custom={}, blocks={}, allows={}, cosmetic={}, \
+             whitelist={}, top_domains=[{}], top_types=[{}], lists_detail=[{}], \
+             sample_patterns=[{}], cosmetic_sample=[{}]]",
+            self.enabled,
+            self.filter_lists.len(),
+            self.custom_rules.len(),
+            self.block_patterns.len(),
+            self.allow_patterns.len(),
+            self.cosmetic_rules.len(),
+            self.whitelist.len(),
+            top_domains.join(", "),
+            top_types.join(", "),
+            list_info.join("; "),
+            compiled_info.join(", "),
+            cosmetic_info.join(", "),
+        )
+    }
+
     pub fn new() -> Self {
         let mut blocker = Self {
             filter_lists: Vec::new(),
@@ -854,11 +935,13 @@ impl AdBlockerUI {
             ui.separator();
             
             // Stats
-            let stats = blocker.get_stats();
-            ui.horizontal(|ui| {
-                ui.label(format!("[x] Total blocked: {}", stats.total_blocked));
-                ui.label(format!("XLS Today: {}", stats.blocked_today));
-            });
+            if self.show_stats {
+                let stats = blocker.get_stats();
+                ui.horizontal(|ui| {
+                    ui.label(format!("[x] Total blocked: {}", stats.total_blocked));
+                    ui.label(format!("XLS Today: {}", stats.blocked_today));
+                });
+            }
             
             ui.separator();
             
@@ -870,6 +953,7 @@ impl AdBlockerUI {
             drop(blocker);
 
             let mut toggle_list: Option<(usize, bool)> = None;
+            if self.show_lists {
             ui.collapsing("DATA Filter Lists", |ui| {
                 for (i, (name, rule_count, enabled)) in list_info.iter().enumerate() {
                     ui.horizontal(|ui| {
@@ -882,6 +966,7 @@ impl AdBlockerUI {
                     });
                 }
             });
+            }
             if let Some((idx, enable)) = toggle_list {
                 if let Ok(mut b) = self.blocker.write() {
                     if enable { b.enable_list(idx); } else { b.disable_list(idx); }

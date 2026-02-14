@@ -6,3 +6,9 @@ target/
 *.log
 *.tmp
 *.bak
+# allow tracking the claude local settings (override any .claude/ or *.local.json ignore)
+!.claude/settings.local.json
+# ignore stray temporary/reserved filenames that break Git on Windows
+*tempwarn*
+tempwarn_lines.txt
+NUL

@@ -1,6 +1,7 @@
 //! Native MCP Protocol — Pure Rust, Bincode over WebSocket
 //!
 //! NO JSON. NO serde_json. Pure binary protocol using bincode.
+#![allow(dead_code)]
 //!
 //! ARCHITECTURE:
 //! ─────────────────────────────────────────────────────────────────────────

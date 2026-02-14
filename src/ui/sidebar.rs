@@ -2,7 +2,8 @@
 //! Sidebars can be placed on any edge: top, right, bottom, left
 //! Each can be hidden, collapsed, or expanded
 
- 
+#![allow(dead_code)]
+
 use super::theme::{SidebarState, Theme};
 use std::collections::HashMap;
 
@@ -50,6 +51,34 @@ pub enum SidebarWidget {
     AddressBar,
     StatusBar,
     Custom(String),
+}
+
+impl SidebarWidget {
+    /// Human-readable label for this widget type
+    pub fn label(&self) -> &'static str {
+        match self {
+            SidebarWidget::TabList => "Tab List",
+            SidebarWidget::TabTiles => "Tab Tiles",
+            SidebarWidget::Bookmarks => "Bookmarks",
+            SidebarWidget::History => "History",
+            SidebarWidget::Downloads => "Downloads",
+            SidebarWidget::Extensions => "Extensions",
+            SidebarWidget::DevTools => "DevTools",
+            SidebarWidget::Search => "Search",
+            SidebarWidget::Navigation => "Navigation",
+            SidebarWidget::AddressBar => "Address Bar",
+            SidebarWidget::StatusBar => "Status Bar",
+            SidebarWidget::Custom(_) => "Custom",
+        }
+    }
+}
+
+impl SidebarContent {
+    /// Describe this content entry for accessibility / debugging
+    pub fn describe(&self) -> String {
+        let icon_str = self.icon.as_deref().unwrap_or("none");
+        format!("[{}] {} (icon={}, widget={})", self.id, self.title, icon_str, self.widget.label())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -416,5 +445,78 @@ mod tests {
         // Content rect should shrink when left sidebar present
         let rect = layout.content_rect(800, 600);
         assert!(rect.width < 800);
+
+        // Exercise Rect::right and Rect::bottom
+        assert_eq!(rect.right(), rect.x + rect.width);
+        assert_eq!(rect.bottom(), rect.y + rect.height);
+
+        // Exercise Edge::is_horizontal / is_vertical
+        assert!(Edge::Top.is_horizontal());
+        assert!(Edge::Bottom.is_horizontal());
+        assert!(Edge::Left.is_vertical());
+        assert!(Edge::Right.is_vertical());
+    }
+
+    #[test]
+    fn test_sidebar_with_size_and_remove() {
+        let mut sidebar = Sidebar::new(Edge::Left).with_size(300);
+        assert_eq!(sidebar.size, 300);
+
+        sidebar.add_content(SidebarContent {
+            id: "test".into(),
+            title: "Test".into(),
+            icon: Some("icon".into()),
+            widget: SidebarWidget::History,
+        });
+        assert_eq!(sidebar.contents.len(), 1);
+
+        // Exercise SidebarContent::describe which reads icon
+        let desc = sidebar.contents[0].describe();
+        assert!(desc.contains("icon=icon"));
+
+        sidebar.remove_content("test");
+        assert!(sidebar.contents.is_empty());
+    }
+
+    #[test]
+    fn test_all_sidebar_widget_variants() {
+        // Construct every SidebarWidget variant to wire them up
+        let widgets = vec![
+            SidebarWidget::TabList,
+            SidebarWidget::TabTiles,
+            SidebarWidget::Bookmarks,
+            SidebarWidget::History,
+            SidebarWidget::Downloads,
+            SidebarWidget::Extensions,
+            SidebarWidget::DevTools,
+            SidebarWidget::Search,
+            SidebarWidget::Navigation,
+            SidebarWidget::AddressBar,
+            SidebarWidget::StatusBar,
+            SidebarWidget::Custom("my-widget".into()),
+        ];
+        for w in &widgets {
+            assert!(!w.label().is_empty());
+        }
+    }
+
+    #[test]
+    fn test_sidebar_resize_and_move_content() {
+        let mut sidebar = Sidebar::new(Edge::Right);
+        sidebar.expand();
+        assert!(sidebar.is_expanded());
+        sidebar.handle_resize(-20);
+        assert!(sidebar.size <= sidebar.max_size);
+
+        let mut layout = SidebarLayout::new();
+
+        // Exercise move_content
+        layout.move_content("tabs", Edge::Left, Edge::Right);
+        let right = layout.get(Edge::Right).unwrap();
+        assert!(right.contents.iter().any(|c| c.id == "tabs"));
+
+        // Hit test
+        let edge = layout.hit_test(5, 200, 800, 600);
+        assert!(edge.is_some());
     }
 }

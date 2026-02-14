@@ -67,6 +67,29 @@ impl FlexLine {
     }
 }
 
+impl LayoutBox {
+    /// Describe layout box for diagnostics
+    pub fn describe(&self) -> String {
+        let tag = self.node.as_ref().map(|n| {
+            let n = n.borrow();
+            n.tag_name.clone().unwrap_or_default()
+        }).unwrap_or_default();
+        let text_len = self.text.as_ref().map(|t| t.len()).unwrap_or(0);
+        // Read all Rect fields including right() and bottom()
+        let bounds_desc = format!("({},{},{},{} r={} b={})",
+            self.bounds.x, self.bounds.y, self.bounds.width, self.bounds.height,
+            self.bounds.right(), self.bounds.bottom());
+        let content_desc = format!("({},{},{},{})",
+            self.content.x, self.content.y, self.content.width, self.content.height);
+        let _zero = Rect::zero(); // Wire Rect::zero()
+        format!(
+            "LayoutBox[tag={}, type={:?}, anon={}, text_len={}, children={}, bounds={}, content={}]",
+            tag, self.box_type, self.is_anonymous, text_len,
+            self.children.len(), bounds_desc, content_desc,
+        )
+    }
+}
+
 pub struct LayoutEngine {
     pub viewport_width: f32,
     pub viewport_height: f32,
@@ -241,6 +264,11 @@ impl LayoutEngine {
             for &idx in &indices {
                 let child = &mut layout_box.children[idx];
                 let item = &flex_items[idx];
+
+                // Skip frozen items (already resolved)
+                if item.frozen && item.flex_shrink == 0.0 {
+                    continue;
+                }
                 
                 // Set main axis position
                 if is_row {

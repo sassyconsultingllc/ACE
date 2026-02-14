@@ -3,6 +3,8 @@
 //! Blocks spam popups while allowing legitimate ones like captchas.
 //! Uses heuristics to distinguish between user-initiated and spam popups.
 
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -53,6 +55,20 @@ pub enum PopupReason {
     Unknown,
 }
 
+impl PopupReason {
+    /// Human-readable label for this popup reason
+    pub fn label(&self) -> &'static str {
+        match self {
+            PopupReason::WindowOpen => "window.open",
+            PopupReason::TargetBlank => "target=_blank",
+            PopupReason::FormSubmit => "form-submit",
+            PopupReason::UserClick => "user-click",
+            PopupReason::Script => "script",
+            PopupReason::Unknown => "unknown",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PopupClassification {
     Allowed,         // Definitely allow
@@ -71,6 +87,18 @@ pub enum InteractionType {
     Scroll,
 }
 
+impl InteractionType {
+    /// Human-readable label for this interaction type
+    pub fn label(&self) -> &'static str {
+        match self {
+            InteractionType::Click => "click",
+            InteractionType::KeyPress => "keypress",
+            InteractionType::FormSubmit => "form-submit",
+            InteractionType::Scroll => "scroll",
+        }
+    }
+}
+
 /// Result of popup evaluation
 #[derive(Debug, Clone)]
 pub struct PopupDecision {
@@ -78,6 +106,31 @@ pub struct PopupDecision {
     pub classification: PopupClassification,
     pub reason: String,
     pub show_notification: bool,
+}
+
+impl PopupDecision {
+    /// Describe the decision for logging / UI display
+    pub fn describe(&self) -> String {
+        format!(
+            "allow={} classification={:?} notify={} reason={}",
+            self.allow, self.classification, self.show_notification, self.reason
+        )
+    }
+}
+
+impl PendingPopup {
+    /// Describe the pending popup for UI / logging
+    pub fn describe(&self) -> String {
+        format!(
+            "{} from {} ({}) reason={} class={:?} age={:.1}s",
+            self.url,
+            self.opener_url,
+            self.opener_domain,
+            self.reason.label(),
+            self.classification,
+            self.timestamp.elapsed().as_secs_f64(),
+        )
+    }
 }
 
 impl PopupManager {
@@ -512,6 +565,16 @@ mod tests {
         assert!(!decision.allow);
         assert!(pm.pending_count() >= 1);
 
+        // Exercise PopupDecision::describe which reads show_notification
+        let desc = decision.describe();
+        assert!(desc.contains("notify="));
+
+        // Exercise PendingPopup::describe
+        if let Some(pending) = pm.pending_popups.first() {
+            let pdesc = pending.describe();
+            assert!(pdesc.contains("suspicious.example"));
+        }
+
         // Allow pending
         let urls = pm.allow_all_pending();
         assert!(!urls.is_empty());
@@ -522,5 +585,85 @@ mod tests {
         pm.block_domain("evil.example");
         assert!(pm.blocked_domains.contains(&"evil.example".to_string()));
         assert_eq!(pm.blocked_for("evil.example"), 0);
+    }
+
+    #[test]
+    fn test_popup_reason_variants() {
+        // Construct and label all PopupReason variants
+        let reasons = vec![
+            PopupReason::WindowOpen,
+            PopupReason::TargetBlank,
+            PopupReason::FormSubmit,
+            PopupReason::UserClick,
+            PopupReason::Script,
+            PopupReason::Unknown,
+        ];
+        for r in &reasons {
+            assert!(!r.label().is_empty());
+        }
+    }
+
+    #[test]
+    fn test_interaction_type_variants() {
+        // Construct and label all InteractionType variants
+        let types = vec![
+            InteractionType::Click,
+            InteractionType::KeyPress,
+            InteractionType::FormSubmit,
+            InteractionType::Scroll,
+        ];
+        for t in &types {
+            assert!(!t.label().is_empty());
+        }
+
+        // Record all interaction types
+        let mut pm = PopupManager::new();
+        pm.record_interaction(InteractionType::KeyPress);
+        pm.record_interaction(InteractionType::Scroll);
+        pm.record_interaction(InteractionType::FormSubmit);
+        assert!(pm.last_user_interaction.is_some());
+    }
+
+    #[test]
+    fn test_popup_with_user_click_reason() {
+        let mut pm = PopupManager::new();
+        pm.record_interaction(InteractionType::Click);
+
+        // UserClick-initiated popup should be allowed (with sandbox permission)
+        let decision = pm.evaluate(
+            "https://safe.example/page",
+            "https://opener.example",
+            PopupReason::UserClick,
+            true,
+        );
+        assert!(decision.allow);
+
+        // TargetBlank popup
+        let decision2 = pm.evaluate(
+            "https://safe.example/page2",
+            "https://opener.example",
+            PopupReason::TargetBlank,
+            true,
+        );
+        assert!(decision2.allow);
+
+        // FormSubmit popup
+        let decision3 = pm.evaluate(
+            "https://safe.example/submit",
+            "https://opener.example",
+            PopupReason::FormSubmit,
+            true,
+        );
+        // FormSubmit without tracking patterns should be allowed as UserInitiated
+        assert!(decision3.allow);
+
+        // Unknown popup reason
+        let decision4 = pm.evaluate(
+            "https://safe.example/unknown",
+            "https://opener.example",
+            PopupReason::Unknown,
+            true,
+        );
+        assert!(decision4.allow);
     }
 }

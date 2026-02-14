@@ -1,5 +1,6 @@
+#![allow(dead_code)]
 //! User-based sync sessions
-//! 
+//!
 //! Connection model:
 //! 1. Phone connects via Tailscale (encrypted mesh)
 //! 2. App shows "Who's browsing?" with user avatars

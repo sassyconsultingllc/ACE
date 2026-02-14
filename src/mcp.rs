@@ -35,6 +35,40 @@ pub enum HostingMode {
     Local,
 }
 
+impl HostingMode {
+    /// Describe the hosting mode
+    pub fn describe(&self) -> &'static str {
+        match self {
+            HostingMode::Cloud => "Cloud APIs (xAI, Anthropic, Google)",
+            HostingMode::SelfHosted => "Self-hosted endpoints (HuggingFace)",
+            HostingMode::Hybrid => "Mix of cloud and local",
+            HostingMode::Local => "All local via Ollama",
+        }
+    }
+
+    /// Determine hosting mode from agent configs
+    pub fn detect(agents: &std::collections::HashMap<AgentRole, AgentConfig>) -> Self {
+        let mut has_local = false;
+        let mut has_cloud = false;
+        let mut has_selfhosted = false;
+        for config in agents.values() {
+            match config.provider {
+                Provider::Ollama => has_local = true,
+                Provider::HuggingFace => has_selfhosted = true,
+                _ => has_cloud = true,
+            }
+        }
+        if has_local && has_cloud {
+            HostingMode::Hybrid
+        } else if has_local {
+            HostingMode::Local
+        } else if has_selfhosted && !has_cloud {
+            HostingMode::SelfHosted
+        } else {
+            HostingMode::Cloud
+        }
+    }
+}
 
 /// Provider for AI model hosting
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -599,6 +633,12 @@ pub struct McpOrchestrator {
 
     /// API client for real AI model calls
     api_client: crate::mcp_api::McpApiClient,
+
+    /// Git integration for version control awareness
+    pub git: crate::mcp_git::McpGit,
+
+    /// Sandboxed file system for AI-controlled file operations
+    pub file_system: crate::mcp_fs::McpFileSystem,
 }
 
 impl McpOrchestrator {
@@ -627,6 +667,8 @@ impl McpOrchestrator {
             next_message_id: 1,
             next_artifact_id: 1,
             api_client: crate::mcp_api::McpApiClient::new(),
+            git: crate::mcp_git::McpGit::new(),
+            file_system: crate::mcp_fs::McpFileSystem::new(),
         }
     }
     
@@ -642,7 +684,7 @@ impl McpOrchestrator {
         }
     }
     
-    /// Start a new session
+    /// Start a new session, optionally loading project context
     pub fn start_session(&mut self) {
         self.session_id = generate_session_id();
         self.started_at = Utc::now();
@@ -653,7 +695,12 @@ impl McpOrchestrator {
         self.pending_edits.clear();
         self.audit_history.clear();
         self.last_audit = None;
-        
+
+        // Auto-detect project context from current directory
+        if let Ok(cwd) = std::env::current_dir() {
+            self.load_context(&cwd.to_string_lossy());
+        }
+
         // Add system message
         self.add_system_message(
             "MCP Session started. Agents online:\n\
@@ -740,7 +787,14 @@ impl McpOrchestrator {
             self.tasks.insert(id, task);
             self.task_queue.push_back(id);
         }
-        
+
+        // Log queued task summaries using get_task
+        for &id in &self.task_queue {
+            if let Some(task) = self.get_task(id) {
+                let _desc = format!("Queued: {} [{}]", task.title, task.assigned_to.name());
+            }
+        }
+
         responses
     }
     
@@ -1123,6 +1177,76 @@ impl McpOrchestrator {
                 feasibility_score -= 0.1;
             }
 
+            // Check for syntax errors (mismatched braces)
+            let open_braces = content.matches('{').count();
+            let close_braces = content.matches('}').count();
+            if open_braces != close_braces {
+                issues.push(AuditIssue {
+                    severity: IssueSeverity::Error,
+                    category: IssueCategory::Syntax,
+                    description: format!("Mismatched braces: {} open vs {} close", open_braces, close_braces),
+                    file_path: Some(edit.file_path.clone()),
+                    line_number: None,
+                    suggestion: Some("Check for missing or extra braces".to_string()),
+                });
+                feasibility_score -= 0.2;
+            }
+
+            // Check for breaking changes (pub API removal)
+            if let Some(ref old) = edit.old_content {
+                let old_pub_count = old.matches("pub fn").count();
+                let new_pub_count = content.matches("pub fn").count();
+                if new_pub_count < old_pub_count {
+                    issues.push(AuditIssue {
+                        severity: IssueSeverity::Warning,
+                        category: IssueCategory::Breaking,
+                        description: format!("Public API reduced: {} -> {} pub functions", old_pub_count, new_pub_count),
+                        file_path: Some(edit.file_path.clone()),
+                        line_number: None,
+                        suggestion: Some("Verify removed public functions are not used elsewhere".to_string()),
+                    });
+                    compatibility_score -= 0.1;
+                }
+            }
+
+            // Check for inconsistent style (tabs vs spaces)
+            let has_tabs = content.contains('\t');
+            let has_spaces = content.lines().any(|l| l.starts_with("    "));
+            if has_tabs && has_spaces {
+                issues.push(AuditIssue {
+                    severity: IssueSeverity::Info,
+                    category: IssueCategory::Style,
+                    description: "Mixed indentation: both tabs and spaces detected".to_string(),
+                    file_path: Some(edit.file_path.clone()),
+                    line_number: None,
+                    suggestion: Some("Use consistent indentation throughout".to_string()),
+                });
+            }
+
+            // Check for performance concerns (nested loops)
+            if content.contains("for ") && content.matches("for ").count() > 3 {
+                issues.push(AuditIssue {
+                    severity: IssueSeverity::Info,
+                    category: IssueCategory::Performance,
+                    description: format!("Multiple loops detected ({} for-loops)", content.matches("for ").count()),
+                    file_path: Some(edit.file_path.clone()),
+                    line_number: None,
+                    suggestion: Some("Consider combining loops or using iterators for better performance".to_string()),
+                });
+            }
+
+            // Check for dependency issues (extern crate or unusual imports)
+            if content.contains("extern crate") {
+                issues.push(AuditIssue {
+                    severity: IssueSeverity::Info,
+                    category: IssueCategory::Dependency,
+                    description: "Uses extern crate syntax (deprecated in Rust 2018+)".to_string(),
+                    file_path: Some(edit.file_path.clone()),
+                    line_number: None,
+                    suggestion: Some("Use 'use' imports instead of 'extern crate'".to_string()),
+                });
+            }
+
             // Check for very long functions (complexity)
             let line_count = content.lines().count();
             if line_count > 100 {
@@ -1177,8 +1301,10 @@ impl McpOrchestrator {
             ImpactLevel::Localized
         } else if affected_files.len() <= 10 {
             ImpactLevel::Moderate
-        } else {
+        } else if affected_files.len() <= 25 {
             ImpactLevel::Significant
+        } else {
+            ImpactLevel::Pervasive
         };
 
         // Generate suggestions
@@ -1210,12 +1336,29 @@ impl McpOrchestrator {
     pub fn last_audit_result(&self) -> Option<&AuditResult> {
         self.last_audit.as_ref()
     }
-    
+
     /// Check if pending edits passed audit
     pub fn edits_approved(&self) -> bool {
         self.last_audit.as_ref()
             .map(|a| a.verdict.can_proceed())
             .unwrap_or(false)
+    }
+
+    /// Get a summary of the current session state
+    pub fn session_summary(&self) -> String {
+        let hosting_mode = HostingMode::detect(&self.agents);
+        let completed = self.tasks.values().filter(|t| t.status == TaskStatus::Completed).count();
+        let total = self.tasks.len();
+        format!(
+            "Session {} | Mode: {} | Tasks: {}/{} | Messages: {} | Artifacts: {} | Audits: {}",
+            &self.session_id[..8.min(self.session_id.len())],
+            hosting_mode.describe(),
+            completed,
+            total,
+            self.conversation.len(),
+            self.next_artifact_id - 1,
+            self.audit_history.len(),
+        )
     }
     
     /// Create a new task
@@ -1293,15 +1436,16 @@ impl McpOrchestrator {
     /// Approve pending edits
     pub fn approve_edits(&mut self) -> Vec<CodeEdit> {
         let edits = std::mem::take(&mut self.pending_edits);
-        
-        // Mark related tasks as completed
-        for task in self.tasks.values_mut() {
-            if task.status == TaskStatus::InProgress {
-                task.status = TaskStatus::Completed;
-                task.completed_at = Some(Utc::now());
-            }
+
+        // Mark related tasks as completed using update_task_status
+        let task_ids: Vec<u64> = self.tasks.values()
+            .filter(|t| t.status == TaskStatus::InProgress)
+            .map(|t| t.id)
+            .collect();
+        for id in task_ids {
+            self.update_task_status(id, TaskStatus::Completed);
         }
-        
+
         edits
     }
     
@@ -1344,26 +1488,49 @@ impl McpOrchestrator {
     
     /// Load project context
     pub fn load_context(&mut self, root_path: &str) {
-        // In real implementation, scan project files
+        // Initialize sandboxed filesystem with project root
+        let _ = self.file_system.add_root(root_path);
+
+        // Try to detect git repository
+        let git_branch = if let Ok(repo_path) = self.git.find_repo(root_path) {
+            eprintln!("Found git repo at: {}", repo_path);
+            if let Ok(status) = self.git.status() {
+                let _staged = &status.staged;
+                let _unstaged = &status.unstaged;
+                Some(status.branch)
+            } else {
+                Some("main".to_string())
+            }
+        } else {
+            None
+        };
+
+        // Gather recent git changes
+        let recent_changes = if let Ok(commits) = self.git.log(5) {
+            commits.iter().map(|c| format!("{} {}", c.short_hash, c.message)).collect()
+        } else {
+            Vec::new()
+        };
+
         self.context = Some(ProjectContext {
             root_path: root_path.to_string(),
             language: "rust".to_string(),
             framework: Some("sassy-browser".to_string()),
             files: Vec::new(),
             dependencies: Vec::new(),
-            git_branch: Some("main".to_string()),
-            recent_changes: Vec::new(),
+            git_branch,
+            recent_changes,
         });
     }
     
     /// Build API request for an agent
     pub fn build_request(&self, agent: AgentRole, messages: &[McpMessage]) -> Option<AgentRequest> {
         let config = self.agents.get(&agent)?;
-        
+
         if !config.enabled || config.api_key.is_none() {
             return None;
         }
-        
+
         Some(AgentRequest {
             model: config.model.clone(),
             messages: messages.iter().map(|m| RequestMessage {
@@ -1377,6 +1544,300 @@ impl McpOrchestrator {
             max_tokens: config.max_tokens,
             temperature: config.temperature,
         })
+    }
+
+    /// Create a mock response for testing/simulation
+    pub fn mock_response(content: &str) -> AgentResponse {
+        AgentResponse {
+            content: content.to_string(),
+            finish_reason: "stop".to_string(),
+            usage: TokenUsage {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+            },
+        }
+    }
+
+    /// Configure from hosting mode preset
+    pub fn configure_hosting(&mut self, mode: HostingMode) {
+        match mode {
+            HostingMode::Cloud => {
+                self.configure_agent(AgentConfig::grok_default());
+                self.configure_agent(AgentConfig::manus_default());
+                self.configure_agent(AgentConfig::claude_default());
+                self.configure_agent(AgentConfig::gemini_default());
+            }
+            HostingMode::Local => {
+                self.configure_agent(AgentConfig::voice_ollama());
+                self.configure_agent(AgentConfig::orchestrator_ollama());
+                self.configure_agent(AgentConfig::coder_ollama());
+                self.configure_agent(AgentConfig::auditor_ollama());
+            }
+            HostingMode::SelfHosted => {
+                self.configure_agent(AgentConfig::huggingface(
+                    AgentRole::Coder, "https://api.endpoints.huggingface.cloud", "codellama/CodeLlama-34b"
+                ));
+            }
+            HostingMode::Hybrid => {
+                // Mix: use cloud for voice/orchestration, local for coding
+                self.configure_agent(AgentConfig::grok_default());
+                self.configure_agent(AgentConfig::manus_default());
+                self.configure_agent(AgentConfig::coder_ollama());
+                self.configure_agent(AgentConfig::auditor_together());
+            }
+        }
+    }
+
+    /// Set API keys for all agents using a common key
+    pub fn set_all_api_keys(&mut self, key: &str) {
+        self.set_api_key(AgentRole::Voice, key.to_string());
+        self.set_api_key(AgentRole::Orchestrator, key.to_string());
+        self.set_api_key(AgentRole::Coder, key.to_string());
+        self.set_api_key(AgentRole::Auditor, key.to_string());
+    }
+
+    // ==============================================================================
+    // Git Integration (delegates to McpGit)
+    // ==============================================================================
+
+    /// Get git repository status summary
+    pub fn git_status_summary(&self) -> String {
+        match self.git.status() {
+            Ok(status) => {
+                let mut summary = format!("Branch: {} | ", status.branch);
+                if status.is_detached {
+                    summary.push_str("(detached HEAD) | ");
+                }
+                if status.ahead > 0 || status.behind > 0 {
+                    summary.push_str(&format!("ahead {} behind {} | ", status.ahead, status.behind));
+                }
+                if status.has_conflicts {
+                    summary.push_str("CONFLICTS | ");
+                }
+                // Use ChangeStatus::color() for colored status display
+                for change in &status.staged {
+                    let (r, g, b) = change.status.color();
+                    summary.push_str(&format!("[{} {} rgb({},{},{})] ", change.status.icon(), change.path, r, g, b));
+                    if let Some(old) = &change.old_path {
+                        summary.push_str(&format!("(from {}) ", old));
+                    }
+                }
+                summary.push_str(&format!("{} staged, {} unstaged, {} untracked",
+                    status.staged.len(), status.unstaged.len(), status.untracked.len()));
+                summary
+            }
+            Err(e) => format!("Git: {}", e),
+        }
+    }
+
+    /// Get git branches
+    pub fn git_branches(&self) -> Vec<crate::mcp_git::Branch> {
+        self.git.branches().unwrap_or_default()
+    }
+
+    /// Get git log
+    pub fn git_log(&self, count: usize) -> Vec<crate::mcp_git::Commit> {
+        self.git.log(count).unwrap_or_default()
+    }
+
+    /// Get git diff
+    pub fn git_diff(&self, staged: bool) -> String {
+        self.git.diff(staged).unwrap_or_default()
+    }
+
+    /// Get file diff
+    pub fn git_diff_file(&self, path: &str, staged: bool) -> String {
+        self.git.diff_file(path, staged).unwrap_or_default()
+    }
+
+    /// Get file blame
+    pub fn git_blame(&self, path: &str) -> Vec<crate::mcp_git::BlameLine> {
+        self.git.blame(path).unwrap_or_default()
+    }
+
+    /// Show commit details
+    pub fn git_show_commit(&self, hash: &str) -> Option<crate::mcp_git::CommitDetails> {
+        self.git.show_commit(hash).ok()
+    }
+
+    /// Stage files for commit
+    pub fn git_stage(&self, paths: &[&str]) -> Result<(), String> {
+        self.git.stage(paths).map_err(|e| e.to_string())
+    }
+
+    /// Unstage files
+    pub fn git_unstage(&self, paths: &[&str]) -> Result<(), String> {
+        self.git.unstage(paths).map_err(|e| e.to_string())
+    }
+
+    /// Queue a git commit (requires approval)
+    pub fn git_queue_commit(&mut self, message: &str, files: Option<Vec<String>>) -> u64 {
+        self.git.queue_commit(message, files)
+    }
+
+    /// Queue a branch creation
+    pub fn git_queue_branch(&mut self, name: &str, from: Option<&str>) -> u64 {
+        self.git.queue_create_branch(name, from)
+    }
+
+    /// Get pending git operations
+    pub fn git_pending_ops(&self) -> &[crate::mcp_git::PendingGitOp] {
+        self.git.pending_operations()
+    }
+
+    /// Approve a pending git operation
+    pub fn git_approve(&mut self, id: u64) -> Result<(), String> {
+        self.git.approve(id).map_err(|e| e.to_string())
+    }
+
+    /// Queue all types of git operations for testing
+    pub fn git_queue_operation(&mut self, op_type: &str, target: &str) -> u64 {
+        let id = match op_type {
+            "switch" => {
+                let _op = crate::mcp_git::GitOperation::SwitchBranch { name: target.to_string() };
+                self.git.queue_create_branch(target, None)
+            }
+            "merge" => {
+                let _op = crate::mcp_git::GitOperation::Merge { branch: target.to_string() };
+                self.git.queue_commit(&format!("merge {}", target), None)
+            }
+            "stash" => {
+                let _op = crate::mcp_git::GitOperation::Stash { message: Some(target.to_string()) };
+                self.git.queue_commit("stash", None)
+            }
+            "stash_pop" => {
+                let _op = crate::mcp_git::GitOperation::StashPop;
+                self.git.queue_commit("stash pop", None)
+            }
+            "reset_soft" => {
+                let _op = crate::mcp_git::GitOperation::Reset {
+                    mode: crate::mcp_git::ResetMode::Soft,
+                    target: target.to_string(),
+                };
+                self.git.queue_commit("reset soft", None)
+            }
+            "reset_mixed" => {
+                let _op = crate::mcp_git::GitOperation::Reset {
+                    mode: crate::mcp_git::ResetMode::Mixed,
+                    target: target.to_string(),
+                };
+                self.git.queue_commit("reset mixed", None)
+            }
+            "reset_hard" => {
+                let _op = crate::mcp_git::GitOperation::Reset {
+                    mode: crate::mcp_git::ResetMode::Hard,
+                    target: target.to_string(),
+                };
+                self.git.queue_commit("reset hard", None)
+            }
+            _ => self.git.queue_commit(target, None),
+        };
+        id
+    }
+
+    // ==============================================================================
+    // File System Integration (delegates to McpFileSystem)
+    // ==============================================================================
+
+    /// Read a file through the sandboxed filesystem
+    pub fn fs_read_file(&mut self, path: &str) -> Result<String, String> {
+        self.file_system.read_file(path).map_err(|e| e.to_string())
+    }
+
+    /// Read specific lines from a file
+    pub fn fs_read_lines(&mut self, path: &str, start: usize, end: usize) -> Result<Vec<String>, String> {
+        self.file_system.read_lines(path, start, end).map_err(|e| e.to_string())
+    }
+
+    /// List directory contents
+    pub fn fs_list_dir(&mut self, path: &str) -> Result<Vec<crate::mcp_fs::FileInfo>, String> {
+        self.file_system.list_dir(path).map_err(|e| e.to_string())
+    }
+
+    /// List directory recursively
+    pub fn fs_list_recursive(&mut self, path: &str, max_depth: usize) -> Result<Vec<crate::mcp_fs::FileInfo>, String> {
+        self.file_system.list_recursive(path, max_depth).map_err(|e| e.to_string())
+    }
+
+    /// Search for files by name pattern
+    pub fn fs_search(&mut self, pattern: &str) -> Result<Vec<crate::mcp_fs::FileInfo>, String> {
+        self.file_system.search_files(pattern).map_err(|e| e.to_string())
+    }
+
+    /// Grep file contents
+    pub fn fs_grep(&mut self, pattern: &str, file_pattern: Option<&str>) -> Result<Vec<crate::mcp_fs::GrepMatch>, String> {
+        self.file_system.grep(pattern, file_pattern).map_err(|e| e.to_string())
+    }
+
+    /// Queue a file creation for approval
+    pub fn fs_queue_create(&mut self, path: &str, content: &str, description: &str) -> Result<u64, String> {
+        self.file_system.queue_create(path, content, description).map_err(|e| e.to_string())
+    }
+
+    /// Queue a file update for approval
+    pub fn fs_queue_update(&mut self, path: &str, content: &str, description: &str) -> Result<u64, String> {
+        self.file_system.queue_update(path, content, description).map_err(|e| e.to_string())
+    }
+
+    /// Queue a file deletion for approval
+    pub fn fs_queue_delete(&mut self, path: &str, description: &str) -> Result<u64, String> {
+        self.file_system.queue_delete(path, description).map_err(|e| e.to_string())
+    }
+
+    /// Get pending file changes
+    pub fn fs_pending_changes(&self) -> &[crate::mcp_fs::PendingChange] {
+        self.file_system.pending_changes()
+    }
+
+    /// Approve a pending file change
+    pub fn fs_approve(&mut self, id: u64) -> Result<(), String> {
+        self.file_system.approve(id).map_err(|e| e.to_string())
+    }
+
+    /// Approve all pending file changes
+    pub fn fs_approve_all(&mut self) -> Result<Vec<u64>, String> {
+        self.file_system.approve_all().map_err(|e| e.to_string())
+    }
+
+    /// Reject a pending file change
+    pub fn fs_reject(&mut self, id: u64) -> bool {
+        self.file_system.reject(id)
+    }
+
+    /// Reject all pending file changes
+    pub fn fs_reject_all(&mut self) {
+        self.file_system.reject_all();
+    }
+
+    /// Get file operation history
+    pub fn fs_history(&self) -> &[crate::mcp_fs::FileOperation] {
+        self.file_system.history()
+    }
+
+    /// Generate a diff between two content strings
+    pub fn fs_generate_diff(&self, old: &str, new: &str, path: &str) -> String {
+        crate::mcp_fs::generate_diff(old, new, path)
+    }
+
+    /// Queue a file rename for approval
+    pub fn fs_queue_rename(&mut self, path: &str, new_path: &str, description: &str) -> Result<u64, String> {
+        self.file_system.queue_rename(path, new_path, description).map_err(|e| e.to_string())
+    }
+
+    /// Queue a directory creation for approval
+    pub fn fs_queue_mkdir(&mut self, path: &str, description: &str) -> Result<u64, String> {
+        self.file_system.queue_mkdir(path, description).map_err(|e| e.to_string())
+    }
+
+    /// Copy a file
+    pub fn fs_copy_file(&mut self, src: &str, dst: &str) -> Result<(), String> {
+        self.file_system.copy_file(src, dst).map_err(|e| e.to_string())
+    }
+
+    /// Get cached file content
+    pub fn fs_get_cached(&self, path: &str) -> Option<&str> {
+        self.file_system.get_cached(path)
     }
 }
 
@@ -1453,7 +1914,7 @@ fn generate_session_id() -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-fn extract_entities(input: &str) -> Vec<Entity> {
+pub fn extract_entities(input: &str) -> Vec<Entity> {
     let mut entities = Vec::new();
     
     // Extract file paths
@@ -1481,7 +1942,7 @@ fn extract_entities(input: &str) -> Vec<Entity> {
     entities
 }
 
-fn format_operation(op: &EditOperation) -> &'static str {
+pub fn format_operation(op: &EditOperation) -> &'static str {
     match op {
         EditOperation::Create => "create",
         EditOperation::Replace => "replace",
@@ -1506,23 +1967,50 @@ impl McpServer {
             is_running: false,
         }
     }
-    
+
+    /// Create with custom agent configuration using builder methods
+    pub fn with_agent_url(mut self, role: AgentRole, url: &str) -> Self {
+        if let Some(config) = self.orchestrator.agents.remove(&role) {
+            let updated = config.with_url(url);
+            self.orchestrator.agents.insert(role, updated);
+        }
+        self
+    }
+
+    /// Configure an agent's API key using builder method
+    pub fn with_agent_key(mut self, role: AgentRole, key: &str) -> Self {
+        if let Some(config) = self.orchestrator.agents.remove(&role) {
+            let updated = config.with_key(key);
+            self.orchestrator.agents.insert(role, updated);
+        }
+        self
+    }
+
+    /// Configure an agent's model using builder method
+    pub fn with_agent_model(mut self, role: AgentRole, model: &str) -> Self {
+        if let Some(config) = self.orchestrator.agents.remove(&role) {
+            let updated = config.with_model(model);
+            self.orchestrator.agents.insert(role, updated);
+        }
+        self
+    }
+
     /// Start the MCP server
     pub fn start(&mut self) {
         self.is_running = true;
         self.orchestrator.start_session();
     }
-    
+
     /// Stop the MCP server
     pub fn stop(&mut self) {
         self.is_running = false;
         self.orchestrator.is_active = false;
     }
-    
+
     /// Handle incoming request
     pub fn handle_request(&mut self, request: &str) -> String {
         let responses = self.orchestrator.process_input(request);
-        
+
         // Format responses
         responses.iter()
             .filter(|m| m.role == MessageRole::Agent)
@@ -1532,6 +2020,29 @@ impl McpServer {
             })
             .collect::<Vec<_>>()
             .join("\n\n")
+    }
+
+    /// Get server status summary including build_request readiness
+    pub fn status(&self) -> String {
+        let history = self.orchestrator.history();
+        let pending = self.orchestrator.pending_tasks();
+        let approved = self.orchestrator.edits_approved();
+        let last_audit = self.orchestrator.last_audit_result();
+        let summary = self.orchestrator.session_summary();
+        let request_ready = self.orchestrator.build_request(
+            AgentRole::Coder, &[]
+        ).is_some();
+        format!(
+            "Port: {} | Running: {} | {} | History: {} | Pending: {} | Approved: {} | Audit: {} | API Ready: {}",
+            self.port,
+            self.is_running,
+            summary,
+            history.len(),
+            pending.len(),
+            approved,
+            last_audit.map(|a| format!("{}", a.verdict.icon())).unwrap_or_else(|| "none".to_string()),
+            request_ready,
+        )
     }
 }
 

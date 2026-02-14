@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Native MCP Server — WebSocket Server for Sassy Browser
 //!
 //! Pure Rust, bincode over WebSocket. NO JSON-RPC.
@@ -393,7 +394,7 @@ async fn handle_client(
     }
 
     // Main message loop — process commands and send responses
-    let (resp_tx, mut resp_rx) = mpsc::channel::<McpResponse>(64);
+    let (_resp_tx, mut resp_rx) = mpsc::channel::<McpResponse>(64);
 
     // Track pending command sequences for this client
     let pending_seqs: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(Vec::new()));

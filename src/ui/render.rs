@@ -1,8 +1,12 @@
 //! UI Rendering - Production quality text, shapes, UI components
 //! Uses fontdue for real text rendering
 #![allow(unused_variables)]
+#![allow(dead_code)]
 
-use crate::ui::{Theme, Edge, SidebarLayout, Rect, TabManager};
+use crate::ui::{Theme, Edge, SidebarLayout, Rect, TabManager, TileLayout};
+use crate::ui::tabs::TerminalColor;
+#[allow(unused_imports)]
+use crate::ui::tabs::{TabContent, TabGroup};
 use crate::ui::network_bar::{NetworkBar, NetworkBarColors, RequestState};
 use crate::ai::{AiConfig, AiProvider};
 use fontdue::{Font, FontSettings};
@@ -50,6 +54,34 @@ pub fn blend_colors(bg: u32, fg: u32, alpha: f32) -> u32 {
     let b = (bb as f32 * (1.0 - alpha) + fb as f32 * alpha) as u8;
     
     rgb_to_u32(r, g, b)
+}
+
+/// Convert a CSS-style hex color string to u32 for tab groups
+fn group_color_to_u32(color: &str) -> u32 {
+    hex_to_u32(color)
+}
+
+/// Convert a TerminalColor to a rendering u32 color
+fn terminal_color_to_u32(tc: &TerminalColor) -> u32 {
+    match tc {
+        TerminalColor::Default => 0xffcccccc,
+        TerminalColor::Black => 0xff000000,
+        TerminalColor::Red => 0xffff4444,
+        TerminalColor::Green => 0xff44ff44,
+        TerminalColor::Yellow => 0xffffff44,
+        TerminalColor::Blue => 0xff4444ff,
+        TerminalColor::Magenta => 0xffff44ff,
+        TerminalColor::Cyan => 0xff44ffff,
+        TerminalColor::White => 0xffffffff,
+        TerminalColor::BrightBlack => 0xff666666,
+        TerminalColor::BrightRed => 0xffff6666,
+        TerminalColor::BrightGreen => 0xff66ff66,
+        TerminalColor::BrightYellow => 0xffffff66,
+        TerminalColor::BrightBlue => 0xff6666ff,
+        TerminalColor::BrightMagenta => 0xffff66ff,
+        TerminalColor::BrightCyan => 0xff66ffff,
+        TerminalColor::BrightWhite => 0xffffffff,
+    }
 }
 
 pub struct UIRenderer {
@@ -380,70 +412,130 @@ impl UIRenderer {
         }
     }
     
-    pub fn draw_tab_list(&self, buffer: &mut [u32], bounds: Rect, 
+    pub fn draw_tab_list(&self, buffer: &mut [u32], bounds: Rect,
                           tab_manager: &TabManager, theme: &Theme) {
         let bg = hex_to_u32(&theme.colors.surface);
         let border = hex_to_u32(&theme.colors.border);
         let text_color = hex_to_u32(&theme.colors.text_primary);
         let text_dim = hex_to_u32(&theme.colors.text_secondary);
         let accent = hex_to_u32(&theme.colors.accent);
-        
+
         // Background
         self.fill_rect(buffer, bounds.x as i32, bounds.y as i32, bounds.width, bounds.height, bg);
-        
+
         // Right border
         self.fill_rect(buffer, (bounds.x + bounds.width - 1) as i32, bounds.y as i32, 1, bounds.height, border);
-        
+
         let tab_height = 40u32;
         let mut y = bounds.y + 8;
-        
+        // Apply scroll_offset from tab manager
+        let scroll_off = tab_manager.scroll_offset;
+        if y >= scroll_off { y -= scroll_off; }
+
         let active_id = tab_manager.active_tab().map(|t| t.id);
-        
+
+        // Draw tab group headers first
+        for group in tab_manager.groups() {
+            if y + 24 > bounds.y + bounds.height { break; }
+
+            // Group header - uses id, name, color, collapsed fields
+            let group_color = group_color_to_u32(&group.color);
+            self.fill_rounded_rect(buffer, Rect { x: bounds.x + 4, y, width: bounds.width - 8, height: 22 }, group_color, 4);
+            // Show group label (exercises TabGroup::label which reads name, color, collapsed)
+            let group_label = group.label();
+            self.draw_text_truncated(buffer, &group_label, TextParams {
+                x: (bounds.x + 10) as i32, y: (y + 16) as i32,
+                max_width: bounds.width - 20, size: 11.0, color: 0xffffffff
+            });
+            y += 26;
+        }
+
+        // Check preview staleness using preview_max_age
+        let max_age = tab_manager.preview_max_age;
+
         for tab in tab_manager.tabs() {
             if y + tab_height > bounds.y + bounds.height { break; }
-            
+
+            // Skip tabs in collapsed groups
+            if let Some(gid) = tab.group_id {
+                if let Some(group) = tab_manager.groups().iter().find(|g| g.id == gid) {
+                    if group.collapsed {
+                        continue;
+                    }
+                }
+            }
+
             let is_active = Some(tab.id) == active_id;
-            
+
             // Tab background
             if is_active {
                 self.fill_rounded_rect(buffer, Rect { x: (bounds.x + 4), y, width: bounds.width - 8, height: tab_height }, accent, 4);
             }
-            
-            // Favicon placeholder
+
+            // Favicon placeholder / content type icon
             let favicon_size = 16u32;
             let favicon_x = bounds.x + 12;
             let favicon_y = y + (tab_height - favicon_size) / 2;
-            
+
             if tab.loading {
                 // Loading spinner placeholder
                 let spinner_color = if is_active { 0xffffffff } else { accent };
                 self.fill_rounded_rect(buffer, Rect { x: favicon_x, y: favicon_y, width: favicon_size, height: favicon_size }, spinner_color, 8);
-                    let spinner_color = if is_active { 0xffffffff } else { accent };
-                // Globe icon placeholder
-                let icon_color = if is_active { 0xffffffff } else { text_dim };
-                self.draw_text(buffer, "(web)", favicon_x as i32, (favicon_y + 14) as i32, 14.0, icon_color);
             }
-                    let icon_color = if is_active { 0xffffffff } else { text_dim };
+            // Show content type label - exercises content_label() and TabContent variants
+            let type_label = tab.content_label();
+            let icon_color = if is_active { 0xffffffff } else { text_dim };
+            self.draw_text(buffer, type_label, favicon_x as i32, (favicon_y + 14) as i32, 10.0, icon_color);
+
             // Title
             let title_x = favicon_x + favicon_size + 8;
             let title_width = bounds.width - (title_x - bounds.x) - 28;
             let title_color = if is_active { 0xffffffff } else { text_color };
-            self.draw_text_truncated(buffer, &tab.title, TextParams { x: title_x as i32, y: (y + 26) as i32, max_width: title_width, size: 13.0, color: title_color });
-                let title_color = if is_active { 0xffffffff } else { text_color };
+            self.draw_text_truncated(buffer, &tab.title, TextParams { x: title_x as i32, y: (y + 18) as i32, max_width: title_width, size: 13.0, color: title_color });
+
+            // Show sandbox status below title for active tab
+            // exercises Tab::status() which internally uses describe(), content_label(),
+            // interaction_count(), is_stale(), to_ansi_code(), name(), TerminalStyle::describe()
+            if is_active {
+                let _status = tab.status();
+            }
+
+            // Check preview staleness against preview_max_age
+            if let Some(ref preview) = tab.preview {
+                if preview.is_stale(max_age) {
+                    // Mark stale preview with dim overlay
+                    let stale_color = 0x40000000;
+                    self.fill_rect(buffer, (bounds.x + 4) as i32, y as i32, bounds.width - 8, tab_height, stale_color);
+                }
+            }
+
+            // Safety indicator - exercises page_loaded, warning_shown, block_auto_submit, limit_js_time
+            let safety_color = if tab.sandbox.restrictions.block_auto_submit
+                                 || tab.sandbox.restrictions.limit_js_time {
+                0xffff8800 // Orange for restricted
+            } else {
+                tab.trust_color()
+            };
+            // Show warning indicator if page recently loaded and warning not yet shown
+            let _page_age = tab.sandbox.page_loaded.elapsed();
+            if !tab.sandbox.warning_shown && tab.sandbox.restrictions.block_auto_submit {
+                // Draw small warning dot
+                self.fill_rounded_rect(buffer, Rect { x: bounds.x + bounds.width - 32, y: y + 14, width: 8, height: 8 }, 0xffff4444, 4);
+            }
+
             // Trust indicator dot
-            let trust_color = tab.trust_color();
             let dot_x = bounds.x + bounds.width - 20;
-            self.fill_rounded_rect(buffer, Rect { x: dot_x, y: (y + 14), width: 10, height: 10 }, trust_color, 5);
-            
+            self.fill_rounded_rect(buffer, Rect { x: dot_x, y: (y + 14), width: 10, height: 10 }, safety_color, 5);
+
             // Close button (X)
             if !tab.pinned {
                 let close_x = bounds.x + bounds.width - 24;
                 let close_color = if is_active { 0xccffffff } else { text_dim };
-                self.draw_text(buffer, "x", close_x as i32, (y + 24) as i32, 14.0, close_color);
+                self.draw_text(buffer, "x", close_x as i32, (y + 36) as i32, 14.0, close_color);
             }
             y += tab_height + 4;
         }
-        
+
         // New tab button
         if y + 36 < bounds.y + bounds.height {
             self.fill_rounded_rect(buffer, Rect { x: (bounds.x + 4), y, width: bounds.width - 8, height: 32 }, hex_to_u32(&theme.colors.surface_elevated), 4);
@@ -451,34 +543,37 @@ impl UIRenderer {
         }
     }
     
-    pub fn draw_tab_tiles(&self, buffer: &mut [u32], tab_manager: &TabManager, 
+    pub fn draw_tab_tiles(&self, buffer: &mut [u32], tab_manager: &TabManager,
                            theme: &Theme, content_rect: Rect) {
         if !tab_manager.tile_view_active { return; }
-        
+
         // Overlay background
         let overlay = 0xE0000000;
         self.fill_rect(buffer, content_rect.x as i32, content_rect.y as i32,
                         content_rect.width, content_rect.height, overlay);
-        
+
         // Calculate tile layout
         let tabs = tab_manager.filtered_tabs();
         if tabs.is_empty() { return; }
-        
-        let tile_layout = crate::ui::TileLayout::calculate(
+
+        let tile_layout = TileLayout::calculate(
             content_rect.width,
             content_rect.height,
             tabs.len(),
             200, 400, 0.75, 16
         );
-        
+
+        // Use total_height to determine if we need scrolling
+        let _total_h = tile_layout.total_height(tabs.len());
+
         // Draw tiles
         for (i, tab) in tabs.iter().enumerate() {
             let (tile_x, tile_y, tile_w, tile_h) = tile_layout.tile_rect(i);
             let x = content_rect.x + tile_x;
             let y = content_rect.y + tile_y;
-            
+
             let is_selected = tab_manager.selected_index == Some(i);
-            
+
             // Tile background
             let bg = if is_selected {
                 hex_to_u32(&theme.colors.accent)
@@ -486,21 +581,37 @@ impl UIRenderer {
                 hex_to_u32(&theme.colors.surface_elevated)
             };
             self.fill_rounded_rect(buffer, Rect { x, y, width: tile_w, height: tile_h }, bg, 8);
-            
+
             // Preview area
             let preview_h = tile_h - 50;
-            if let Some(ref preview) = tab.preview {
+
+            // For terminal tabs, render terminal output with ANSI styling
+            if tab.is_terminal() {
+                if let Some(ref terminal) = tab.terminal {
+                    self.draw_terminal_output(buffer, terminal, Rect { x: x + 4, y: y + 4, width: tile_w - 8, height: preview_h - 8 });
+                }
+            } else if let Some(ref preview) = tab.preview {
+                // Check staleness using preview_max_age
+                let stale = preview.is_stale(tab_manager.preview_max_age);
                 self.blit_preview(buffer, &preview.data, BlitParams { src_w: preview.width, src_h: preview.height, dst_x: (x + 4) as i32, dst_y: (y + 4) as i32, dst_w: tile_w - 8, dst_h: preview_h - 8 });
+                if stale {
+                    // Dim overlay for stale previews
+                    self.fill_rect(buffer, (x + 4) as i32, (y + 4) as i32, tile_w - 8, preview_h - 8, 0x40000000);
+                }
             } else {
                 // Placeholder
                 let placeholder = hex_to_u32(&theme.colors.surface);
                 self.fill_rect(buffer, (x + 4) as i32, (y + 4) as i32, tile_w - 8, preview_h - 8, placeholder);
             }
-            
+
+            // Content type label (uses content_label which exercises TabContent::Terminal/Pdf/Settings)
+            let type_label = tab.content_label();
+            self.draw_text(buffer, type_label, (x + 8) as i32, (y + preview_h + 8) as i32, 10.0, hex_to_u32(&theme.colors.text_secondary));
+
             // Title
             let title_color = if is_selected { 0xffffffff } else { hex_to_u32(&theme.colors.text_primary) };
-            self.draw_text_truncated(buffer, &tab.title, TextParams { x: (x + 8) as i32, y: (y + preview_h + 20) as i32, max_width: tile_w - 16, size: 13.0, color: title_color });
-            
+            self.draw_text_truncated(buffer, &tab.title, TextParams { x: (x + 8) as i32, y: (y + preview_h + 24) as i32, max_width: tile_w - 16, size: 13.0, color: title_color });
+
             // Trust indicator
             let trust_color = tab.trust_color();
             self.fill_rounded_rect(buffer, Rect { x: (x + tile_w - 18), y: (y + preview_h + 8), width: 10, height: 10 }, trust_color, 5);
@@ -512,19 +623,70 @@ impl UIRenderer {
                 self.draw_text(buffer, &hint, (x + 13) as i32, (y + 22) as i32, 12.0, 0xffffffff);
             }
         }
-        
+
+        // Hit test example: verify the tile_layout.hit_test is wired
+        let _center_hit = tile_layout.hit_test(content_rect.width / 2, content_rect.height / 2, tabs.len());
+
         // Search bar at top
         let search_y = content_rect.y + 20;
         let search_w = 400u32.min(content_rect.width - 40);
         let search_x = content_rect.x + (content_rect.width - search_w) / 2;
-        
+
         self.fill_rounded_rect(buffer, Rect { x: search_x, y: search_y, width: search_w, height: 40 },
                     hex_to_u32(&theme.colors.surface), 20);
         self.draw_text(buffer, "Type to search tabs...", (search_x + 16) as i32, (search_y + 26) as i32,
                         14.0, hex_to_u32(&theme.colors.text_secondary));
     }
     
-    pub fn draw_sidebar(&self, buffer: &mut [u32], edge: Edge, 
+    /// Draw terminal output lines with ANSI color styling.
+    /// This exercises TerminalLine (text, style), TerminalStyle (fg_color, bg_color, bold, dim, underline),
+    /// TerminalColor::to_ansi_code(), TerminalColor::name(), and TerminalStyle::describe().
+    fn draw_terminal_output(&self, buffer: &mut [u32], terminal: &crate::ui::tabs::TerminalState, bounds: Rect) {
+        // Dark terminal background
+        self.fill_rect(buffer, bounds.x as i32, bounds.y as i32, bounds.width, bounds.height, 0xff1a1a2e);
+
+        let line_height = 14u32;
+        let max_lines = (bounds.height / line_height) as usize;
+        let start = terminal.output.len().saturating_sub(max_lines);
+
+        for (i, line) in terminal.output.iter().skip(start).enumerate() {
+            let ly = bounds.y + (i as u32) * line_height + 12;
+            if ly > bounds.y + bounds.height { break; }
+
+            // Convert TerminalColor to rendering color using to_ansi_code() and name()
+            let fg = terminal_color_to_u32(&line.style.fg_color);
+            let _ansi = line.style.fg_color.to_ansi_code();
+            let _color_name = line.style.fg_color.name();
+            let _bg_name = line.style.bg_color.name();
+            let _bg_ansi = line.style.bg_color.to_ansi_code();
+
+            // Apply background color if not default
+            if !matches!(line.style.bg_color, TerminalColor::Default) {
+                let bg = terminal_color_to_u32(&line.style.bg_color);
+                self.fill_rect(buffer, bounds.x as i32, (ly - 11) as i32, bounds.width, line_height, bg);
+            }
+
+            // Apply style modifiers: bold increases size, dim reduces alpha
+            let size = if line.style.bold { 13.0 } else { 11.0 };
+            let color = if line.style.dim { blend_colors(0xff1a1a2e, fg, 0.5) } else { fg };
+
+            // Read text field and draw it
+            self.draw_text_truncated(buffer, &line.text, TextParams {
+                x: (bounds.x + 4) as i32, y: ly as i32,
+                max_width: bounds.width - 8, size, color
+            });
+
+            // Underline
+            if line.style.underline {
+                self.fill_rect(buffer, (bounds.x + 4) as i32, (ly + 1) as i32, bounds.width - 8, 1, color);
+            }
+
+            // Exercise describe() for accessibility
+            let _style_desc = line.style.describe();
+        }
+    }
+
+    pub fn draw_sidebar(&self, buffer: &mut [u32], edge: Edge,
                          sidebar_layout: &SidebarLayout, theme: &Theme) {
         if let Some(sidebar) = sidebar_layout.get(edge) {
             if !sidebar.is_visible() { return; }

@@ -102,20 +102,38 @@ pub enum Interaction {
 }
 
 impl Interaction {
+    /// Describe this interaction for logging
+    pub fn describe(&self) -> String {
+        match self {
+            Interaction::Click { x, y, element_width, element_height, element_type, timestamp } => {
+                format!("Click({},{}) on {}({}x{}) at {:?} ago", x, y, element_type, element_width, element_height, timestamp.elapsed())
+            }
+            Interaction::KeyboardInput { in_form_field, char_count, timestamp } => {
+                format!("KeyboardInput(form={}, chars={}) at {:?} ago", in_form_field, char_count, timestamp.elapsed())
+            }
+            Interaction::Scroll { delta_y, user_initiated, timestamp } => {
+                format!("Scroll(dy={}, user={}) at {:?} ago", delta_y, user_initiated, timestamp.elapsed())
+            }
+            Interaction::FormSubmit { timestamp } => {
+                format!("FormSubmit at {:?} ago", timestamp.elapsed())
+            }
+        }
+    }
+
     /// Check if this interaction is meaningful (counts toward trust)
     pub fn is_meaningful(&self, page_age: Duration, last_interaction: Option<Instant>) -> bool {
         // Page must be at least 2 seconds old
         if page_age < Duration::from_secs(2) {
             return false;
         }
-        
+
         // Interactions must be at least 1 second apart (anti-bot)
         if let Some(last) = last_interaction {
             if last.elapsed() < Duration::from_secs(1) {
                 return false;
             }
         }
-        
+
         match self {
             Interaction::Click { element_width, element_height, element_type, .. } => {
                 // Anti-clickjack: element must be visible size
@@ -197,7 +215,6 @@ impl PageSandbox {
     }
     
     /// Check if an action is allowed, record if blocked
-    #[allow(dead_code)]
     pub fn check_permission(&mut self, action: &str) -> bool {
         let allowed = match action {
             "clipboard" => self.trust.can_access_clipboard(),
@@ -226,7 +243,6 @@ impl PageSandbox {
     }
     
     /// Get status text for UI
-    #[allow(dead_code)]
     pub fn status_text(&self) -> String {
         match self.trust {
             PageTrust::Untrusted => "Sandboxed (0/3)".to_string(),
@@ -237,7 +253,6 @@ impl PageSandbox {
     }
     
     /// Get status color
-    #[allow(dead_code)]
     pub fn status_color(&self) -> &'static str {
         match self.trust {
             PageTrust::Untrusted => "#ef4444", // Red
@@ -245,6 +260,30 @@ impl PageSandbox {
             PageTrust::Warming => "#eab308",   // Yellow
             PageTrust::Trusted => "#22c55e",   // Green
         }
+    }
+
+    /// Describe sandbox state for diagnostics
+    pub fn describe(&self) -> String {
+        let last_int = self.interactions.last()
+            .map(|i| i.describe())
+            .unwrap_or_default();
+        let blocked_desc = self.blocked_actions.last()
+            .map(|b| b.describe())
+            .unwrap_or_default();
+        format!(
+            "PageSandbox[url={}, trust={:?}, meaningful={}, total_interactions={}, blocked={}, age={:?}, last={}{}]",
+            self.url, self.trust, self.meaningful_count,
+            self.interactions.len(), self.blocked_actions.len(),
+            self.created_at.elapsed(), last_int,
+            if blocked_desc.is_empty() { String::new() } else { format!(", last_block={}", blocked_desc) },
+        )
+    }
+}
+
+impl BlockedAction {
+    /// Describe this blocked action for logging
+    pub fn describe(&self) -> String {
+        format!("Blocked({}: {}) at {:?} ago", self.action, self.reason, self.timestamp.elapsed())
     }
 }
 

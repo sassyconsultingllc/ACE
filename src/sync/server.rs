@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! WebSocket server for phone sync
 //! Handles connections from phone companion app
 

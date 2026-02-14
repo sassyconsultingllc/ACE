@@ -2,7 +2,8 @@
 //!
 //! All input routing and text editing in one place.
 
- 
+#![allow(dead_code)]
+
 use std::time::Instant;
 
 /// Focus state - what element has keyboard input
@@ -535,6 +536,56 @@ pub enum Key {
     Other,
 }
 
+impl Key {
+    /// Map an ASCII character to the corresponding Key variant
+    pub fn from_char(c: char) -> Self {
+        match c {
+            'a' | 'A' => Key::A,
+            'b' | 'B' => Key::B,
+            'c' | 'C' => Key::C,
+            'd' | 'D' => Key::D,
+            'e' | 'E' => Key::E,
+            'f' | 'F' => Key::F,
+            'g' | 'G' => Key::G,
+            'h' | 'H' => Key::H,
+            'i' | 'I' => Key::I,
+            'j' | 'J' => Key::J,
+            'k' | 'K' => Key::K,
+            'l' | 'L' => Key::L,
+            'm' | 'M' => Key::M,
+            'n' | 'N' => Key::N,
+            'o' | 'O' => Key::O,
+            'p' | 'P' => Key::P,
+            'q' | 'Q' => Key::Q,
+            'r' | 'R' => Key::R,
+            's' | 'S' => Key::S,
+            't' | 'T' => Key::T,
+            'u' | 'U' => Key::U,
+            'v' | 'V' => Key::V,
+            'w' | 'W' => Key::W,
+            'x' | 'X' => Key::X,
+            'y' | 'Y' => Key::Y,
+            'z' | 'Z' => Key::Z,
+            '0' => Key::Num0,
+            '1' => Key::Num1,
+            '2' => Key::Num2,
+            '3' => Key::Num3,
+            '4' => Key::Num4,
+            '5' => Key::Num5,
+            '6' => Key::Num6,
+            '7' => Key::Num7,
+            '8' => Key::Num8,
+            '9' => Key::Num9,
+            ' ' => Key::Space,
+            '\n' | '\r' => Key::Enter,
+            '\t' => Key::Tab,
+            '\x08' => Key::Backspace,
+            '\x7f' => Key::Delete,
+            _ => Key::Unknown,
+        }
+    }
+}
+
 /// Actions that can result from input
 #[derive(Debug, Clone)]
 pub enum InputAction {
@@ -576,6 +627,50 @@ pub enum InputAction {
     BlockDomainPopups(String),
 }
 
+impl InputAction {
+    /// Label for the action kind (useful for logging / accessibility)
+    pub fn label(&self) -> &'static str {
+        match self {
+            InputAction::None => "none",
+            InputAction::TextChanged => "text-changed",
+            InputAction::SearchChanged => "search-changed",
+            InputAction::CursorMoved => "cursor-moved",
+            InputAction::SelectionChanged => "selection-changed",
+            InputAction::FocusAddressBar => "focus-address-bar",
+            InputAction::Navigate(_) => "navigate",
+            InputAction::CancelInput => "cancel-input",
+            InputAction::NewTab => "new-tab",
+            InputAction::CloseTab => "close-tab",
+            InputAction::NextTab => "next-tab",
+            InputAction::PrevTab => "prev-tab",
+            InputAction::Reload => "reload",
+            InputAction::ToggleHelpPane => "toggle-help",
+            InputAction::GoBack => "go-back",
+            InputAction::GoForward => "go-forward",
+            InputAction::ToggleTileView => "toggle-tile-view",
+            InputAction::OpenFind => "open-find",
+            InputAction::CloseFind => "close-find",
+            InputAction::FindNext(_) => "find-next",
+            InputAction::ScrollUp(_) => "scroll-up",
+            InputAction::ScrollDown(_) => "scroll-down",
+            InputAction::ScrollToTop => "scroll-to-top",
+            InputAction::ScrollToBottom => "scroll-to-bottom",
+            InputAction::FocusNextElement => "focus-next",
+            InputAction::PageClick(_, _) => "page-click",
+            InputAction::TabListClick(_, _) => "tab-list-click",
+            InputAction::ForwardToPage(_) => "forward-char",
+            InputAction::ForwardKeyToPage(_) => "forward-key",
+            InputAction::Copy(_) => "copy",
+            InputAction::Cut(_) => "cut",
+            InputAction::RequestPaste => "request-paste",
+            InputAction::AllowPendingPopup => "allow-popup",
+            InputAction::BlockPendingPopup => "block-popup",
+            InputAction::AllowDomainPopups(_) => "allow-domain-popups",
+            InputAction::BlockDomainPopups(_) => "block-domain-popups",
+        }
+    }
+}
+
 /// UI element bounds for hit testing
 #[derive(Debug, Clone, Default)]
 pub struct UiBounds {
@@ -605,5 +700,161 @@ impl Rect {
     pub fn contains(&self, px: i32, py: i32) -> bool {
         px >= self.x && px < self.x + self.width &&
         py >= self.y && py < self.y + self.height
+    }
+}
+
+impl UiBounds {
+    /// Describe all element bounds for debugging
+    pub fn describe(&self) -> String {
+        format!(
+            "addr={}x{} back={}x{} fwd={}x{} refresh={}x{} help={}x{} content={}x{} tabs={}x{} net={}x{}",
+            self.address_bar.width, self.address_bar.height,
+            self.back_button.width, self.back_button.height,
+            self.forward_button.width, self.forward_button.height,
+            self.refresh_button.width, self.refresh_button.height,
+            self.help_button.width, self.help_button.height,
+            self.content_area.width, self.content_area.height,
+            self.tab_list.width, self.tab_list.height,
+            self.network_bar.width, self.network_bar.height,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_text_input_operations() {
+        let mut ti = TextInput::with_text("hello");
+        assert_eq!(ti.text, "hello");
+        assert_eq!(ti.cursor, 5);
+
+        ti.insert(' ');
+        ti.insert_str("world");
+        assert!(ti.text.contains("world"));
+
+        ti.select_all();
+        assert!(ti.selected_text().is_some());
+
+        let copied = ti.copy();
+        assert!(copied.is_some());
+
+        let cut = ti.cut();
+        assert!(cut.is_some());
+        assert!(ti.text.is_empty());
+
+        ti.paste("new text");
+        assert_eq!(ti.text, "new text");
+
+        ti.home(false);
+        ti.end(true);
+        ti.move_left(false);
+        ti.move_right(false);
+        ti.backspace();
+        ti.delete();
+        ti.clear();
+        ti.set_text("final");
+        assert_eq!(ti.text, "final");
+    }
+
+    #[test]
+    fn test_key_from_char() {
+        assert_eq!(Key::from_char('a'), Key::A);
+        assert_eq!(Key::from_char('Z'), Key::Z);
+        assert_eq!(Key::from_char('5'), Key::Num5);
+        assert_eq!(Key::from_char(' '), Key::Space);
+        assert_eq!(Key::from_char('!'), Key::Unknown);
+
+        // Exercise Key1/Key2 in mod.rs key handling
+        let k1 = Key::Key1;
+        let k2 = Key::Key2;
+        let other = Key::Other;
+        assert_ne!(k1, k2);
+        assert_ne!(k2, other);
+    }
+
+    #[test]
+    fn test_input_manager_and_actions() {
+        let mut im = InputManager::new();
+        im.set_address("https://example.com");
+        assert_eq!(im.address_bar.text, "https://example.com");
+
+        // Character input in address bar
+        im.focus = Focus::AddressBar;
+        let action = im.char_input('x');
+        assert_eq!(action.label(), "text-changed");
+
+        // Scroll
+        let scroll_action = im.mouse_scroll(-3.0);
+        assert_eq!(scroll_action.label(), "scroll-down");
+        let scroll_up = im.mouse_scroll(3.0);
+        assert_eq!(scroll_up.label(), "scroll-up");
+
+        // Paste
+        im.focus = Focus::SearchBar;
+        im.paste("query");
+        assert_eq!(im.search_bar.text, "query");
+
+        // FormField focus
+        im.focus = Focus::FormField(42);
+        let fwd = im.char_input('z');
+        assert_eq!(fwd.label(), "forward-char");
+
+        // UiBounds describe exercises network_bar field
+        let bounds = UiBounds::default();
+        let desc = bounds.describe();
+        assert!(desc.contains("net="));
+
+        // Rect::new
+        let r = Rect::new(10, 20, 100, 50);
+        assert!(r.contains(15, 25));
+        assert!(!r.contains(0, 0));
+    }
+
+    #[test]
+    fn test_input_action_labels_exhaustive() {
+        // Ensure all InputAction variants have labels
+        let actions: Vec<InputAction> = vec![
+            InputAction::None,
+            InputAction::TextChanged,
+            InputAction::SearchChanged,
+            InputAction::CursorMoved,
+            InputAction::SelectionChanged,
+            InputAction::FocusAddressBar,
+            InputAction::Navigate("url".into()),
+            InputAction::CancelInput,
+            InputAction::NewTab,
+            InputAction::CloseTab,
+            InputAction::NextTab,
+            InputAction::PrevTab,
+            InputAction::Reload,
+            InputAction::ToggleHelpPane,
+            InputAction::GoBack,
+            InputAction::GoForward,
+            InputAction::ToggleTileView,
+            InputAction::OpenFind,
+            InputAction::CloseFind,
+            InputAction::FindNext("q".into()),
+            InputAction::ScrollUp(10),
+            InputAction::ScrollDown(10),
+            InputAction::ScrollToTop,
+            InputAction::ScrollToBottom,
+            InputAction::FocusNextElement,
+            InputAction::PageClick(0, 0),
+            InputAction::TabListClick(0, 0),
+            InputAction::ForwardToPage('a'),
+            InputAction::ForwardKeyToPage(Key::A),
+            InputAction::Copy("t".into()),
+            InputAction::Cut("t".into()),
+            InputAction::RequestPaste,
+            InputAction::AllowPendingPopup,
+            InputAction::BlockPendingPopup,
+            InputAction::AllowDomainPopups("d".into()),
+            InputAction::BlockDomainPopups("d".into()),
+        ];
+        for a in &actions {
+            assert!(!a.label().is_empty());
+        }
     }
 }

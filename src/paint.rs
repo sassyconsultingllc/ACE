@@ -87,17 +87,50 @@ impl Painter {
         // Border
         self.paint_border(buffer, buffer_width, layout, offset_x, offset_y);
         
+        // Image content (check if node is an <img> element)
+        let is_img = layout.node.as_ref().map(|n| {
+            let n = n.borrow();
+            n.tag_name.as_deref() == Some("img")
+        }).unwrap_or(false);
+
+        if is_img {
+            let src = layout.node.as_ref().and_then(|n| {
+                n.borrow().attributes.get("src").cloned()
+            });
+            if let Some(ref src_url) = src {
+                // Try to draw image from cache
+                if let Some(crate::imaging::ImageState::Loaded(img)) = crate::imaging::cache_get_global(src_url) {
+                    let img_x = layout.content.x as i32 + offset_x;
+                    let img_y = layout.content.y as i32 + offset_y;
+                    self.draw_image(buffer, buffer_width, &img.pixels, img_x, img_y, img.width, img.height);
+                } else {
+                    // Draw placeholder border using draw_line
+                    let bx = layout.content.x as i32 + offset_x;
+                    let by = layout.content.y as i32 + offset_y;
+                    let bw = layout.content.width as i32;
+                    let bh = layout.content.height as i32;
+                    let placeholder_color = Color { r: 200, g: 200, b: 200, a: 255 };
+                    self.draw_line(buffer, buffer_width, bx, by, bx + bw, by, placeholder_color);
+                    self.draw_line(buffer, buffer_width, bx, by + bh, bx + bw, by + bh, placeholder_color);
+                    self.draw_line(buffer, buffer_width, bx, by, bx, by + bh, placeholder_color);
+                    self.draw_line(buffer, buffer_width, bx + bw, by, bx + bw, by + bh, placeholder_color);
+                    // Trigger background load
+                    let _ = crate::imaging::load_image_background(src_url);
+                }
+            }
+        }
+
         // Text content
         if let Some(ref text) = layout.text {
             if !text.trim().is_empty() {
                 let text_x = layout.content.x as i32 + offset_x;
                 let text_y = layout.content.y as i32 + offset_y;
-                let font_size = if layout.style.font_size > 0.0 { 
-                    layout.style.font_size 
-                } else { 
-                    self.font_size 
+                let font_size = if layout.style.font_size > 0.0 {
+                    layout.style.font_size
+                } else {
+                    self.font_size
                 };
-                
+
                 self.draw_text(
                     buffer, buffer_width,
                     text, text_x, text_y, font_size,

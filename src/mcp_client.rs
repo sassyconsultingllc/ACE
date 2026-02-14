@@ -1,6 +1,7 @@
 //! MCP WebSocket Client — Connects to Sassy Browser's Native MCP Server
 //!
 //! Pure Rust, no JSON. Uses bincode over WebSocket via tokio-tungstenite.
+#![allow(dead_code)]
 //!
 //! USAGE:
 //! ─────────────────────────────────────────────────────────────────────────

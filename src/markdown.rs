@@ -2,8 +2,8 @@
 //!
 //! Renders Markdown to styled DOM elements.
 //! Supports: headings, lists, code blocks, links, emphasis, tables.
+#![allow(dead_code)]
 
- 
 use crate::style::Color;
 
 /// Markdown block element
@@ -35,6 +35,12 @@ pub enum MdInline {
 pub struct MarkdownParser;
 
 impl MarkdownParser {
+    /// Parse and render markdown to plaintext, wiring render_to_text
+    pub fn parse_to_text(input: &str) -> String {
+        let blocks = Self::parse(input);
+        render_to_text(&blocks)
+    }
+
     pub fn parse(input: &str) -> Vec<MdBlock> {
         let mut blocks = Vec::new();
         let lines: Vec<&str> = input.lines().collect();
@@ -196,7 +202,7 @@ impl MarkdownParser {
         blocks
     }
     
-    fn parse_inline(input: &str) -> Vec<MdInline> {
+    pub fn parse_inline(input: &str) -> Vec<MdInline> {
         let mut result = Vec::new();
         let chars: Vec<char> = input.chars().collect();
         let mut i = 0;
@@ -376,6 +382,22 @@ pub struct MdStyle {
     pub code_text: Color,
     pub blockquote_border: Color,
     pub blockquote_bg: Color,
+}
+
+impl MdStyle {
+    /// Summary for diagnostics - reads all fields
+    pub fn describe(&self) -> String {
+        format!(
+            "MdStyle[headings={}, text=({},{},{},{}), link=({},{},{},{}), code_bg=({},{},{},{}), code_text=({},{},{},{}), bq_border=({},{},{},{}), bq_bg=({},{},{},{})]",
+            self.heading_colors.len(),
+            self.text_color.r, self.text_color.g, self.text_color.b, self.text_color.a,
+            self.link_color.r, self.link_color.g, self.link_color.b, self.link_color.a,
+            self.code_bg.r, self.code_bg.g, self.code_bg.b, self.code_bg.a,
+            self.code_text.r, self.code_text.g, self.code_text.b, self.code_text.a,
+            self.blockquote_border.r, self.blockquote_border.g, self.blockquote_border.b, self.blockquote_border.a,
+            self.blockquote_bg.r, self.blockquote_bg.g, self.blockquote_bg.b, self.blockquote_bg.a,
+        )
+    }
 }
 
 impl Default for MdStyle {

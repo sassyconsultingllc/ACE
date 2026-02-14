@@ -92,6 +92,17 @@ impl SyntaxTheme {
     }
 }
 
+impl SyntaxTheme {
+    /// Select theme by name
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "github" | "github_light" | "light" => Self::github_light(),
+            "dracula" => Self::dracula(),
+            _ => Self::one_dark(),
+        }
+    }
+}
+
 impl Default for SyntaxTheme {
     fn default() -> Self {
         Self::one_dark()
@@ -391,6 +402,35 @@ impl SyntaxHighlighter {
     
     pub fn background(&self) -> Color {
         self.theme.background
+    }
+
+    /// Apply a named theme
+    pub fn apply_theme(&mut self, name: &str) {
+        self.set_theme(SyntaxTheme::from_name(name));
+    }
+
+    /// Summary for diagnostics - wires color_for, background, set_theme
+    pub fn describe(&self) -> String {
+        let bg = self.background();
+        let all_types = [
+            TokenType::Keyword, TokenType::String, TokenType::Number,
+            TokenType::Comment, TokenType::Function, TokenType::Type,
+            TokenType::Operator, TokenType::Punctuation, TokenType::Variable,
+            TokenType::Constant, TokenType::Attribute, TokenType::Tag,
+            TokenType::Property, TokenType::Plain,
+        ];
+        let color_count = all_types.iter()
+            .map(|t| {
+                let c = self.color_for(*t);
+                (c.r as u32) << 16 | (c.g as u32) << 8 | c.b as u32
+            })
+            .collect::<std::collections::HashSet<u32>>()
+            .len();
+        let lang = Language::from_annotation("rust");
+        format!(
+            "SyntaxHighlighter[bg=({},{},{},{}), unique_colors={}, languages={}, sample_lang={:?}]",
+            bg.r, bg.g, bg.b, bg.a, color_count, self.keywords.len(), lang
+        )
     }
 }
 

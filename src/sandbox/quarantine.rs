@@ -111,6 +111,20 @@ impl QuarantinedFile {
             "wsf", "wsh", "scr", "pif", "com", "dll", "sys",
         ];
         
+        // Archive / container extensions (may hide executables)
+        let caution_exts = ["zip", "rar", "7z", "tar", "gz", "iso", "dmg", "cab"];
+        if caution_exts.contains(&ext.as_str()) {
+            self.warnings.push(Warning {
+                level: WarningLevel::Caution,
+                message: "Archive file".into(),
+                detail: format!(
+                    "Archive (.{}) files can contain executables. \
+                     Extract with care and scan contents before running.",
+                    ext
+                ),
+            });
+        }
+
         if dangerous_exts.contains(&ext.as_str()) {
             self.warnings.push(Warning {
                 level: WarningLevel::Danger,
@@ -206,7 +220,6 @@ impl QuarantinedFile {
     }
     
     /// Get the highest warning level
-    #[allow(dead_code)]
     pub fn max_warning_level(&self) -> WarningLevel {
         self.warnings.iter()
             .map(|w| w.level)
@@ -257,7 +270,6 @@ impl QuarantinedFile {
     }
     
     /// Release file to filesystem
-    #[allow(dead_code)]
     pub fn release(&mut self, destination: PathBuf, key: Option<&crate::crypto::EncryptionKey>) -> Result<PathBuf, String> {
         match self.can_release() {
             ReleaseStatus::Ready => {}
@@ -352,7 +364,6 @@ impl QuarantinedFile {
 }
 
 #[cfg(windows)]
-#[allow(dead_code)]
 fn mark_as_downloaded(path: &std::path::Path, source_url: &str) -> Result<(), String> {
     use std::fs::OpenOptions;
     use std::io::Write;

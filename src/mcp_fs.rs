@@ -3,6 +3,8 @@
 //! Provides safe, sandboxed file system access for the AI agents.
 //! All operations are logged and can be reviewed before execution.
 
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -224,17 +226,22 @@ impl McpFileSystem {
     /// Read a file's contents
     pub fn read_file(&mut self, path: &str) -> FileResult<String> {
         let path_buf = PathBuf::from(path);
-        
+
         // Security check
         if !self.is_in_sandbox(&path_buf) {
             return Err(FileError::OutsideSandbox(path.to_string()));
         }
-        
+
         // Check if file exists
         if !path_buf.exists() {
             return Err(FileError::NotFound(path.to_string()));
         }
-        
+
+        // Return cached content if fresh
+        if let Some(cached) = self.get_cached(path) {
+            return Ok(cached.to_string());
+        }
+
         // Check file size
         let metadata = fs::metadata(&path_buf)?;
         if metadata.len() > self.max_read_size {
@@ -244,7 +251,7 @@ impl McpFileSystem {
                 max: self.max_read_size,
             });
         }
-        
+
         // Read file
         let content = fs::read_to_string(&path_buf)?;
         
@@ -464,6 +471,89 @@ impl McpFileSystem {
         Ok(id)
     }
     
+    /// Queue a file rename for approval
+    pub fn queue_rename(&mut self, path: &str, new_path: &str, description: &str) -> FileResult<u64> {
+        let path_buf = PathBuf::from(path);
+        let new_path_buf = PathBuf::from(new_path);
+
+        if !self.is_in_sandbox(&path_buf) {
+            return Err(FileError::OutsideSandbox(path.to_string()));
+        }
+        if !self.is_in_sandbox(&new_path_buf) {
+            return Err(FileError::OutsideSandbox(new_path.to_string()));
+        }
+        if !path_buf.exists() {
+            return Err(FileError::NotFound(path.to_string()));
+        }
+
+        let id = self.next_change_id;
+        self.next_change_id += 1;
+
+        self.pending.push(PendingChange {
+            id,
+            change_type: ChangeType::RenameFile,
+            path: path.to_string(),
+            content: None,
+            old_content: None,
+            new_path: Some(new_path.to_string()),
+            description: description.to_string(),
+            created_at: Utc::now(),
+        });
+
+        self.log_operation(OperationType::Rename, path, OperationStatus::Pending, Some(description));
+
+        Ok(id)
+    }
+
+    /// Queue a directory creation for approval
+    pub fn queue_mkdir(&mut self, path: &str, description: &str) -> FileResult<u64> {
+        let path_buf = PathBuf::from(path);
+
+        if !self.is_in_sandbox(&path_buf) {
+            return Err(FileError::OutsideSandbox(path.to_string()));
+        }
+
+        let id = self.next_change_id;
+        self.next_change_id += 1;
+
+        self.pending.push(PendingChange {
+            id,
+            change_type: ChangeType::CreateDirectory,
+            path: path.to_string(),
+            content: None,
+            old_content: None,
+            new_path: None,
+            description: description.to_string(),
+            created_at: Utc::now(),
+        });
+
+        self.log_operation(OperationType::CreateDir, path, OperationStatus::Pending, Some(description));
+
+        Ok(id)
+    }
+
+    /// Copy a file (executed immediately, logged)
+    pub fn copy_file(&mut self, src: &str, dst: &str) -> FileResult<()> {
+        let src_buf = PathBuf::from(src);
+        let dst_buf = PathBuf::from(dst);
+
+        if !self.is_in_sandbox(&src_buf) {
+            return Err(FileError::OutsideSandbox(src.to_string()));
+        }
+        if !self.is_in_sandbox(&dst_buf) {
+            return Err(FileError::OutsideSandbox(dst.to_string()));
+        }
+        if !src_buf.exists() {
+            return Err(FileError::NotFound(src.to_string()));
+        }
+
+        fs::copy(&src_buf, &dst_buf)?;
+        self.log_operation(OperationType::Copy, src, OperationStatus::Executed,
+            Some(&format!("Copied to {}", dst)));
+
+        Ok(())
+    }
+
     /// Get all pending changes
     pub fn pending_changes(&self) -> &[PendingChange] {
         &self.pending
@@ -472,25 +562,54 @@ impl McpFileSystem {
     /// Approve and execute a pending change
     pub fn approve(&mut self, id: u64) -> FileResult<()> {
         let idx = self.pending.iter().position(|c| c.id == id);
-        
+
         if let Some(idx) = idx {
             let change = self.pending.remove(idx);
-            self.execute_change(&change)?;
+            let op_type = match change.change_type {
+                ChangeType::CreateFile => OperationType::Create,
+                ChangeType::UpdateFile => OperationType::Update,
+                ChangeType::DeleteFile => OperationType::Delete,
+                ChangeType::RenameFile => OperationType::Rename,
+                ChangeType::CreateDirectory => OperationType::CreateDir,
+            };
+            self.log_operation(op_type, &change.path.clone(), OperationStatus::Approved, None);
+            match self.execute_change(&change) {
+                Ok(()) => {}
+                Err(e) => {
+                    self.log_operation(op_type, &change.path, OperationStatus::Failed,
+                        Some(&e.to_string()));
+                    return Err(e);
+                }
+            }
         }
-        
+
         Ok(())
     }
-    
+
     /// Approve and execute all pending changes
     pub fn approve_all(&mut self) -> FileResult<Vec<u64>> {
         let changes: Vec<PendingChange> = self.pending.drain(..).collect();
         let mut executed = Vec::new();
-        
+
         for change in changes {
-            self.execute_change(&change)?;
-            executed.push(change.id);
+            let op_type = match change.change_type {
+                ChangeType::CreateFile => OperationType::Create,
+                ChangeType::UpdateFile => OperationType::Update,
+                ChangeType::DeleteFile => OperationType::Delete,
+                ChangeType::RenameFile => OperationType::Rename,
+                ChangeType::CreateDirectory => OperationType::CreateDir,
+            };
+            self.log_operation(op_type, &change.path.clone(), OperationStatus::Approved, None);
+            match self.execute_change(&change) {
+                Ok(()) => executed.push(change.id),
+                Err(e) => {
+                    self.log_operation(op_type, &change.path, OperationStatus::Failed,
+                        Some(&e.to_string()));
+                    return Err(e);
+                }
+            }
         }
-        
+
         Ok(executed)
     }
     
@@ -627,6 +746,19 @@ impl McpFileSystem {
         });
     }
     
+    /// Get cached file content if available and fresh
+    pub fn get_cached(&self, path: &str) -> Option<&str> {
+        self.cache.get(path).and_then(|cached| {
+            // Only return cached content if it was cached within the last 5 minutes
+            let age = Utc::now() - cached.modified;
+            if age.num_seconds() < 300 {
+                Some(cached.content.as_str())
+            } else {
+                None
+            }
+        })
+    }
+
     /// Get operation history
     pub fn history(&self) -> &[FileOperation] {
         &self.history

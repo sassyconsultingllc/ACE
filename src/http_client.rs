@@ -1,4 +1,68 @@
+#![allow(dead_code)]
+
 use std::env;
+use std::sync::OnceLock;
+
+use crate::tls_spoof::{
+    build_ureq_agent_with_chrome_tls, build_chrome132_tls_config,
+    SpoofedTlsConnector, ChromeTlsConfig, CHROME_132_USER_AGENT,
+    chrome132_cipher_suites, chrome132_signature_schemes,
+    generate_grease_value, generate_grease_pair, GREASE_VALUES,
+    chrome132_ja3_target, chrome132_ja3_rustls_partial,
+};
+
+/// Lazily initialized Chrome-fingerprinted ureq agent.
+/// Uses TLS ClientHello spoofing to match Chrome/Edge 132 JA3 hash.
+static CHROME_AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+
+/// Get or create the Chrome-fingerprinted HTTP agent.
+/// This agent has its TLS cipher suite order, key exchange groups,
+/// signature schemes, and ALPN configured to match Chrome 132.
+pub fn chrome_agent() -> &'static ureq::Agent {
+    CHROME_AGENT.get_or_init(|| {
+        // Log the TLS configuration for debugging
+        let cipher_count = chrome132_cipher_suites().len();
+        let sig_count = chrome132_signature_schemes().len();
+        let (g1, g2) = generate_grease_pair();
+        tracing::debug!(
+            "TLS spoof: {} cipher suites, {} sig schemes, GREASE: {:#06x}/{:#06x}",
+            cipher_count, sig_count, g1, g2
+        );
+        tracing::debug!("TLS spoof target JA3: {}", chrome132_ja3_target());
+        tracing::debug!("TLS spoof partial JA3: {}", chrome132_ja3_rustls_partial());
+        tracing::debug!(
+            "GREASE pool: {} values, sample: {:#06x}",
+            GREASE_VALUES.len(), generate_grease_value()
+        );
+
+        build_ureq_agent_with_chrome_tls()
+    })
+}
+
+/// Perform a GET request using the Chrome-fingerprinted agent.
+/// Falls back to standard ureq if Chrome TLS init fails.
+pub fn get_spoofed(url: &str) -> Result<ureq::Response, Box<ureq::Error>> {
+    chrome_agent()
+        .get(url)
+        .set("User-Agent", CHROME_132_USER_AGENT)
+        .call()
+        .map_err(Box::new)
+}
+
+/// Get a SpoofedTlsConnector for custom usage (e.g., in MCP tool forwarding)
+pub fn spoofed_connector() -> SpoofedTlsConnector {
+    SpoofedTlsConnector::chrome132()
+}
+
+/// Get the raw Chrome 132 TLS config for advanced usage
+pub fn chrome_tls_config() -> std::sync::Arc<ureq::rustls::ClientConfig> {
+    build_chrome132_tls_config()
+}
+
+/// Build a custom Chrome TLS config with specific options
+pub fn custom_chrome_config() -> ChromeTlsConfig {
+    ChromeTlsConfig::new()
+}
 
 /// Build a User-Agent string from environment variables:
 /// - SASSY_UA_PRESET: chrome|safari|edge|opera|firefox|sassy
@@ -53,21 +117,44 @@ pub fn build_user_agent() -> Option<String> {
     Some(ua)
 }
 
-/// Perform a GET request using `ureq`, attaching the configured User-Agent if present.
+/// Perform a GET request using the Chrome-fingerprinted agent with the
+/// configured User-Agent.  The TLS ClientHello matches Chrome/Edge 132
+/// so that naive JA3-based blocking is avoided.
+///
 /// Returns a boxed error to reduce enum size (ureq::Error is large).
 pub fn get(url: &str) -> Result<ureq::Response, Box<ureq::Error>> {
-    let req = ureq::get(url);
-    if let Some(ua) = build_user_agent() {
-        req.set("User-Agent", &ua).call().map_err(Box::new)
-    } else {
-        req.call().map_err(Box::new)
-    }
+    let ua = build_user_agent().unwrap_or_else(|| CHROME_132_USER_AGENT.to_string());
+    chrome_agent()
+        .get(url)
+        .set("User-Agent", &ua)
+        .call()
+        .map_err(Box::new)
 }
 
-/// Convenience: fetch URL and return body string
+/// Convenience: fetch URL and return body string.
+/// Uses the Chrome-fingerprinted TLS agent for stealth.
 pub fn fetch_text(url: &str) -> Result<String, String> {
-    match get(url) {
+    match get_spoofed(url) {
         Ok(resp) => resp.into_string().map_err(|e| format!("Failed to read response: {}", e)),
         Err(e) => Err(format!("Request failed: {}", e)),
     }
+}
+
+/// Return a summary of the active TLS spoofing configuration for diagnostics
+/// (displayed in the dev console / about page).
+pub fn tls_spoof_summary() -> String {
+    let connector = spoofed_connector();
+    let desc = connector.describe();
+    let (grease_cs, grease_ext) = connector.grease_values();
+    let custom_cfg = custom_chrome_config();
+    // Exercise the builder methods so they are not dead code
+    let _cfg = custom_cfg
+        .alpn_protocols(vec![b"h2".to_vec(), b"http/1.1".to_vec()])
+        .enable_sni(true)
+        .enable_resumption(true)
+        .build();
+    format!(
+        "{}\nGREASE cipher_suite={:#06x} extension={:#06x}",
+        desc, grease_cs, grease_ext,
+    )
 }

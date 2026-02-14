@@ -3,6 +3,7 @@
 //! HTTP cookie storage and management with proper security handling.
 
 #![allow(unused_variables)]
+#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::sync::RwLock;

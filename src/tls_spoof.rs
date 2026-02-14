@@ -6,6 +6,7 @@
 //! fingerprint (JA3 hash) closely matches Chrome/Edge 132 on Windows.  The goal
 //! is to defeat naive TLS fingerprinting that blocks non-browser user agents
 //! while preserving the security guarantees of `rustls` and its `ring` backend.
+#![allow(dead_code)]
 //!
 //! # Target JA3 (Chrome 132)
 //!
@@ -112,7 +113,7 @@ use ureq::rustls::{
 ///
 /// Each value follows the pattern `0x?a?a` where the high and low bytes share
 /// the same nibble structure.  Chrome picks one at random for each connection.
-const GREASE_VALUES: [u16; 16] = [
+pub const GREASE_VALUES: [u16; 16] = [
     0x0a0a, 0x1a1a, 0x2a2a, 0x3a3a,
     0x4a4a, 0x5a5a, 0x6a6a, 0x7a7a,
     0x8a8a, 0x9a9a, 0xaaaa, 0xbaba,
@@ -153,7 +154,7 @@ pub fn generate_grease_pair() -> (u16, u16) {
 /// Chrome also advertises 6 CBC/RSA-kx suites that rustls does not support;
 /// those are omitted because modern servers never negotiate them when AEAD
 /// alternatives are available.
-fn chrome132_cipher_suites() -> Vec<SupportedCipherSuite> {
+pub fn chrome132_cipher_suites() -> Vec<SupportedCipherSuite> {
     vec![
         // TLS 1.3
         cipher_suite::TLS13_AES_128_GCM_SHA256,        // 0x1301
@@ -174,7 +175,7 @@ fn chrome132_cipher_suites() -> Vec<SupportedCipherSuite> {
 ///
 /// This ordering matters for fingerprinting -- JA3S and other fingerprinters
 /// record the order.
-fn chrome132_signature_schemes() -> Vec<SignatureScheme> {
+pub fn chrome132_signature_schemes() -> Vec<SignatureScheme> {
     vec![
         SignatureScheme::ECDSA_NISTP256_SHA256, // 0x0403
         SignatureScheme::RSA_PSS_SHA256,        // 0x0804

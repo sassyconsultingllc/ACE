@@ -136,4 +136,20 @@ impl NetworkSandbox {
             rl.attempts.iter().any(|t| now.duration_since(*t) < window)
         });
     }
+
+    /// Describe current network sandbox state for diagnostics
+    pub fn describe(&self) -> String {
+        format!(
+            "NetworkSandbox[allowed={}, blocked={}, rate_tracked={}, blocked_count={}, rate_limited={}, window={:.1}s, max_per_window={}, last={:?}, patterns={}]",
+            self.allowed_hosts.len(),
+            self.blocked_hosts.len(),
+            self.rate_limits.len(),
+            self.connections_blocked,
+            self.rate_limited_count,
+            RATE_LIMIT_WINDOW_SECS,
+            RATE_LIMIT_MAX_PER_WINDOW,
+            self.last_validation.map(|t| t.elapsed()),
+            BLOCKED_PATTERNS.len(),
+        )
+    }
 }
