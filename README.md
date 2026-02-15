@@ -264,7 +264,7 @@ MIT License — Sassy Consulting LLC
 
 ## 🔐 Security Contact
 
-Found a vulnerability? Email security@sassyconsultingllc.com
+Found a vulnerability? Email shane@sassyconsultingllc.com
 
 We take security seriously — that's the whole point of this browser.
 
