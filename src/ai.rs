@@ -2,6 +2,8 @@
 //!
 //! Off by default. When enabled, provides contextual help like Windows XP's "?" button.
 //! Easter eggs throughout encourage exploration and learning.
+//!
+//! Supported providers: Anthropic (Claude), OpenAI, xAI (Grok), Google (Gemini), Local (Ollama)
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::fs;
@@ -22,7 +24,7 @@ pub struct AiConfig {
 impl Default for AiConfig {
     fn default() -> Self {
         Self {
-            enabled: false,  // OFF by default
+            enabled: true,  // OFF by default
             provider: AiProvider::None,
             api_key: None,
             show_help_button: true,
@@ -37,6 +39,8 @@ pub enum AiProvider {
     None,
     Anthropic,  // Claude
     OpenAI,
+    XAI,        // Grok
+    Google,     // Gemini
     Local,      // Ollama/local models
 }
 
@@ -46,6 +50,8 @@ pub struct AiRuntime {
     pub config: AiConfig,
     pub openai_key: Option<String>,
     pub anthropic_key: Option<String>,
+    pub xai_key: Option<String>,
+    pub google_key: Option<String>,
     pub local_endpoint: Option<String>,
     pub local_model: Option<String>,
 }
@@ -94,11 +100,13 @@ impl EasterEggReward {
 impl AiRuntime {
     /// Summary of the AI runtime configuration
     pub fn describe(&self) -> String {
-        format!("AiRuntime[enabled={}, provider={:?}, openai={}, anthropic={}, local_endpoint={}, local_model={}]",
+        format!("AiRuntime[enabled={}, provider={:?}, openai={}, anthropic={}, xai={}, google={}, local_endpoint={}, local_model={}]",
             self.config.enabled,
             self.config.provider,
             self.openai_key.is_some(),
             self.anthropic_key.is_some(),
+            self.xai_key.is_some(),
+            self.google_key.is_some(),
             self.local_endpoint.as_deref().unwrap_or("none"),
             self.local_model.as_deref().unwrap_or("none"))
     }
@@ -143,6 +151,11 @@ impl AiConfig {
 }
 
 /// Load AI runtime config from config/ai.toml (user config dir), falling back to packaged default.
+///
+/// Keys are resolved with fallback priority:
+///   1. [ai.keys] section (provider-specific)
+///   2. [mcp.keys] section (shared cloud keys)
+/// This means you only need to set keys once in [mcp.keys] and the sidebar AI picks them up.
 pub fn load_runtime() -> AiRuntime {
     let path = config_dir().join("ai.toml");
     let fallback = PathBuf::from("config").join("ai.toml");
@@ -152,22 +165,53 @@ pub fn load_runtime() -> AiRuntime {
         .unwrap_or_default();
 
     let parsed: AiFile = toml::from_str(&content).unwrap_or_default();
+
+    // Resolve keys: [ai.keys] takes priority, then fall back to [mcp.keys]
+    let anthropic_key = parsed.ai.keys.anthropic.clone()
+        .filter(|s| !s.is_empty())
+        .or_else(|| parsed.mcp.keys.anthropic.clone().filter(|s| !s.is_empty()));
+    let openai_key = parsed.ai.keys.openai.clone()
+        .filter(|s| !s.is_empty());
+    let xai_key = parsed.ai.keys.xai.clone()
+        .filter(|s| !s.is_empty())
+        .or_else(|| parsed.mcp.keys.xai.clone().filter(|s| !s.is_empty()));
+    let google_key = parsed.ai.keys.google.clone()
+        .filter(|s| !s.is_empty())
+        .or_else(|| parsed.mcp.keys.google.clone().filter(|s| !s.is_empty()));
+
     let provider = match crate::fontcase::ascii_lower(&parsed.ai.provider).as_str() {
-        "anthropic" => AiProvider::Anthropic,
-        "openai" => AiProvider::OpenAI,
-        "local" => AiProvider::Local,
+        "anthropic" | "claude" => AiProvider::Anthropic,
+        "openai" | "gpt" => AiProvider::OpenAI,
+        "xai" | "grok" | "x" => AiProvider::XAI,
+        "google" | "gemini" => AiProvider::Google,
+        "local" | "ollama" => AiProvider::Local,
+        // Auto-detect: if provider is "auto" or "none" but keys exist, pick the first available
+        "auto" => {
+            if xai_key.is_some() { AiProvider::XAI }
+            else if anthropic_key.is_some() { AiProvider::Anthropic }
+            else if google_key.is_some() { AiProvider::Google }
+            else if openai_key.is_some() { AiProvider::OpenAI }
+            else { AiProvider::None }
+        }
         _ => AiProvider::None,
     };
 
+    let api_key = match &provider {
+        AiProvider::Anthropic => anthropic_key.clone(),
+        AiProvider::OpenAI => openai_key.clone(),
+        AiProvider::XAI => xai_key.clone(),
+        AiProvider::Google => google_key.clone(),
+        AiProvider::Local => None,
+        AiProvider::None => None,
+    };
+
+    // Auto-enable if we have a valid provider + key
+    let enabled = parsed.ai.enabled || (api_key.is_some() && !matches!(provider, AiProvider::None));
+
     let config = AiConfig {
-        enabled: parsed.ai.enabled,
+        enabled,
         provider: provider.clone(),
-        api_key: match provider {
-            AiProvider::Anthropic => parsed.ai.keys.anthropic.clone().filter(|s| !s.is_empty()),
-            AiProvider::OpenAI => parsed.ai.keys.openai.clone().filter(|s| !s.is_empty()),
-            AiProvider::Local => None,
-            AiProvider::None => None,
-        },
+        api_key,
         show_help_button: parsed.help.show_button,
         learning_mode: parsed.learning.enabled,
         ..Default::default()
@@ -181,10 +225,15 @@ pub fn load_runtime() -> AiRuntime {
         eprintln!("Easter egg notifications enabled");
     }
 
+    tracing::info!("AI sidebar: provider={:?}, enabled={}, has_key={}", 
+        config.provider, config.enabled, config.api_key.is_some());
+
     AiRuntime {
         config,
-        openai_key: parsed.ai.keys.openai.clone().filter(|s| !s.is_empty()),
-        anthropic_key: parsed.ai.keys.anthropic.clone().filter(|s| !s.is_empty()),
+        openai_key,
+        anthropic_key,
+        xai_key,
+        google_key,
         local_endpoint: Some(parsed.ai.local.endpoint.clone()).filter(|s| !s.is_empty()),
         local_model: Some(parsed.ai.local.model.clone()).filter(|s| !s.is_empty()),
     }
@@ -226,6 +275,20 @@ pub fn run_help_query(runtime: &AiRuntime, query: HelpQuery) -> Result<String, S
                 .as_ref()
                 .ok_or_else(|| "Anthropic key missing".to_string())?;
             call_anthropic(key, &build_prompt(&query))
+        }
+        AiProvider::XAI => {
+            let key = runtime
+                .xai_key
+                .as_ref()
+                .ok_or_else(|| "xAI key missing".to_string())?;
+            call_xai(key, &build_prompt(&query))
+        }
+        AiProvider::Google => {
+            let key = runtime
+                .google_key
+                .as_ref()
+                .ok_or_else(|| "Google API key missing".to_string())?;
+            call_google(key, &build_prompt(&query))
         }
         AiProvider::Local => {
             let endpoint = runtime
@@ -318,6 +381,75 @@ fn call_anthropic(key: &str, prompt: &str) -> Result<String, String> {
     }
 }
 
+fn call_xai(key: &str, prompt: &str) -> Result<String, String> {
+    let body = serde_json::json!({
+        "model": "grok-2",
+        "messages": [
+            {"role": "system", "content": "You are a concise browser assistant. Be safe, avoid code execution, no external calls."},
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 256,
+        "temperature": 0.7
+    });
+
+    let resp = ureq::post("https://api.x.ai/v1/chat/completions")
+        .set("Authorization", &format!("Bearer {}", key))
+        .set("Content-Type", "application/json")
+        .send_string(&body.to_string())
+        .map_err(|e| format!("xAI request failed: {}", e))?;
+
+    let json: JsonValue = resp
+        .into_json()
+        .map_err(|e| format!("xAI JSON parse failed: {}", e))?;
+    let content = json["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    if content.is_empty() {
+        Err("xAI returned empty response".into())
+    } else {
+        Ok(content)
+    }
+}
+
+fn call_google(key: &str, prompt: &str) -> Result<String, String> {
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
+        key
+    );
+
+    let body = serde_json::json!({
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }],
+        "systemInstruction": {
+            "parts": [{"text": "You are a concise browser assistant. Be safe, avoid code execution, no external calls."}]
+        },
+        "generationConfig": {
+            "maxOutputTokens": 256,
+            "temperature": 0.4
+        }
+    });
+
+    let resp = ureq::post(&url)
+        .set("Content-Type", "application/json")
+        .send_string(&body.to_string())
+        .map_err(|e| format!("Google Gemini request failed: {}", e))?;
+
+    let json: JsonValue = resp
+        .into_json()
+        .map_err(|e| format!("Gemini JSON parse failed: {}", e))?;
+    let content = json["candidates"][0]["content"]["parts"][0]["text"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    if content.is_empty() {
+        Err("Gemini returned empty response".into())
+    } else {
+        Ok(content)
+    }
+}
+
 fn call_local(endpoint: &str, model: &str, prompt: &str) -> Result<String, String> {
     let url = format!("{}/api/generate", endpoint.trim_end_matches('/'));
     let body = serde_json::json!({
@@ -344,7 +476,10 @@ fn call_local(endpoint: &str, model: &str, prompt: &str) -> Result<String, Strin
     Err("Local AI returned empty response".into())
 }
 
+// ==============================================================================
 // Config file mapping
+// ==============================================================================
+
 #[derive(Debug, Deserialize, Default)]
 struct AiFile {
     #[serde(default)]
@@ -355,6 +490,8 @@ struct AiFile {
     learning: LearningSection,
     #[serde(default)]
     whisper: WhisperSection,
+    #[serde(default)]
+    mcp: McpSection,
 }
 
 #[derive(Debug, Deserialize)]
@@ -388,6 +525,10 @@ struct AiKeys {
     anthropic: Option<String>,
     #[serde(default)]
     openai: Option<String>,
+    #[serde(default)]
+    xai: Option<String>,
+    #[serde(default)]
+    google: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default, Clone)]
@@ -417,6 +558,23 @@ struct LearningSection {
     enabled: bool,
     #[serde(default)]
     easter_eggs_notifications: bool,
+}
+
+/// Minimal MCP section — just enough to read [mcp.keys] for fallback
+#[derive(Debug, Deserialize, Default)]
+struct McpSection {
+    #[serde(default)]
+    keys: McpKeys,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+struct McpKeys {
+    #[serde(default)]
+    xai: Option<String>,
+    #[serde(default)]
+    anthropic: Option<String>,
+    #[serde(default)]
+    google: Option<String>,
 }
 
 // ==============================================================================
@@ -521,6 +679,29 @@ mod tests {
             let reward = cfg.discover_easter_egg(id);
             assert!(reward.is_some());
             assert_eq!(cfg.eggs_found(), 1);
+        }
+    }
+
+    #[test]
+    fn test_xai_provider_parse() {
+        // Verify "xai", "grok", "x" all resolve to XAI
+        for name in &["xai", "grok", "x"] {
+            let provider = match *name {
+                "xai" | "grok" | "x" => AiProvider::XAI,
+                _ => AiProvider::None,
+            };
+            assert!(matches!(provider, AiProvider::XAI));
+        }
+    }
+
+    #[test]
+    fn test_google_provider_parse() {
+        for name in &["google", "gemini"] {
+            let provider = match *name {
+                "google" | "gemini" => AiProvider::Google,
+                _ => AiProvider::None,
+            };
+            assert!(matches!(provider, AiProvider::Google));
         }
     }
 }

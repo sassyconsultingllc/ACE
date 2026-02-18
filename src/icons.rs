@@ -8,6 +8,7 @@
 
 use eframe::egui::{self, ColorImage, TextureHandle, Vec2};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Default icon render size (logical pixels).
 const DEFAULT_ICON_SIZE: f32 = 16.0;
@@ -18,12 +19,52 @@ pub struct Icons {
 }
 
 impl Icons {
+    /// Resolve the SVG icons directory by checking multiple candidate paths.
+    fn find_svg_dir() -> Option<PathBuf> {
+        let candidates: Vec<PathBuf> = vec![
+            // 1. Relative to current working directory
+            PathBuf::from("assets/icons/svg"),
+            // 2. Relative to the executable location
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.join("assets/icons/svg")))
+                .unwrap_or_default(),
+            // 3. Relative to exe's grandparent (common for target/debug/ or target/release/)
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent()
+                    .and_then(|p| p.parent())
+                    .and_then(|p| p.parent())
+                    .map(|p| p.join("assets/icons/svg")))
+                .unwrap_or_default(),
+            // 4. Compile-time manifest dir (works during cargo run)
+            PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/svg")),
+        ];
+
+        for candidate in &candidates {
+            if candidate.is_dir() {
+                tracing::info!("Found SVG icon directory: {}", candidate.display());
+                return Some(candidate.clone());
+            }
+        }
+
+        tracing::warn!("SVG icon directory not found. Tried: {:?}", candidates);
+        None
+    }
+
     /// Load all SVG icons from `assets/icons/svg/` and rasterize to egui textures.
     pub fn load(ctx: &egui::Context) -> Self {
         let mut textures = HashMap::new();
-        let svg_dir = std::path::Path::new("assets/icons/svg");
 
-        if let Ok(entries) = std::fs::read_dir(svg_dir) {
+        let svg_dir = match Self::find_svg_dir() {
+            Some(dir) => dir,
+            None => {
+                tracing::info!("Loaded 0 SVG icons");
+                return Icons { textures };
+            }
+        };
+
+        if let Ok(entries) = std::fs::read_dir(&svg_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.extension().map_or(false, |e| e == "svg") {

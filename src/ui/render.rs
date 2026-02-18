@@ -772,6 +772,8 @@ impl UIRenderer {
             AiProvider::None => "Provider: not set",
             AiProvider::Anthropic => "Provider: Anthropic (Claude)",
             AiProvider::OpenAI => "Provider: OpenAI",
+            AiProvider::XAI => "Provider: xAI (Grok)",
+            AiProvider::Google => "Provider: Google (Gemini)",
             AiProvider::Local => "Provider: Local (Ollama)",
         };
         self.draw_text(buffer, provider, x, y, 13.0, dim);

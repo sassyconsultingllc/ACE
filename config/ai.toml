@@ -3,14 +3,20 @@
 
 [ai]
 enabled = true
-provider = "none"  # Options: "none", "anthropic", "openai", "local"
+provider = "auto"  # Options: "none", "anthropic", "openai", "xai"/"grok", "google"/"gemini", "local", "auto"
+                   # "auto" picks the first provider with a valid key (checks xai > anthropic > google > openai)
 
 # API Keys - never synced, never uploaded, stored locally only
+# Keys here take priority; if empty, falls back to [mcp.keys] automatically
 # Get your key from: https://console.anthropic.com (Claude)
 #                    https://platform.openai.com (OpenAI)
+#                    https://console.x.ai (xAI/Grok)
+#                    https://aistudio.google.com (Google/Gemini)
 [ai.keys]
-anthropic = ""
-openai = ""
+anthropic = "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"
+openai = "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"
+xai = "xai-lONBXXMUdXD08kslDvH7VqJOtqOZJv1OXaNMe5Z5FxrFZDHsUDDkHI58KKiUmP77Shxk5fpeFqtR2vhP"
+google = "AIzaSyC4h4x6koUvbCg_qH52x9hUsXIv2sGkM2Q"
 
 # Local AI (Ollama)
 [ai.local]
@@ -24,7 +30,7 @@ position = "bottom-right"
 
 # Learning mode - extra explanations for curious users
 [learning]
-enabled = false
+enabled = true
 easter_eggs_notifications = true
 
 # ==============================================================================
@@ -45,7 +51,7 @@ easter_eggs_notifications = true
 # }
 
 [mcp_server]
-enabled = false
+enabled = true
 transport = "stdio"     # "stdio" (for Claude Desktop) or "socket"
 port = 9999             # Port for socket transport
 confirm_destructive = true  # Require confirmation for destructive actions
@@ -81,9 +87,9 @@ mode = "cloud"  # "cloud", "self-hosted", "hybrid", "local"
 # API Keys for Cloud Mode
 # ==============================================================================
 [mcp.keys]
-xai = ""           # https://console.x.ai - Grok
-anthropic = ""     # https://console.anthropic.com - Claude
-google = ""        # https://aistudio.google.com - Gemini
+xai = "xai-nz0Dty69WHeSUcK1cMroW0hNjL9FosbInOhD3qB0tTxvYH8LeuALl1qHLOuSSPBjzgjjQsJqOt3cMoym"           # https://console.x.ai - Grok
+anthropic = "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"     # https://console.anthropic.com - Claude
+google = "AIzaSyC4h4x6koUvbCg_qH52x9hUsXIv2sGkM2Q"        # https://aistudio.google.com - Gemini
 together = ""      # https://api.together.xyz - Together.ai (alternative)
 huggingface = ""   # https://huggingface.co/settings/tokens - HF Inference
 
