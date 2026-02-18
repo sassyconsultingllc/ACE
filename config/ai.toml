@@ -2,7 +2,7 @@
 # All AI features are OFF by default. Your browsing stays private.
 
 [ai]
-enabled = false
+enabled = true
 provider = "none"  # Options: "none", "anthropic", "openai", "local"
 
 # API Keys - never synced, never uploaded, stored locally only
