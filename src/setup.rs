@@ -13,7 +13,7 @@
 //! 5. Profile saved to disk (encrypted if PIN set)
 
 use crate::data::{init_dirs, is_first_run, Config, UserData};
-use crate::sync::{UserManager, TailscaleInfo};
+use crate::sync::TailscaleInfo;
 
 /// Setup result
 pub struct SetupResult {

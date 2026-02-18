@@ -71,10 +71,10 @@ impl ChemicalViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32, _icons: &crate::icons::Icons) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32, icons: &crate::icons::Icons) {
         if let FileContent::Chemical(chem) = &file.content {
             // Toolbar
-            self.render_toolbar(ui, chem, global_zoom);
+            self.render_toolbar(ui, chem, global_zoom, icons);
             
             ui.separator();
             
@@ -93,9 +93,10 @@ impl ChemicalViewer {
         }
     }
     
-    fn render_toolbar(&mut self, ui: &mut egui::Ui, chem: &ChemicalContent, _global_zoom: f32) {
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, chem: &ChemicalContent, _global_zoom: f32, icons: &crate::icons::Icons) {
         ui.horizontal(|ui| {
             // Render mode
+            icons.inline(ui, "grid");
             ui.label("Render:");
             if ui.selectable_label(self.render_mode == RenderMode::BallAndStick, " Ball & Stick").clicked() {
                 self.render_mode = RenderMode::BallAndStick;
@@ -110,6 +111,7 @@ impl ChemicalViewer {
             ui.separator();
             
             // Color mode
+            icons.inline(ui, "summation");
             ui.label("Color:");
             egui::ComboBox::from_id_salt("color_mode")
                 .selected_text(match self.color_mode {
@@ -128,14 +130,17 @@ impl ChemicalViewer {
             ui.separator();
             
             // Display options
+            icons.inline(ui, "circle-green");
             ui.checkbox(&mut self.show_atoms, "Atoms");
+            icons.inline(ui, "bullet");
             ui.checkbox(&mut self.show_bonds, "Bonds");
+            icons.inline(ui, "pilcrow");
             ui.checkbox(&mut self.show_labels, "Labels");
             
             ui.separator();
             
             // Reset view
-            if ui.button("Reset View").clicked() {
+            if icons.text_button(ui, "reload", "Reset View", "Reset view").clicked() {
                 self.rotation_x = 0.0;
                 self.rotation_y = 0.0;
                 self.zoom = 1.0;

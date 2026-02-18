@@ -95,6 +95,7 @@ pub struct ImageViewer {
     fit_to_window: bool,
     show_info: bool,
     zoom_override: Option<f32>,
+    current_path: Option<PathBuf>,
     
     // Editing state
     current_tool: EditTool,
@@ -151,7 +152,8 @@ impl ImageViewer {
             fit_to_window: true,
             show_info: false,
             zoom_override: None,
-            
+            current_path: None,
+
             current_tool: EditTool::Select,
             original_image: None,
             working_image: None,
@@ -185,6 +187,7 @@ impl ImageViewer {
     /// Load image from bytes
     pub fn load_image(&mut self, data: &[u8], path: &std::path::Path) {
         if let Ok(img) = image::load_from_memory(data) {
+            self.current_path = Some(path.to_path_buf());
             self.resize_width = img.width();
             self.resize_height = img.height();
             self.original_image = Some(img.clone());
@@ -470,7 +473,7 @@ impl ImageViewer {
         }
         
         // Top toolbar
-        self.render_toolbar(ui);
+        self.render_toolbar(ui, icons);
         ui.separator();
         
         // Main content area with side panel
@@ -496,16 +499,16 @@ impl ImageViewer {
         }
     }
     
-    fn render_toolbar(&mut self, ui: &mut egui::Ui) {
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, icons: &crate::icons::Icons) {
         ui.horizontal(|ui| {
             // File operations
-            if ui.button("(save) Save").clicked() {
+            if icons.text_button(ui, "download", "Save", "Save image").clicked() {
                 self.show_export = true;
             }
-            if ui.button("(export) Export").clicked() {
+            if icons.text_button(ui, "upload", "Export", "Export image").clicked() {
                 self.show_export = true;
             }
-            if ui.button("(print) Print").clicked() {
+            if icons.text_button(ui, "file-pdf", "Print", "Print image").clicked() {
                 // TODO: System print dialog
             }
             
@@ -513,52 +516,62 @@ impl ImageViewer {
             
             // Undo/Redo
             ui.add_enabled_ui(self.history_index > 0, |ui| {
-                if ui.button("<- Undo").clicked() {
+                if icons.button(ui, "nav-back", "Undo").clicked() {
                     self.undo();
                 }
             });
             ui.add_enabled_ui(self.history_index < self.history.len().saturating_sub(1), |ui| {
-                if ui.button("-> Redo").clicked() {
+                if icons.button(ui, "nav-forward", "Redo").clicked() {
                     self.redo();
                 }
             });
-            if ui.button("Reset").clicked() {
+            if icons.button(ui, "reload", "Reset edits").clicked() {
                 self.reset();
             }
             
             ui.separator();
             
             // Transform tools
-            if ui.button("(refresh)").on_hover_text("Rotate Left").clicked() {
+            if icons.button(ui, "reload", "Rotate left").clicked() {
                 self.rotate_ccw();
             }
-            if ui.button("(refresh)").on_hover_text("Rotate Right").clicked() {
+            if icons.button(ui, "reload", "Rotate right").clicked() {
                 self.rotate_cw();
             }
-            if ui.button("").on_hover_text("Flip Horizontal").clicked() {
+            if icons.button(ui, "arrow-left", "Flip horizontal").clicked() {
                 self.flip_horizontal();
             }
-            if ui.button("").on_hover_text("Flip Vertical").clicked() {
+            if icons.button(ui, "arrow-up", "Flip vertical").clicked() {
                 self.flip_vertical();
             }
             
             ui.separator();
             
             // Tool selection
-            ui.selectable_value(&mut self.current_tool, EditTool::Select, " Select");
-            ui.selectable_value(&mut self.current_tool, EditTool::Crop, "(cut) Crop");
+            icons.inline(ui, "select-cursor");
+            ui.selectable_value(&mut self.current_tool, EditTool::Select, "Select");
+            icons.inline(ui, "extract");
+            ui.selectable_value(&mut self.current_tool, EditTool::Crop, "Crop");
             
             ui.separator();
             
             // Panel toggles
+            icons.inline(ui, "settings");
             ui.toggle_value(&mut self.show_adjustments, "Adjust");
+            icons.inline(ui, "bullet");
             ui.toggle_value(&mut self.show_filters, "Filters");
-            ui.toggle_value(&mut self.show_resize, "(resize) Resize");
+            icons.inline(ui, "fullscreen");
+            ui.toggle_value(&mut self.show_resize, "Resize");
             
             // Right side - image info
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if let Some(path) = &self.current_path {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        ui.label(name);
+                    }
+                }
                 if let Some((w, h)) = self.dimensions() {
-                    ui.label(format!("{}Ã--{}", w, h));
+                    ui.label(format!("{} x {}", w, h));
                 }
                 if self.has_unsaved_changes {
                     ui.label("*").on_hover_text("Unsaved changes");
@@ -674,21 +687,21 @@ impl ImageViewer {
             }
             
             // Crop panel
-            if self.current_tool == EditTool::Crop && self.crop_selection.is_some() {
+            if self.current_tool == EditTool::Crop {
                 ui.separator();
                 ui.label("Crop Selection");
-                
+
                 ui.horizontal(|ui| {
                     if ui.button("Free").clicked() { self.crop_aspect = None; }
                     if ui.button("1:1").clicked() { self.crop_aspect = Some(1.0); }
-                    if ui.button("4:3").clicked() { self.crop_aspect = Some(4.0/3.0); }
-                    if ui.button("16:9").clicked() { self.crop_aspect = Some(16.0/9.0); }
+                    if ui.button("4:3").clicked() { self.crop_aspect = Some(4.0 / 3.0); }
+                    if ui.button("16:9").clicked() { self.crop_aspect = Some(16.0 / 9.0); }
                 });
-                
-                if ui.button("[OK] Apply Crop").clicked() {
+
+                if ui.button("Apply Crop").clicked() {
                     self.apply_crop();
                 }
-                if ui.button("[X] Cancel").clicked() {
+                if ui.button("Cancel").clicked() {
                     self.crop_selection = None;
                 }
             }
@@ -752,8 +765,27 @@ impl ImageViewer {
                     
                     // Draw checkerboard for transparency
                     let checker_size = 10.0;
-                    // (simplified - just draw solid background)
-                    painter.rect_filled(rect, 0.0, Color32::from_gray(40));
+                    let cols = (rect.width() / checker_size).ceil() as i32;
+                    let rows = (rect.height() / checker_size).ceil() as i32;
+                    for row in 0..rows {
+                        for col in 0..cols {
+                            let x = rect.left() + col as f32 * checker_size;
+                            let y = rect.top() + row as f32 * checker_size;
+                            let tile_rect = Rect::from_min_max(
+                                Pos2::new(x, y),
+                                Pos2::new(
+                                    (x + checker_size).min(rect.right()),
+                                    (y + checker_size).min(rect.bottom()),
+                                ),
+                            );
+                            let color = if (row + col) % 2 == 0 {
+                                Color32::from_gray(35)
+                            } else {
+                                Color32::from_gray(55)
+                            };
+                            painter.rect_filled(tile_rect, 0.0, color);
+                        }
+                    }
                     
                     // Draw image
                     painter.image(
@@ -906,7 +938,7 @@ impl ImageViewer {
                 }
                 
                 if let Some((w, h)) = self.dimensions() {
-                    ui.label(format!("Size: {}Ã--{} pixels", w, h));
+                    ui.label(format!("Size: {} x {} pixels", w, h));
                 }
                 
                 ui.separator();

@@ -19,7 +19,7 @@ pub mod css;
 #[cfg(test)]
 mod tests;
 
-pub use lexer::{Lexer, Token};
+pub use lexer::Lexer;
 pub use value::Value;
 pub use parser::{Parser, Expr, Stmt};
 pub use interpreter::JsInterpreter;

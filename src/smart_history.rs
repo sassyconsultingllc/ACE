@@ -9,7 +9,6 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use crate::fontcase;
 
 // The magic number: how long before a page visit becomes "intentional"
 pub const INTENT_DELAY_SECS: f64 = 14.7;

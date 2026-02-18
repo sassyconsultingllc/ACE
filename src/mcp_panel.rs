@@ -5,7 +5,7 @@
 
  
 use crate::mcp::{
-    AgentRole, CodeEdit, EditOperation, McpMessage, McpOrchestrator,
+    AgentRole, ApplySummary, CodeEdit, EditOperation, McpOrchestrator,
     MessageRole, Task, TaskStatus,
 };
 use crate::style::Color;
@@ -92,10 +92,14 @@ impl McpPanel {
         self.mode = mode;
         self.scroll_offset = 0.0;
     }
+
+    pub fn configure_from_ai_toml(&mut self) -> Result<(), String> {
+        self.orchestrator.configure_from_ai_toml()
+    }
     
     /// Approve all pending edits
-    pub fn approve_edits(&mut self) -> Vec<CodeEdit> {
-        self.orchestrator.approve_edits()
+    pub fn approve_edits(&mut self) -> ApplySummary {
+        self.orchestrator.apply_pending_edits()
     }
     
     /// Reject all pending edits
@@ -114,12 +118,8 @@ impl McpPanel {
     }
     
     /// Approve a single edit
-    pub fn approve_edit(&mut self, index: usize) -> Option<CodeEdit> {
-        if index < self.orchestrator.pending_edits.len() {
-            Some(self.orchestrator.pending_edits.remove(index))
-        } else {
-            None
-        }
+    pub fn approve_edit(&mut self, index: usize) -> ApplySummary {
+        self.orchestrator.apply_edit_at(index)
     }
     
     /// Render the panel to a string representation

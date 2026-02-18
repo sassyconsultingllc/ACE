@@ -301,7 +301,7 @@ pub fn print_page(content: &[u8], settings: &PrintSettings) -> Result<(), String
 
     // Calculate printable area
     let printable_width = width_mm - (margin_left.0 + margin_right.0);
-    let printable_height = height_mm - (margin_top.0 + margin_bottom.0);
+    let _printable_height = height_mm - (margin_top.0 + margin_bottom.0);
 
     // Font settings
     let font_size = 12.0;

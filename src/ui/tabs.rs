@@ -1025,7 +1025,7 @@ pub struct TileLayout {
 impl TileLayout {
     pub fn calculate(
         available_width: u32,
-        available_height: u32,
+        _available_height: u32,
         tab_count: usize,
         min_tile_width: u32,
         max_tile_width: u32,

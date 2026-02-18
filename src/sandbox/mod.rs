@@ -36,10 +36,14 @@ pub mod page;
 pub mod popup;
 pub mod network;
 
-pub use quarantine::{Quarantine, QuarantinedFile, ReleaseStatus, Warning, WarningLevel};
-pub use page::{PageSandbox, PageTrust, SandboxManager, Interaction};
-pub use popup::{PopupHandler, PopupRequest, PopupDecision, BlockedPopup};
-pub use network::NetworkSandbox;
+pub use quarantine::{Quarantine, QuarantinedFile, ReleaseStatus, WarningLevel};
+pub use page::{PageTrust, SandboxManager, Interaction};
+pub use popup::{PopupHandler, PopupRequest, PopupDecision};
+
+pub type Warning = quarantine::Warning;
+pub type PageSandbox = page::PageSandbox;
+pub type BlockedPopup = popup::BlockedPopup;
+pub type NetworkSandbox = network::NetworkSandbox;
 
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};

@@ -133,9 +133,9 @@ impl SpreadsheetViewer {
 
             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 // Apply formula to cell
-                if let Some((row, col)) = self.selected_cell {
+                if let Some((_row, _col)) = self.selected_cell {
                     if let Some(sheet) = spreadsheet.sheets.get(self.active_sheet) {
-                        let value = if self.formula_bar_text.starts_with('=') {
+                        let _value = if self.formula_bar_text.starts_with('=') {
                             // Evaluate formula
                             let formula = &self.formula_bar_text[1..];
                             match Self::evaluate_formula(formula, sheet) {

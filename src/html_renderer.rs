@@ -16,7 +16,6 @@ use eframe::egui::{self, Color32, RichText, Ui, Vec2};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
-use crate::fontcase;
 
 /// Parsed HTML document
 #[derive(Debug, Clone)]
@@ -275,7 +274,7 @@ impl HtmlRenderer {
             }
             HtmlNode::Script(_) => {}
             HtmlNode::Element { tag, id, class, style, attrs, children } => {
-                let computed = self.compute_styles(tag, id.as_deref(), class, style, styles);
+                let _computed = self.compute_styles(tag, id.as_deref(), class, style, styles);
                 match tag.as_str() {
                     "a" => {
                         let href = attrs.get("href").cloned().unwrap_or_default();
@@ -283,7 +282,7 @@ impl HtmlRenderer {
                         let display = if text.is_empty() { &href } else { &text };
                         let flagged_reason = link_check.and_then(|f| f(&href));
                         let link = ui.link(
-                            if let Some(reason) = flagged_reason {
+                            if let Some(_reason) = flagged_reason {
                                 RichText::new(display).color(accent_warn).underline().strong()
                             } else {
                                 RichText::new(display)

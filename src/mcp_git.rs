@@ -7,8 +7,7 @@
 //! - Branch management
 
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use chrono::{DateTime, Utc, TimeZone};
 use serde::{Deserialize, Serialize};

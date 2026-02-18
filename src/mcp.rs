@@ -17,6 +17,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use std::fs;
+use std::path::{Path, PathBuf};
 use chrono::{DateTime, Utc};
 
 /// Hosting mode for MCP agents
@@ -575,6 +577,13 @@ pub enum EditOperation {
     Append,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ApplySummary {
+    pub applied: usize,
+    pub failed: usize,
+    pub errors: Vec<String>,
+}
+
 /// Project context for the AI agents
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectContext {
@@ -594,6 +603,97 @@ pub struct FileInfo {
     pub size_bytes: u64,
     pub last_modified: DateTime<Utc>,
     pub summary: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct McpConfigFile {
+    #[serde(default)]
+    mcp: McpConfigSection,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct McpConfigSection {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    mode: Option<String>,
+    #[serde(default)]
+    keys: McpKeys,
+    #[serde(default)]
+    voice: McpAgentSection,
+    #[serde(default)]
+    orchestrator: McpAgentSection,
+    #[serde(default)]
+    coder: McpAgentSection,
+    #[serde(default)]
+    auditor: McpAgentSection,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct McpKeys {
+    #[serde(default)]
+    xai: Option<String>,
+    #[serde(default)]
+    anthropic: Option<String>,
+    #[serde(default)]
+    google: Option<String>,
+    #[serde(default)]
+    together: Option<String>,
+    #[serde(default)]
+    huggingface: Option<String>,
+    #[serde(default)]
+    openai: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct McpAgentSection {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    provider: Option<String>,
+    #[serde(default)]
+    xai: McpProviderConfig,
+    #[serde(default)]
+    together: McpProviderConfig,
+    #[serde(default)]
+    openai: McpProviderConfig,
+    #[serde(default)]
+    anthropic: McpProviderConfig,
+    #[serde(default)]
+    google: McpProviderConfig,
+    #[serde(default)]
+    huggingface: McpProviderConfig,
+    #[serde(default)]
+    ollama: McpProviderConfig,
+    #[serde(default)]
+    custom: McpProviderConfig,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+struct McpProviderConfig {
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    max_tokens: Option<u32>,
+    #[serde(default)]
+    temperature: Option<f32>,
+}
+
+impl McpAgentSection {
+    fn provider_config(&self, provider: Provider) -> &McpProviderConfig {
+        match provider {
+            Provider::Xai => &self.xai,
+            Provider::Anthropic => &self.anthropic,
+            Provider::Google => &self.google,
+            Provider::Together => &self.together,
+            Provider::HuggingFace => &self.huggingface,
+            Provider::Ollama => &self.ollama,
+            Provider::OpenAI => &self.openai,
+            Provider::Custom => &self.custom,
+        }
+    }
 }
 
 /// The MCP Orchestrator - coordinates all agents
@@ -673,13 +773,130 @@ impl McpOrchestrator {
     
     /// Configure an agent
     pub fn configure_agent(&mut self, config: AgentConfig) {
+        self.api_client.configure(config.clone());
         self.agents.insert(config.role, config);
     }
     
     /// Set API key for an agent
     pub fn set_api_key(&mut self, role: AgentRole, key: String) {
         if let Some(agent) = self.agents.get_mut(&role) {
-            agent.api_key = Some(key);
+            agent.api_key = Some(key.clone());
+        }
+        self.api_client.set_api_key(role, key);
+    }
+
+    /// Load MCP configuration from config/ai.toml (user config dir), fallback to packaged default.
+    pub fn configure_from_ai_toml(&mut self) -> Result<(), String> {
+        let path = crate::data::config_dir().join("ai.toml");
+        let fallback = PathBuf::from("config").join("ai.toml");
+        let content = fs::read_to_string(&path)
+            .or_else(|_| fs::read_to_string(&fallback))
+            .unwrap_or_default();
+        let parsed: McpConfigFile = toml::from_str(&content).unwrap_or_default();
+        self.apply_mcp_config(parsed.mcp);
+        Ok(())
+    }
+
+    fn apply_mcp_config(&mut self, config: McpConfigSection) {
+        if let Some(mode) = config.mode.as_deref() {
+            if let Some(hosting_mode) = Self::parse_hosting_mode(mode) {
+                self.configure_hosting(hosting_mode);
+            }
+        }
+
+        self.apply_agent_config(AgentRole::Voice, &config.voice, &config.keys);
+        self.apply_agent_config(AgentRole::Orchestrator, &config.orchestrator, &config.keys);
+        self.apply_agent_config(AgentRole::Coder, &config.coder, &config.keys);
+        self.apply_agent_config(AgentRole::Auditor, &config.auditor, &config.keys);
+
+        if let Some(false) = config.enabled {
+            for role in [AgentRole::Voice, AgentRole::Orchestrator, AgentRole::Coder, AgentRole::Auditor] {
+                if let Some(existing) = self.agents.get_mut(&role) {
+                    existing.enabled = false;
+                    self.api_client.configure(existing.clone());
+                }
+            }
+        }
+    }
+
+    fn apply_agent_config(&mut self, role: AgentRole, section: &McpAgentSection, keys: &McpKeys) {
+        let mut config = match self.agents.get(&role) {
+            Some(existing) => existing.clone(),
+            None => match role {
+                AgentRole::Voice => AgentConfig::grok_default(),
+                AgentRole::Orchestrator => AgentConfig::manus_default(),
+                AgentRole::Coder => AgentConfig::claude_default(),
+                AgentRole::Auditor => AgentConfig::gemini_default(),
+            },
+        };
+
+        if let Some(provider) = section.provider.as_deref().and_then(Self::parse_provider) {
+            config.provider = provider;
+        }
+
+        let provider_cfg = section.provider_config(config.provider);
+        if let Some(url) = Self::clean_str(&provider_cfg.url) {
+            config.api_url = url.to_string();
+        }
+        if let Some(model) = Self::clean_str(&provider_cfg.model) {
+            config.model = model.to_string();
+        }
+        if let Some(max_tokens) = provider_cfg.max_tokens {
+            config.max_tokens = max_tokens;
+        }
+        if let Some(temperature) = provider_cfg.temperature {
+            config.temperature = temperature;
+        }
+
+        if let Some(enabled) = section.enabled {
+            config.enabled = enabled;
+        }
+
+        if let Some(key) = Self::key_for_provider(config.provider, keys) {
+            config.api_key = Some(key.to_string());
+        }
+
+        self.configure_agent(config);
+    }
+
+    fn clean_str(value: &Option<String>) -> Option<&str> {
+        value.as_deref().filter(|s| !s.trim().is_empty())
+    }
+
+    fn parse_provider(value: &str) -> Option<Provider> {
+        match crate::fontcase::ascii_lower(value).as_str() {
+            "xai" => Some(Provider::Xai),
+            "anthropic" => Some(Provider::Anthropic),
+            "google" => Some(Provider::Google),
+            "together" => Some(Provider::Together),
+            "huggingface" => Some(Provider::HuggingFace),
+            "ollama" => Some(Provider::Ollama),
+            "openai" => Some(Provider::OpenAI),
+            "custom" => Some(Provider::Custom),
+            _ => None,
+        }
+    }
+
+    fn parse_hosting_mode(value: &str) -> Option<HostingMode> {
+        match crate::fontcase::ascii_lower(value).as_str() {
+            "cloud" => Some(HostingMode::Cloud),
+            "self-hosted" => Some(HostingMode::SelfHosted),
+            "hybrid" => Some(HostingMode::Hybrid),
+            "local" => Some(HostingMode::Local),
+            _ => None,
+        }
+    }
+
+    fn key_for_provider<'a>(provider: Provider, keys: &'a McpKeys) -> Option<&'a str> {
+        match provider {
+            Provider::Xai => Self::clean_str(&keys.xai),
+            Provider::Anthropic => Self::clean_str(&keys.anthropic),
+            Provider::Google => Self::clean_str(&keys.google),
+            Provider::Together => Self::clean_str(&keys.together),
+            Provider::HuggingFace => Self::clean_str(&keys.huggingface),
+            Provider::OpenAI => Self::clean_str(&keys.openai),
+            Provider::Custom => Self::clean_str(&keys.openai),
+            Provider::Ollama => None,
         }
     }
     
@@ -1447,6 +1664,35 @@ impl McpOrchestrator {
 
         edits
     }
+
+    /// Approve and apply all pending edits
+    pub fn apply_pending_edits(&mut self) -> ApplySummary {
+        if self.pending_edits.is_empty() {
+            return ApplySummary::default();
+        }
+        if !self.edits_approved() {
+            return self.audit_blocked_summary(self.pending_edits.len());
+        }
+        let edits = self.approve_edits();
+        self.apply_edits(edits)
+    }
+
+    /// Approve and apply a single pending edit by index
+    pub fn apply_edit_at(&mut self, index: usize) -> ApplySummary {
+        if index >= self.pending_edits.len() {
+            return ApplySummary {
+                applied: 0,
+                failed: 1,
+                errors: vec![format!("No pending edit at index {}", index)],
+            };
+        }
+        if !self.edits_approved() {
+            return self.audit_blocked_summary(1);
+        }
+
+        let edit = self.pending_edits.remove(index);
+        self.apply_edits(vec![edit])
+    }
     
     /// Reject pending edits
     pub fn reject_edits(&mut self) {
@@ -1456,6 +1702,242 @@ impl McpOrchestrator {
             AgentRole::Coder,
             "Edits rejected. Let me know how you'd like me to revise them."
         );
+    }
+
+    fn apply_edits(&mut self, edits: Vec<CodeEdit>) -> ApplySummary {
+        self.ensure_context_loaded();
+        let mut summary = ApplySummary::default();
+
+        for edit in edits {
+            let path_label = edit.file_path.clone();
+            match self.apply_edit(&edit) {
+                Ok(()) => summary.applied += 1,
+                Err(err) => {
+                    summary.failed += 1;
+                    summary.errors.push(format!("{}: {}", path_label, err));
+                }
+            }
+        }
+
+        if summary.failed == 0 {
+            self.add_agent_message(
+                AgentRole::Coder,
+                &format!("Applied {} edit(s).", summary.applied)
+            );
+        } else {
+            let details = summary.errors.iter()
+                .take(5)
+                .map(|e| format!("- {}", e))
+                .collect::<Vec<_>>()
+                .join("\n");
+            self.add_agent_message(
+                AgentRole::Coder,
+                &format!(
+                    "Applied {} edit(s), {} failed:\n{}",
+                    summary.applied,
+                    summary.failed,
+                    details
+                )
+            );
+        }
+
+        summary
+    }
+
+    fn audit_blocked_summary(&mut self, count: usize) -> ApplySummary {
+        let message = "Audit verdict does not allow applying changes. Review the audit first.";
+        self.add_agent_message(AgentRole::Auditor, message);
+        ApplySummary {
+            applied: 0,
+            failed: count,
+            errors: vec![message.to_string()],
+        }
+    }
+
+    fn ensure_context_loaded(&mut self) {
+        if self.context.is_none() {
+            if let Ok(cwd) = std::env::current_dir() {
+                self.load_context(&cwd.to_string_lossy());
+            }
+        }
+    }
+
+    fn resolve_edit_path(&self, path: &str) -> PathBuf {
+        let raw = Path::new(path);
+        if raw.is_absolute() {
+            raw.to_path_buf()
+        } else if let Some(ctx) = &self.context {
+            PathBuf::from(&ctx.root_path).join(path)
+        } else {
+            raw.to_path_buf()
+        }
+    }
+
+    fn apply_edit(&mut self, edit: &CodeEdit) -> Result<(), String> {
+        let path = self.resolve_edit_path(&edit.file_path);
+        let path_str = path.to_string_lossy().to_string();
+        let exists = path.exists();
+
+        if edit.operation == EditOperation::Delete
+            && edit.old_content.is_none()
+            && edit.line_start.is_none()
+        {
+            if !exists {
+                return Err("File not found for delete".to_string());
+            }
+            let id = self.file_system.queue_delete(
+                &path_str,
+                &edit.description
+            ).map_err(|e| e.to_string())?;
+            self.file_system.approve(id).map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+
+        let current = if exists {
+            self.file_system.read_file(&path_str).map_err(|e| e.to_string())?
+        } else {
+            String::new()
+        };
+
+        let updated = self.apply_edit_to_content(edit, &current)?;
+        let description = if edit.description.is_empty() {
+            "MCP edit"
+        } else {
+            edit.description.as_str()
+        };
+
+        if exists {
+            let id = self.file_system.queue_update(
+                &path_str,
+                &updated,
+                description
+            ).map_err(|e| e.to_string())?;
+            self.file_system.approve(id).map_err(|e| e.to_string())?;
+        } else {
+            let id = self.file_system.queue_create(
+                &path_str,
+                &updated,
+                description
+            ).map_err(|e| e.to_string())?;
+            self.file_system.approve(id).map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
+
+    fn apply_edit_to_content(&self, edit: &CodeEdit, original: &str) -> Result<String, String> {
+        match edit.operation {
+            EditOperation::Create => Ok(edit.new_content.clone()),
+            EditOperation::Append => {
+                let mut updated = original.to_string();
+                if !updated.is_empty() && !updated.ends_with('\n') {
+                    updated.push('\n');
+                }
+                updated.push_str(&edit.new_content);
+                Ok(updated)
+            }
+            EditOperation::Insert => {
+                if let Some(line) = edit.line_start {
+                    Ok(Self::insert_line_range(original, line, &edit.new_content))
+                } else {
+                    let mut updated = original.to_string();
+                    if !updated.is_empty() && !updated.ends_with('\n') {
+                        updated.push('\n');
+                    }
+                    updated.push_str(&edit.new_content);
+                    Ok(updated)
+                }
+            }
+            EditOperation::Replace => {
+                if let Some(old) = &edit.old_content {
+                    if original.contains(old) {
+                        return Ok(original.replacen(old, &edit.new_content, 1));
+                    }
+                }
+                if let Some(start) = edit.line_start {
+                    let end = edit.line_end.unwrap_or(start);
+                    return Self::replace_line_range(original, start, end, &edit.new_content);
+                }
+                Err("Replace operation requires old_content or line range".to_string())
+            }
+            EditOperation::Delete => {
+                if let Some(old) = &edit.old_content {
+                    if original.contains(old) {
+                        return Ok(original.replacen(old, "", 1));
+                    }
+                }
+                if let Some(start) = edit.line_start {
+                    let end = edit.line_end.unwrap_or(start);
+                    return Self::delete_line_range(original, start, end);
+                }
+                Err("Delete operation requires line range or old_content".to_string())
+            }
+        }
+    }
+
+    fn insert_line_range(original: &str, line: u32, insert: &str) -> String {
+        let mut lines = Self::split_lines(original);
+        let insert_lines = Self::split_lines(insert);
+        let idx = line.saturating_sub(1) as usize;
+        let idx = idx.min(lines.len());
+        lines.splice(idx..idx, insert_lines);
+        Self::join_lines(lines, original.ends_with('\n'))
+    }
+
+    fn replace_line_range(
+        original: &str,
+        start: u32,
+        end: u32,
+        replacement: &str,
+    ) -> Result<String, String> {
+        let mut lines = Self::split_lines(original);
+        if lines.is_empty() {
+            return Err("Cannot replace lines in empty file".to_string());
+        }
+
+        let start = start.max(1);
+        let end = end.max(1);
+        let (start, end) = if end < start { (end, start) } else { (start, end) };
+        let start_idx = (start - 1) as usize;
+        if start_idx >= lines.len() {
+            return Err("Line start out of range".to_string());
+        }
+        let end_idx = (end - 1) as usize;
+        let end_idx = end_idx.min(lines.len() - 1);
+        let replacement_lines = Self::split_lines(replacement);
+        lines.splice(start_idx..=end_idx, replacement_lines);
+        Ok(Self::join_lines(lines, original.ends_with('\n')))
+    }
+
+    fn delete_line_range(original: &str, start: u32, end: u32) -> Result<String, String> {
+        let mut lines = Self::split_lines(original);
+        if lines.is_empty() {
+            return Err("Cannot delete lines in empty file".to_string());
+        }
+
+        let start = start.max(1);
+        let end = end.max(1);
+        let (start, end) = if end < start { (end, start) } else { (start, end) };
+        let start_idx = (start - 1) as usize;
+        if start_idx >= lines.len() {
+            return Err("Line start out of range".to_string());
+        }
+        let end_idx = (end - 1) as usize;
+        let end_idx = end_idx.min(lines.len() - 1);
+        lines.drain(start_idx..=end_idx);
+        Ok(Self::join_lines(lines, original.ends_with('\n')))
+    }
+
+    fn split_lines(content: &str) -> Vec<String> {
+        content.lines().map(String::from).collect()
+    }
+
+    fn join_lines(lines: Vec<String>, ends_with_newline: bool) -> String {
+        let mut output = lines.join("\n");
+        if ends_with_newline && !output.is_empty() {
+            output.push('\n');
+        }
+        output
     }
     
     /// Get task by ID
@@ -1960,8 +2442,10 @@ pub struct McpServer {
 
 impl McpServer {
     pub fn new(port: u16) -> Self {
+        let mut orchestrator = McpOrchestrator::new();
+        let _ = orchestrator.configure_from_ai_toml();
         McpServer {
-            orchestrator: McpOrchestrator::new(),
+            orchestrator,
             port,
             is_running: false,
         }
@@ -1969,27 +2453,27 @@ impl McpServer {
 
     /// Create with custom agent configuration using builder methods
     pub fn with_agent_url(mut self, role: AgentRole, url: &str) -> Self {
-        if let Some(config) = self.orchestrator.agents.remove(&role) {
+        if let Some(config) = self.orchestrator.agents.get(&role).cloned() {
             let updated = config.with_url(url);
-            self.orchestrator.agents.insert(role, updated);
+            self.orchestrator.configure_agent(updated);
         }
         self
     }
 
     /// Configure an agent's API key using builder method
     pub fn with_agent_key(mut self, role: AgentRole, key: &str) -> Self {
-        if let Some(config) = self.orchestrator.agents.remove(&role) {
+        if let Some(config) = self.orchestrator.agents.get(&role).cloned() {
             let updated = config.with_key(key);
-            self.orchestrator.agents.insert(role, updated);
+            self.orchestrator.configure_agent(updated);
         }
         self
     }
 
     /// Configure an agent's model using builder method
     pub fn with_agent_model(mut self, role: AgentRole, model: &str) -> Self {
-        if let Some(config) = self.orchestrator.agents.remove(&role) {
+        if let Some(config) = self.orchestrator.agents.get(&role).cloned() {
             let updated = config.with_model(model);
-            self.orchestrator.agents.insert(role, updated);
+            self.orchestrator.configure_agent(updated);
         }
         self
     }

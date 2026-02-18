@@ -22,8 +22,15 @@ pub mod secure;
 pub mod family;
 pub mod users;
 
-pub use protocol::{SyncMessage, SyncCommand, SyncEvent};
+pub use protocol::{SyncCommand, SyncEvent};
 pub use server::SyncServer;
-pub use secure::{SecureSyncServer, SyncConfig, BindMode, TailscaleInfo};
-pub use family::{FamilyConfig, FamilyDevice, TrustLevel};
-pub use users::{UserManager, UserProfile, UserSession, UserLoginInfo, BootstrapResult};
+pub use secure::{SecureSyncServer, SyncConfig, TailscaleInfo};
+pub use family::{FamilyConfig, TrustLevel};
+pub use users::{UserManager, UserLoginInfo};
+
+pub type SyncMessage = protocol::SyncMessage;
+pub type BindMode = secure::BindMode;
+pub type FamilyDevice = family::FamilyDevice;
+pub type UserProfile = users::UserProfile;
+pub type UserSession = users::UserSession;
+pub type BootstrapResult = users::BootstrapResult;

@@ -44,7 +44,7 @@ impl EbookViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, _zoom: f32, _icons: &crate::icons::Icons) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, _zoom: f32, icons: &crate::icons::Icons) {
         let available = ui.available_size();
         
         // Theme colors
@@ -76,7 +76,7 @@ impl EbookViewer {
                         ui.set_max_width(250.0);
                         ui.set_min_height(available.y);
                         
-                        self.render_sidebar(ui, file, accent_color);
+                        self.render_sidebar(ui, file, accent_color, icons);
                     });
             }
             
@@ -87,12 +87,12 @@ impl EbookViewer {
                 .show(ui, |ui| {
                     ui.set_min_width(if self.show_toc { available.x - 270.0 } else { available.x });
                     
-                    self.render_content(ui, file, text_color, accent_color);
+                    self.render_content(ui, file, text_color, accent_color, icons);
                 });
         });
     }
     
-    fn render_sidebar(&mut self, ui: &mut egui::Ui, file: &OpenFile, accent: Color32) {
+    fn render_sidebar(&mut self, ui: &mut egui::Ui, file: &OpenFile, accent: Color32, icons: &crate::icons::Icons) {
         ui.vertical(|ui| {
             ui.add_space(12.0);
             
@@ -100,7 +100,7 @@ impl EbookViewer {
             ui.horizontal(|ui| {
                 ui.heading(RichText::new("Contents").size(16.0));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.small_button("<").on_hover_text("Hide sidebar").clicked() {
+                    if icons.button(ui, "arrow-left", "Hide sidebar").clicked() {
                         self.show_toc = false;
                     }
                 });
@@ -238,11 +238,11 @@ impl EbookViewer {
         });
     }
     
-    fn render_content(&mut self, ui: &mut egui::Ui, file: &OpenFile, text_color: Color32, accent: Color32) {
+    fn render_content(&mut self, ui: &mut egui::Ui, file: &OpenFile, text_color: Color32, accent: Color32, icons: &crate::icons::Icons) {
         // Show TOC button if hidden
         if !self.show_toc {
             ui.horizontal(|ui| {
-                if ui.button("= Contents").clicked() {
+                if icons.text_button(ui, "books", "Contents", "Show table of contents").clicked() {
                     self.show_toc = true;
                 }
                 ui.separator();
@@ -257,32 +257,36 @@ impl EbookViewer {
                 let can_prev = self.current_chapter > 0;
                 let can_next = self.current_chapter < ebook.chapters.len().saturating_sub(1);
                 
-                if ui.add_enabled(can_prev, egui::Button::new("< Previous")).clicked() {
-                    self.current_chapter -= 1;
-                    self.scroll_position = 0.0;
-                }
+                ui.add_enabled_ui(can_prev, |ui| {
+                    if icons.button(ui, "arrow-left", "Previous chapter").clicked() {
+                        self.current_chapter -= 1;
+                        self.scroll_position = 0.0;
+                    }
+                });
                 
                 ui.label(format!("{} / {}", 
                     self.current_chapter + 1,
                     ebook.chapters.len()
                 ));
                 
-                if ui.add_enabled(can_next, egui::Button::new("Next >")).clicked() {
-                    self.current_chapter += 1;
-                    self.scroll_position = 0.0;
-                }
+                ui.add_enabled_ui(can_next, |ui| {
+                    if icons.button(ui, "arrow-right", "Next chapter").clicked() {
+                        self.current_chapter += 1;
+                        self.scroll_position = 0.0;
+                    }
+                });
             }
             
             ui.separator();
             
             // Bookmark
-            if ui.button("Bookmark").on_hover_text("Add bookmark").clicked() {
+            if icons.text_button(ui, "plus", "Bookmark", "Add bookmark").clicked() {
                 self.bookmarks.push((self.current_chapter, String::new()));
             }
             
             // Search
             ui.separator();
-            ui.label("");
+            icons.inline(ui, "search");
             let _search_resp = ui.add(egui::TextEdit::singleline(&mut self.search_query)
                 .desired_width(150.0)
                 .hint_text("Search..."));

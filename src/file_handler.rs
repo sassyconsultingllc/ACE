@@ -451,7 +451,7 @@ pub struct ParagraphStyle {
     pub heading_level: Option<u8>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum TextAlignment {
     #[default]
     Left,

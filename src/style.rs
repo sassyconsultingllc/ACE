@@ -249,7 +249,7 @@ impl Stylesheet {
         
         if !parts[0].is_empty() && parts[0] != tag { return false; }
         
-        for (i, part) in parts.iter().enumerate().skip(1) {
+        for (_i, part) in parts.iter().enumerate().skip(1) {
             let is_id = selector[..selector.find(part).unwrap_or(0)].ends_with('#');
             if is_id { if n.get_id().as_deref() != Some(*part) { return false; } }
             else if !n.has_class(part) { return false; }

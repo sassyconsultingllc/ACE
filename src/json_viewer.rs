@@ -5,7 +5,6 @@
 
  
 use crate::style::Color;
-use std::collections::HashMap;
 
 /// JSON value type (simplified for our use)
 #[derive(Debug, Clone)]

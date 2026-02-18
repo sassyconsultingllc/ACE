@@ -3,14 +3,11 @@
 
 use crate::ui::{Theme, Edge, SidebarLayout, Rect, TabManager, TileLayout};
 use crate::ui::tabs::TerminalColor;
-use crate::ui::tabs::{TabContent, TabGroup};
-use crate::ui::network_bar::{NetworkBar, NetworkBarColors, RequestState};
+use crate::ui::network_bar::{NetworkBar, NetworkBarColors, RequestState, truncate_host};
 use crate::ai::{AiConfig, AiProvider};
 use fontdue::{Font, FontSettings};
 use std::sync::OnceLock;
 
-// Re-export helpers for external use
-pub use crate::ui::network_bar::{format_bytes, format_bytes_per_sec, truncate_url, truncate_host, state_text};
 
 // Global font instance
 static FONT: OnceLock<Font> = OnceLock::new();
@@ -183,8 +180,8 @@ impl UIRenderer {
                 
                 // Check if in corner regions
                 let in_corner = |cx: u32, cy: u32| -> bool {
-                    let cdx = if dx < r { r - dx } else if dx >= w - r { dx - (w - r - 1) } else { 0 };
-                    let cdy = if dy < r { r - dy } else if dy >= h - r { dy - (h - r - 1) } else { 0 };
+                    let cdx = if cx < r { r - cx } else if cx >= w - r { cx - (w - r - 1) } else { 0 };
+                    let cdy = if cy < r { r - cy } else if cy >= h - r { cy - (h - r - 1) } else { 0 };
                     
                     if cdx > 0 && cdy > 0 {
                         let dist_sq = cdx * cdx + cdy * cdy;
@@ -207,8 +204,6 @@ impl UIRenderer {
     fn draw_char(&self, buffer: &mut [u32], c: char, x: i32, y: i32, size: f32, color: u32) -> u32 {
         let font = get_font();
         let (metrics, bitmap) = font.rasterize(c, size);
-        
-        let (cr, cg, cb) = u32_to_rgb(color);
         
         for row in 0..metrics.height {
             let py = y + row as i32 - metrics.height as i32 + metrics.ymin + (size * 0.8) as i32;

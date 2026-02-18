@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::sync::{UserManager, UserProfile, FamilyConfig};
+use crate::sync::{UserManager, FamilyConfig};
 
 /// Get the data directory for Sassy Browser
 pub fn data_dir() -> PathBuf {

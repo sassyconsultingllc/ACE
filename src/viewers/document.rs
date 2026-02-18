@@ -8,7 +8,7 @@
 //! - Save: Export to DOCX, ODT, RTF, PDF, TXT, HTML
 //! - Print: System print dialog
 
-use crate::file_handler::{DocumentContent, FileContent, OpenFile};
+use crate::file_handler::{DocumentContent, FileContent, OpenFile, TextAlignment};
 use eframe::egui::{self, Color32, RichText, TextEdit, Sense, Stroke};
 use std::path::{Path, PathBuf};
 
@@ -24,15 +24,6 @@ pub struct TextFormat {
     pub color: Color32,
     pub background: Option<Color32>,
     pub alignment: TextAlignment,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub enum TextAlignment {
-    #[default]
-    Left,
-    Center,
-    Right,
-    Justify,
 }
 
 /// Paragraph style
@@ -734,7 +725,7 @@ impl DocumentViewer {
     // UI RENDERING
     // ---------------------------------------------------------------------------
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, _icons: &crate::icons::Icons) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
         // Load document if empty
         if self.paragraphs.is_empty() {
             if let FileContent::Document(content) = &file.content {
@@ -743,7 +734,7 @@ impl DocumentViewer {
         }
         
         // Toolbar
-        self.render_toolbar(ui);
+        self.render_toolbar(ui, icons);
         ui.separator();
         
         // Main area
@@ -774,16 +765,16 @@ impl DocumentViewer {
         }
     }
     
-    fn render_toolbar(&mut self, ui: &mut egui::Ui) {
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, icons: &crate::icons::Icons) {
         // Row 1: File operations
         ui.horizontal(|ui| {
-            if ui.button("Save").clicked() {
+            if icons.text_button(ui, "download", "Save", "Save document").clicked() {
                 let _ = self.save();
             }
-            if ui.button("Export").clicked() {
+            if icons.text_button(ui, "upload", "Export", "Export document").clicked() {
                 self.show_export = true;
             }
-            if ui.button("Print").clicked() {
+            if icons.text_button(ui, "file-pdf", "Print", "Print document").clicked() {
                 // Print the document
                 self.print_document();
             }
@@ -792,12 +783,12 @@ impl DocumentViewer {
             
             // Undo/Redo
             ui.add_enabled_ui(self.history_index > 0, |ui| {
-                if ui.button("<-").on_hover_text("Undo").clicked() {
+                if icons.button(ui, "arrow-left", "Undo").clicked() {
                     self.undo();
                 }
             });
             ui.add_enabled_ui(self.history_index < self.history.len().saturating_sub(1), |ui| {
-                if ui.button("->").on_hover_text("Redo").clicked() {
+                if icons.button(ui, "arrow-right", "Redo").clicked() {
                     self.redo();
                 }
             });
@@ -805,15 +796,17 @@ impl DocumentViewer {
             ui.separator();
             
             // Find/Replace
-            if ui.button("").on_hover_text("Find & Replace").clicked() {
+            if icons.button(ui, "search", "Find & Replace").clicked() {
                 self.show_find_replace = !self.show_find_replace;
             }
             
             ui.separator();
             
             // Styles toggle
-            ui.toggle_value(&mut self.show_styles, "¶ Styles");
-            ui.checkbox(&mut self.show_formatting, "Show ¶");
+            icons.inline(ui, "pilcrow");
+            ui.toggle_value(&mut self.show_styles, "Styles");
+            icons.inline(ui, "grid");
+            ui.checkbox(&mut self.show_formatting, "Show Marks");
             
             // Stats
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

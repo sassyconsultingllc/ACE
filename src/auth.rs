@@ -15,7 +15,6 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit},
     ChaCha20Poly1305, Nonce,
 };
-use crate::fontcase;
 
 // ==============================================================================
 // LICENSE TIERS

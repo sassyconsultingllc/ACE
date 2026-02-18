@@ -277,6 +277,7 @@ impl VideoViewer {
                     if icons.button(ui, "info", "Video info").clicked() {
                         self.show_info_overlay = !self.show_info_overlay;
                     }
+                    ui.label(RichText::new("Info").color(info_color));
 
                     // Volume
                     let vol_icon_name = if self.is_muted { "volume-mute" } else { "volume-high" };

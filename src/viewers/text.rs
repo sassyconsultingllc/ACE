@@ -2,7 +2,7 @@
 //! Text/Code Viewer - Syntax highlighting, line numbers, editing
 
 use crate::file_handler::{FileContent, OpenFile};
-use eframe::egui::{self, Color32, FontId, RichText, TextEdit, Vec2};
+use eframe::egui::{self, Color32, FontId, RichText, TextEdit};
 use syntect::highlighting::{ThemeSet, Style};
 use syntect::parsing::SyntaxSet;
 use syntect::easy::HighlightLines;
@@ -104,7 +104,7 @@ impl TextViewer {
         }
     }
     
-    fn render_editor(&mut self, ui: &mut egui::Ui, file: &OpenFile, font_size: f32) {
+    fn render_editor(&mut self, ui: &mut egui::Ui, _file: &OpenFile, font_size: f32) {
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {

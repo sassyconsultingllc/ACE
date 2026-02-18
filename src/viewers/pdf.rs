@@ -12,7 +12,6 @@
 
 use crate::file_handler::{FileContent, OpenFile};
 use eframe::egui::{self, Color32, FontId, Pos2, Rect, RichText, Sense, Stroke, Vec2};
-use image::GenericImageView;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -496,7 +495,7 @@ impl PdfViewer {
         }
     }
 
-    fn decode_pdf_image(&self, img: &lopdf::xobject::PdfImage, page: &PdfPage) -> Option<EmbeddedImage> {
+    fn decode_pdf_image(&self, img: &lopdf::xobject::PdfImage, _page: &PdfPage) -> Option<EmbeddedImage> {
         let width = img.width as u32;
         let height = img.height as u32;
         if width == 0 || height == 0 { return None; }
@@ -535,7 +534,7 @@ impl PdfViewer {
         })
     }
 
-    fn raw_to_rgba(&self, data: &[u8], width: u32, height: u32, bpc: u32, color_space: &str) -> Option<Vec<u8>> {
+    fn raw_to_rgba(&self, data: &[u8], width: u32, height: u32, _bpc: u32, color_space: &str) -> Option<Vec<u8>> {
         let pixel_count = (width * height) as usize;
 
         match color_space {
@@ -1046,6 +1045,8 @@ impl PdfViewer {
                     self.current_page = i;
                 }
 
+                ui.painter().rect_filled(rect, 4.0, bg);
+
                 // Draw thumbnail background (white page)
                 let page_rect = Rect::from_min_size(
                     rect.min + Vec2::new(4.0, 2.0),
@@ -1073,7 +1074,8 @@ impl PdfViewer {
                                 Pos2::new(tx, ty),
                                 Vec2::new(text_width.min(page_rect.right() - tx), text_height),
                             );
-                            ui.painter().rect_filled(line_rect, 0.0, Color32::from_rgb(80, 85, 95));
+                            let shade = 80 + (idx as u8 % 6) * 4;
+                            ui.painter().rect_filled(line_rect, 0.0, Color32::from_rgb(shade, shade, shade));
                         }
                     }
 

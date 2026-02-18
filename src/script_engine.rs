@@ -1,6 +1,6 @@
 // Script Engine - JavaScript-DOM bridge
 
-use crate::js::{JsInterpreter, Value, Lexer, Token, Parser, Expr, Stmt};
+use crate::js::{JsInterpreter, Value, Lexer, Parser, Expr, Stmt};
 use crate::dom::{Document, Node, NodeRef};
 use crate::engine::Timer;
 use std::rc::Rc;

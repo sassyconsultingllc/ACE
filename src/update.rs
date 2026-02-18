@@ -4,7 +4,7 @@
 //! Uses the same quarantine system as downloads - no silent installs.
 
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 const UPDATE_URL: &str = "https://onesassybrowser.com/api/version";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");

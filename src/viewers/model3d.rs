@@ -1,8 +1,8 @@
 #![allow(deprecated)]
 //! 3D Model Viewer - OBJ, STL, GLTF/GLB, PLY visualization
 
-use crate::file_handler::{BoundingBox, Face3D, FileContent, Model3DContent, Model3DFormat, OpenFile, Vertex3D};
-use eframe::egui::{self, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
+use crate::file_handler::{Face3D, FileContent, Model3DContent, Model3DFormat, OpenFile, Vertex3D};
+use eframe::egui::{self, Color32, FontId, Pos2, Sense, Stroke, Vec2};
 
 pub struct Model3DViewer {
     rotation_x: f32,
@@ -53,7 +53,7 @@ impl Model3DViewer {
     
     pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32, icons: &crate::icons::Icons) {
         if let FileContent::Model3D(model) = &file.content {
-            self.render_toolbar(ui, model);
+            self.render_toolbar(ui, model, icons);
             ui.separator();
             self.render_3d_viewport(ui, model, global_zoom);
             self.render_info_panel(ui, model);
@@ -64,9 +64,10 @@ impl Model3DViewer {
         }
     }
     
-    fn render_toolbar(&mut self, ui: &mut egui::Ui, model: &Model3DContent) {
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, model: &Model3DContent, icons: &crate::icons::Icons) {
         ui.horizontal(|ui| {
             // Render mode
+            icons.inline(ui, "grid");
             ui.label("Render:");
             if ui.selectable_label(self.render_mode == RenderMode::Wireframe, "Wire").clicked() {
                 self.render_mode = RenderMode::Wireframe;
@@ -84,12 +85,15 @@ impl Model3DViewer {
             ui.separator();
             
             // Display options
+            icons.inline(ui, "cross");
             ui.checkbox(&mut self.show_axes, "Axes");
+            icons.inline(ui, "grid");
             ui.checkbox(&mut self.show_grid, "Grid");
             
             ui.separator();
             
             // Auto-rotate
+            icons.inline(ui, "reload");
             ui.checkbox(&mut self.auto_rotate, "Auto-rotate");
             if self.auto_rotate {
                 ui.add(egui::Slider::new(&mut self.auto_rotate_speed, 0.1..=2.0).text("Speed"));
@@ -98,7 +102,7 @@ impl Model3DViewer {
             ui.separator();
             
             // Reset view
-            if ui.button(" Reset View").clicked() {
+            if icons.text_button(ui, "reload", "Reset View", "Reset camera").clicked() {
                 self.rotation_x = -30.0;
                 self.rotation_y = 45.0;
                 self.zoom = 1.0;

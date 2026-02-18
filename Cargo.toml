@@ -249,6 +249,7 @@ core-foundation = "0.10"
 [features]
 default = []
 voice = []  # Future: Whisper STT integration
+devtools = []  # Dev-only exercises and smoke checks
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BUILD OPTIMIZATION

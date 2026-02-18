@@ -25,9 +25,9 @@ impl FontViewer {
         }
     }
     
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, _icons: &crate::icons::Icons) {
+    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
         if let FileContent::Font(font) = &file.content {
-            self.render_toolbar(ui, font);
+            self.render_toolbar(ui, font, icons);
             ui.separator();
             
             egui::ScrollArea::vertical()
@@ -49,12 +49,14 @@ impl FontViewer {
         }
     }
     
-    fn render_toolbar(&mut self, ui: &mut egui::Ui, font: &FontContent) {
+    fn render_toolbar(&mut self, ui: &mut egui::Ui, font: &FontContent, icons: &crate::icons::Icons) {
         ui.horizontal(|ui| {
             // View mode
+            icons.inline(ui, "file-text");
             if ui.selectable_label(!self.show_charset, "Preview").clicked() {
                 self.show_charset = false;
             }
+            icons.inline(ui, "grid");
             if ui.selectable_label(self.show_charset, "Character Map").clicked() {
                 self.show_charset = true;
             }
@@ -75,6 +77,7 @@ impl FontViewer {
             
             ui.separator();
             
+            icons.inline(ui, "pencil");
             ui.checkbox(&mut self.custom_text_mode, "Custom text");
             
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

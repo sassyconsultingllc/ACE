@@ -15,12 +15,7 @@ use crate::extensions::ExtensionManager;
 use crate::icons::Icons;
 use crate::input::FocusManager;
 use crate::json_viewer::JsonViewer;
-use crate::mcp::{
-    McpOrchestrator, AgentRole, IntentType, UserIntent, Entity,
-    AgentRequest, AgentResponse, TokenUsage, McpServer, McpMessage,
-    extract_entities, format_operation, EditOperation, MessageRole,
-    Provider, TaskStatus, IssueSeverity, AgentConfig, HostingMode,
-};
+use crate::mcp::{AgentRole, MessageRole};
 use crate::mcp_panel::{
     McpPanel, PanelMode, PanelRender, RenderElement, AgentStatus,
     Action as McpAction, ActionStyle, NotificationStyle, McpTheme, QuickCommand,
@@ -37,7 +32,7 @@ use crate::mcp_server_native::{McpNativeServer, NativeServerConfig, McpBridge};
 use crate::mcp_protocol::{McpCommand, McpResponse, ErrorCode};
 use crate::poisoning::{PoisoningEngine, PoisonMode};
 use crate::stealth_victories::StealthVictories;
-use crate::ai::{AiRuntime, EasterEggReward};
+use crate::ai::{help_query_for_context, run_help_query, AiRuntime, EasterEggReward, HelpQuery};
 use crate::script_engine::ScriptEngine;
 use crate::adblock::{AdBlocker, AdBlockerUI, BlockStats, FilterList, FilterRule, ResourceType as AdResourceType};
 use crate::voice::{
@@ -218,7 +213,6 @@ pub struct BrowserApp {
     pub syntax_highlighter: SyntaxHighlighter,
 
     // MCP AI system
-    mcp_orchestrator: McpOrchestrator,
     mcp_panel: McpPanel,
 
     // Detection engine + Native MCP server
@@ -690,7 +684,6 @@ impl BrowserApp {
             syntax_highlighter: SyntaxHighlighter::new(),
 
             // MCP AI system
-            mcp_orchestrator: McpOrchestrator::new(),
             mcp_panel: McpPanel::new(),
 
             // Detection engine + Native MCP server
@@ -790,6 +783,10 @@ impl BrowserApp {
 
         // Wire ad_blocker_ui to share the same Arc as ad_blocker
         app.ad_blocker_ui = AdBlockerUI::new(app.ad_blocker.clone());
+
+        if let Err(err) = app.mcp_panel.configure_from_ai_toml() {
+            tracing::warn!("Failed to load MCP config: {}", err);
+        }
 
         // Start the native MCP server in background and wire the bridge
         {
@@ -1388,6 +1385,11 @@ impl BrowserApp {
                             if tab_response.clicked() {
                                 self.engine.set_active_tab(idx);
                             }
+
+                            if tab_response.secondary_clicked() {
+                                self.context_menu_pos = tab_response.interact_pointer_pos();
+                                self.context_menu_link = Some(self.engine.tabs()[idx].content.get_display_url());
+                            }
                             
                             // Middle click to close
                             if tab_response.middle_clicked() {
@@ -1447,6 +1449,22 @@ impl BrowserApp {
             if let Some(idx) = close_tab {
                 self.engine.close_tab(idx);
             }
+
+            self.session_state.active_tab = if self.engine.tab_count() > 0 {
+                Some(self.engine.active_tab_index())
+            } else {
+                None
+            };
+            self.session_state.tabs = self.engine.tabs()
+                .iter()
+                .map(|t| crate::data::TabState {
+                    id: t.id.0,
+                    url: t.content.get_display_url(),
+                    title: t.title(),
+                    scroll_x: 0,
+                    scroll_y: 0,
+                })
+                .collect();
         });
     }
     
@@ -1593,29 +1611,10 @@ impl BrowserApp {
                 // Get file reference carefully
                 if let Some(tab) = self.engine.active_tab() {
                     if let TabContent::File(file) = &tab.content {
-                        let file_type = file.file_type;
-                        let zoom = self.zoom_level;
                         // Clone necessary data to avoid borrow issues
                         let file_clone = file.clone();
                         let _ = tab;
-                        let icons = &self.svg_icons;
-                        match file_type {
-                            FileType::Image | FileType::ImageRaw | FileType::ImagePsd => {
-                                self.image_viewer.render(ui, &file_clone, zoom, icons)
-                            }
-                            FileType::Pdf => self.pdf_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Document => self.document_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Spreadsheet => self.spreadsheet_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Chemical => self.chemical_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Archive => self.archive_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Model3D => self.model3d_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Font => self.font_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Audio => self.audio_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Video => self.video_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Ebook => self.ebook_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Markdown => self.text_viewer.render(ui, &file_clone, zoom, icons),
-                            FileType::Text | FileType::Unknown => self.text_viewer.render(ui, &file_clone, zoom, icons),
-                        }
+                        self.render_file_content(ui, &file_clone);
                     }
                 }
             }
@@ -4812,8 +4811,39 @@ impl BrowserApp {
                     .desired_width(f32::INFINITY));
 
                 if ui.button("Ask AI").clicked() && !self.ai_query_input.is_empty() {
-                    self.status_message = format!("AI query: {}", self.ai_query_input);
+                    let active_url = self.engine.active_tab()
+                        .map(|t| t.content.get_display_url())
+                        .unwrap_or_default();
+                    let query = help_query_for_context(&self.ai_query_input, &active_url);
+                    if let HelpQuery::EasterEgg { trigger } = &query {
+                        if let Some(reward) = self.ai_runtime.config.discover_easter_egg(trigger) {
+                            self.ai_easter_egg_pending = Some(reward);
+                        }
+                    }
+                    match run_help_query(&self.ai_runtime, query) {
+                        Ok(resp) => {
+                            self.ai_response = resp;
+                            self.ai_error = None;
+                        }
+                        Err(err) => {
+                            self.ai_error = Some(err);
+                        }
+                    }
                     self.ai_query_input.clear();
+                }
+
+                if let Some(err) = &self.ai_error {
+                    ui.colored_label(Color32::RED, err);
+                } else if !self.ai_response.is_empty() {
+                    ui.label(&self.ai_response);
+                }
+
+                if let Some(reward) = &self.ai_easter_egg_pending {
+                    ui.separator();
+                    ui.label(&reward.message);
+                    if ui.button("Redeem reward").clicked() {
+                        let _ = open::that(&reward.redeem_url);
+                    }
                 }
 
                 ui.add_space(20.0);
@@ -6152,10 +6182,55 @@ example.com#@#.approved-ad\n\
                     if let Some(ct) = resp.content_type() { ui.label(format!("Type: {}",ct)); }
                     ui.collapsing("Resp Headers", |ui| { for (n,v) in &resp.headers { ui.label(format!("{}: {}",n,v)); } });
                     ui.collapsing("Resp Body", |ui| {
-                        if resp.is_json() { if let Some(p) = resp.json_pretty() { ui.code(p); } }
-                        else if resp.is_html() { if let Some(ref t) = resp.body_text { ui.code(&t[..t.len().min(2000)]); } }
-                        else if let Some(ref t) = resp.body_text { ui.code(&t[..t.len().min(2000)]); }
-                        else { ui.label(format!("(binary {} bytes)",resp.body.len())); }
+                        if resp.is_json() {
+                            if let Some(ref body) = resp.body_text {
+                                if self.json_viewer.load(body).is_ok() {
+                                    if let Some(root) = &self.json_viewer.root {
+                                        ui.code(root.pretty_print(0));
+                                    }
+                                } else if let Some(p) = resp.json_pretty() {
+                                    ui.code(p);
+                                }
+
+                                let highlighted = self.syntax_highlighter
+                                    .highlight(body, crate::syntax::Language::Json);
+                                if !highlighted.is_empty() {
+                                    ui.separator();
+                                    ui.label("Syntax preview");
+                                    for line in highlighted.iter().take(8) {
+                                        let mut job = egui::text::LayoutJob::default();
+                                        for token in line {
+                                            let color = Color32::from_rgba_premultiplied(
+                                                token.color.r,
+                                                token.color.g,
+                                                token.color.b,
+                                                token.color.a,
+                                            );
+                                            job.append(
+                                                &token.text,
+                                                0.0,
+                                                egui::text::TextFormat {
+                                                    font_id: FontId::monospace(12.0),
+                                                    color,
+                                                    ..Default::default()
+                                                },
+                                            );
+                                        }
+                                        ui.label(job);
+                                    }
+                                }
+                            } else if let Some(p) = resp.json_pretty() {
+                                ui.code(p);
+                            }
+                        } else if resp.is_html() {
+                            if let Some(ref t) = resp.body_text {
+                                ui.code(&t[..t.len().min(2000)]);
+                            }
+                        } else if let Some(ref t) = resp.body_text {
+                            ui.code(&t[..t.len().min(2000)]);
+                        } else {
+                            ui.label(format!("(binary {} bytes)", resp.body.len()));
+                        }
                     });
                     ui.collapsing("Resp Diagnostics", |ui| { ui.label(resp.describe()); });
                 }
@@ -6416,126 +6491,6 @@ example.com#@#.approved-ad\n\
             });
     }
 
-    fn process_mcp_orchestrator(&mut self) {
-        // Exercise AgentRole variants with their methods
-        let roles = [AgentRole::Voice, AgentRole::Orchestrator, AgentRole::Coder, AgentRole::Auditor];
-        for role in &roles {
-            let _n = role.name();
-            let _i = role.icon();
-            let _d = role.description();
-        }
-        // Provider checks
-        let providers = [Provider::Xai, Provider::Together, Provider::OpenAI, Provider::Ollama, Provider::Custom];
-        for p in &providers {
-            let _compat = p.is_openai_compatible();
-            let _local = p.is_local();
-            let _name = p.name();
-        }
-        // TaskStatus and IssueSeverity icons
-        let statuses = [TaskStatus::Pending, TaskStatus::InProgress, TaskStatus::Review, TaskStatus::Completed, TaskStatus::Failed, TaskStatus::Blocked];
-        for s in &statuses { let _icon = s.icon(); }
-        let severities = [IssueSeverity::Info, IssueSeverity::Warning, IssueSeverity::Error, IssueSeverity::Critical];
-        for sv in &severities { let _icon = sv.icon(); }
-        // AgentConfig::huggingface with builder methods
-        let hf_config = AgentConfig::huggingface(AgentRole::Coder, "https://api.hf.space", "codellama/CodeLlama-34b")
-            .with_url("https://custom.endpoint/v1")
-            .with_key("hf_test_key")
-            .with_model("custom-model");
-        self.mcp_orchestrator.configure_agent(hf_config);
-        // Set API key
-        self.mcp_orchestrator.set_api_key(AgentRole::Voice, "test_key".into());
-        // Read McpOrchestrator public fields
-        let _tid = self.mcp_orchestrator.next_task_id;
-        // Start session and process input
-        self.mcp_orchestrator.start_session();
-        let _msgs = self.mcp_orchestrator.process_input("explain this code");
-        // Build a request
-        let msgs: Vec<McpMessage> = vec![];
-        if let Some(req) = self.mcp_orchestrator.build_request(AgentRole::Coder, &msgs) {
-            let _req: &AgentRequest = &req;
-            let _model = &req.model;
-            let _msgs = &req.messages;
-            let _max = req.max_tokens;
-            let _temp = req.temperature;
-        }
-        // Extract entities
-        let entities: Vec<Entity> = extract_entities("fix bug in src/main.rs line 42");
-        for e in &entities {
-            let _et = &e.entity_type;
-            let _ev = &e.value;
-            let _es = e.start;
-            let _ee = e.end;
-        }
-        // Format operations
-        let ops = [EditOperation::Create, EditOperation::Replace, EditOperation::Insert, EditOperation::Delete, EditOperation::Append];
-        for op in &ops { let _f = format_operation(op); }
-        // Exercise all IntentType variants via UserIntent and read fields
-        let intents = [IntentType::Create, IntentType::Fix, IntentType::Refactor, IntentType::Explain, IntentType::Test, IntentType::Document, IntentType::General];
-        for it in &intents {
-            let ui = UserIntent { summary: format!("do {:?}", it), intent_type: it.clone(), entities: entities.clone(), confidence: 0.95 };
-            let _s = &ui.summary;
-            let _t = &ui.intent_type;
-            let _e = &ui.entities;
-            let _c = ui.confidence;
-        }
-        // Mock response with TokenUsage
-        let resp: AgentResponse = McpOrchestrator::mock_response("test response");
-        let _content = &resp.content;
-        let _finish = &resp.finish_reason;
-        let usage: &TokenUsage = &resp.usage;
-        let _pt = usage.prompt_tokens;
-        let _ct = usage.completion_tokens;
-        let _tt = usage.total_tokens;
-        // Session summary
-        let _summary = self.mcp_orchestrator.session_summary();
-        // Configure hosting mode
-        self.mcp_orchestrator.configure_hosting(HostingMode::Cloud);
-        self.mcp_orchestrator.set_all_api_keys("test_key_all");
-        // Git integration methods
-        let _branches = self.mcp_orchestrator.git_branches();
-        let _log = self.mcp_orchestrator.git_log(5);
-        let _diff = self.mcp_orchestrator.git_diff(false);
-        let _diff_file = self.mcp_orchestrator.git_diff_file("src/main.rs", true);
-        let _blame = self.mcp_orchestrator.git_blame("src/main.rs");
-        let _commit = self.mcp_orchestrator.git_show_commit("abc123");
-        let _ = self.mcp_orchestrator.git_stage(&["src/main.rs"]);
-        let _ = self.mcp_orchestrator.git_unstage(&["src/main.rs"]);
-        let _cid = self.mcp_orchestrator.git_queue_commit("test commit", None);
-        let _bid = self.mcp_orchestrator.git_queue_branch("feature/test", None);
-        let _pending = self.mcp_orchestrator.git_pending_ops();
-        let _ = self.mcp_orchestrator.git_approve(0);
-        let _oid = self.mcp_orchestrator.git_queue_operation("tag", "v1.0");
-        // File system methods
-        let _ = self.mcp_orchestrator.fs_read_file("test.txt");
-        let _ = self.mcp_orchestrator.fs_read_lines("test.txt", 0, 10);
-        let _ = self.mcp_orchestrator.fs_list_dir(".");
-        let _ = self.mcp_orchestrator.fs_list_recursive(".", 2);
-        let _ = self.mcp_orchestrator.fs_search("*.rs");
-        let _ = self.mcp_orchestrator.fs_grep("TODO", Some("*.rs"));
-        let _ = self.mcp_orchestrator.fs_queue_create("new.txt", "content", "Create new file");
-        let _ = self.mcp_orchestrator.fs_queue_update("old.txt", "updated", "Update file");
-        let _ = self.mcp_orchestrator.fs_queue_delete("temp.txt", "Remove temp file");
-        let _pc = self.mcp_orchestrator.fs_pending_changes();
-        let _ = self.mcp_orchestrator.fs_approve(0);
-        let _ = self.mcp_orchestrator.fs_approve_all();
-        let _ = self.mcp_orchestrator.fs_reject(0);
-        self.mcp_orchestrator.fs_reject_all();
-        let _ = self.mcp_orchestrator.fs_history();
-        let _ = self.mcp_orchestrator.fs_generate_diff("old", "new", "test.txt");
-        let _ = self.mcp_orchestrator.fs_queue_rename("a.txt", "b.txt", "Rename file");
-        let _ = self.mcp_orchestrator.fs_queue_mkdir("new_dir", "Create directory");
-        let _ = self.mcp_orchestrator.fs_copy_file("src.txt", "dst.txt");
-        let _ = self.mcp_orchestrator.fs_get_cached("test.txt");
-        // McpServer lifecycle with builder methods
-        let server = McpServer::new(9090);
-        let server = server.with_agent_url(AgentRole::Voice, "http://localhost:8001");
-        let server = server.with_agent_key(AgentRole::Voice, "key123");
-        let mut server = server.with_agent_model(AgentRole::Coder, "gpt-4");
-        server.start();
-        let _resp = server.handle_request(r#"{"method":"ping"}"#);
-        let _status = server.status();
-        server.stop();
-    }
 
 }
 
@@ -6602,7 +6557,7 @@ impl eframe::App for BrowserApp {
                 let is_loading = *loading;
 
                 // Only run detection on loaded pages we haven't analyzed yet
-                if !is_loading && self.detection_last_analyzed_url.as_deref() != Some(&url_owned) {
+                if !is_loading && self.detection_last_analyzed_url.as_deref() != Some(url_owned.as_str()) {
                     // Update page context URL/domain
                     self.detection_page_ctx.url = url_owned.clone();
                     self.detection_page_ctx.domain = extract_domain_from_url(&url_owned);
@@ -6616,7 +6571,7 @@ impl eframe::App for BrowserApp {
                     self.detection_last_analyzed_url = Some(url_owned.clone());
 
                     // Apply fingerprint poisoning (once per page load)
-                    if self.poison_last_applied_url.as_deref() != Some(&url_owned) {
+                    if self.poison_last_applied_url.as_deref() != Some(url_owned.as_str()) {
                         if self.poison_engine.should_poison(&url_owned) {
                             // Inject fingerprint poisoning via dedicated script engine
                             let _result = self.poison_engine.poison_page(
@@ -6787,7 +6742,6 @@ impl eframe::App for BrowserApp {
 
         // MCP AI Panel
         self.render_mcp_panel(ctx);
-        self.process_mcp_orchestrator();
 
         // Developer console panel (F12)
         self.render_dev_console(ctx);
