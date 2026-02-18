@@ -12,7 +12,9 @@
       "Bash(cargo check:*)",
       "Bash(cargo doc:*)",
       "Bash(python:*)",
-      "Bash(copy:*)"
+      "Bash(copy:*)",
+      "Bash(xargs:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

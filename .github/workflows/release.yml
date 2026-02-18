@@ -1,0 +1,334 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 2.0.0)'
+        required: true
+        default: '2.0.0'
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # WINDOWS BUILD - EXE + Portable ZIP
+  # ═══════════════════════════════════════════════════════════════════════════
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: windows-cargo-
+
+      - name: Build release binary
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Prepare portable package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $pkg = "SassyBrowser-$version-windows-x64"
+          New-Item -ItemType Directory -Force -Path $pkg
+          Copy-Item "target\x86_64-pc-windows-msvc\release\sassy-browser.exe" "$pkg\"
+          Copy-Item "config\*.toml" "$pkg\" -ErrorAction SilentlyContinue
+          Copy-Item -Recurse "assets" "$pkg\" -ErrorAction SilentlyContinue
+          Copy-Item "README.md" "$pkg\" -ErrorAction SilentlyContinue
+          Copy-Item "LICENSE" "$pkg\" -ErrorAction SilentlyContinue
+          Compress-Archive -Path "$pkg\*" -DestinationPath "SassyBrowser-$version-windows-x64.zip"
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sassy-browser-windows-exe
+          path: target/x86_64-pc-windows-msvc/release/sassy-browser.exe
+
+      - name: Upload Windows ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sassy-browser-windows-zip
+          path: SassyBrowser-${{ steps.version.outputs.version }}-windows-x64.zip
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # macOS BUILD - DMG (Universal Binary: Intel + Apple Silicon)
+  # ═══════════════════════════════════════════════════════════════════════════
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: macos-cargo-
+
+      - name: Build for Apple Silicon (aarch64)
+        run: cargo build --release --target aarch64-apple-darwin
+
+      - name: Build for Intel (x86_64)
+        run: cargo build --release --target x86_64-apple-darwin
+
+      - name: Create universal binary
+        run: |
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create \
+            target/aarch64-apple-darwin/release/sassy-browser \
+            target/x86_64-apple-darwin/release/sassy-browser \
+            -output target/universal-apple-darwin/release/sassy-browser
+          chmod +x target/universal-apple-darwin/release/sassy-browser
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create macOS app bundle
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          APP_NAME="Sassy Browser.app"
+          APP_DIR="$APP_NAME/Contents"
+
+          mkdir -p "$APP_DIR/MacOS"
+          mkdir -p "$APP_DIR/Resources"
+
+          # Copy universal binary
+          cp target/universal-apple-darwin/release/sassy-browser "$APP_DIR/MacOS/sassy-browser"
+          chmod +x "$APP_DIR/MacOS/sassy-browser"
+
+          # Copy assets
+          cp -r assets "$APP_DIR/Resources/" 2>/dev/null || true
+          cp -r config "$APP_DIR/Resources/" 2>/dev/null || true
+
+          # Create icon if source PNG exists
+          if [ -f "assets/icons/android-chrome-512x512.png" ]; then
+            mkdir -p SassyBrowser.iconset
+            sips -z 16 16     "assets/icons/android-chrome-512x512.png" --out SassyBrowser.iconset/icon_16x16.png
+            sips -z 32 32     "assets/icons/android-chrome-512x512.png" --out SassyBrowser.iconset/icon_16x16@2x.png
+            sips -z 32 32     "assets/icons/android-chrome-512x512.png" --out SassyBrowser.iconset/icon_32x32.png
+            sips -z 64 64     "assets/icons/android-chrome-512x512.png" --out SassyBrowser.iconset/icon_32x32@2x.png
+            sips -z 128 128   "assets/icons/android-chrome-512x512.png" --out SassyBrowser.iconset/icon_128x128.png
+            sips -z 256 256   "assets/icons/android-chrome-512x512.png" --out SassyBrowser.iconset/icon_128x128@2x.png
+            sips -z 256 256   "assets/icons/android-chrome-512x512.png" --out SassyBrowser.iconset/icon_256x256.png
+            sips -z 512 512   "assets/icons/android-chrome-512x512.png" --out SassyBrowser.iconset/icon_256x256@2x.png
+            sips -z 512 512   "assets/icons/android-chrome-512x512.png" --out SassyBrowser.iconset/icon_512x512.png
+            cp "assets/icons/android-chrome-512x512.png" SassyBrowser.iconset/icon_512x512@2x.png
+            iconutil -c icns SassyBrowser.iconset -o "$APP_DIR/Resources/AppIcon.icns"
+            rm -rf SassyBrowser.iconset
+          fi
+
+          # Create Info.plist
+          cat > "$APP_DIR/Info.plist" << PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>Sassy Browser</string>
+              <key>CFBundleDisplayName</key>
+              <string>Sassy Browser</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.sassyconsulting.sassy-browser</string>
+              <key>CFBundleVersion</key>
+              <string>${VERSION}</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${VERSION}</string>
+              <key>CFBundleExecutable</key>
+              <string>sassy-browser</string>
+              <key>CFBundleIconFile</key>
+              <string>AppIcon</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleSignature</key>
+              <string>SASY</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>11.0</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+              <key>NSSupportsAutomaticGraphicsSwitching</key>
+              <true/>
+              <key>CFBundleDocumentTypes</key>
+              <array>
+                  <dict>
+                      <key>CFBundleTypeName</key>
+                      <string>Web Document</string>
+                      <key>CFBundleTypeRole</key>
+                      <string>Viewer</string>
+                      <key>LSItemContentTypes</key>
+                      <array>
+                          <string>public.html</string>
+                          <string>public.url</string>
+                      </array>
+                  </dict>
+                  <dict>
+                      <key>CFBundleTypeName</key>
+                      <string>Document</string>
+                      <key>CFBundleTypeRole</key>
+                      <string>Viewer</string>
+                      <key>LSItemContentTypes</key>
+                      <array>
+                          <string>public.data</string>
+                          <string>public.content</string>
+                      </array>
+                  </dict>
+              </array>
+              <key>CFBundleURLTypes</key>
+              <array>
+                  <dict>
+                      <key>CFBundleURLName</key>
+                      <string>Web URL</string>
+                      <key>CFBundleURLSchemes</key>
+                      <array>
+                          <string>http</string>
+                          <string>https</string>
+                      </array>
+                  </dict>
+              </array>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Create DMG
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="SassyBrowser-${VERSION}-macos-universal.dmg"
+          VOLUME_NAME="Sassy Browser ${VERSION}"
+
+          # Create a temporary DMG directory
+          mkdir -p dmg-staging
+          cp -r "Sassy Browser.app" dmg-staging/
+          ln -s /Applications dmg-staging/Applications
+
+          # Create DMG
+          hdiutil create -volname "$VOLUME_NAME" \
+            -srcfolder dmg-staging \
+            -ov -format UDZO \
+            "$DMG_NAME"
+
+          rm -rf dmg-staging
+          echo "Created $DMG_NAME"
+          ls -lh "$DMG_NAME"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sassy-browser-macos-dmg
+          path: SassyBrowser-${{ steps.version.outputs.version }}-macos-universal.dmg
+
+      - name: Upload macOS app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: sassy-browser-macos-app
+          path: Sassy Browser.app
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # CREATE GITHUB RELEASE
+  # ═══════════════════════════════════════════════════════════════════════════
+  release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+            echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f -ls
+
+      - name: Create tag (if workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git tag "${{ steps.version.outputs.tag }}" || true
+          git push origin "${{ steps.version.outputs.tag }}" || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Sassy Browser v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          body: |
+            ## Sassy Browser v${{ steps.version.outputs.version }}
+
+            **Pure Rust Web Browser & Universal File Viewer**
+            No Chrome. No Google. No WebKit. No paid dependencies.
+
+            ### Downloads
+
+            | Platform | File | Description |
+            |----------|------|-------------|
+            | Windows | `SassyBrowser-${{ steps.version.outputs.version }}-windows-x64.zip` | Portable ZIP (extract and run) |
+            | Windows | `sassy-browser.exe` | Standalone executable |
+            | macOS | `SassyBrowser-${{ steps.version.outputs.version }}-macos-universal.dmg` | DMG installer (Intel + Apple Silicon) |
+
+            ### Features
+            - 200+ file format support (PDF, DOCX, PSD, RAW, PDB, and more)
+            - Custom HTML/CSS/JS engine (Pure Rust)
+            - Built-in ad blocker
+            - MCP protocol support
+            - Phone companion app for file sync
+
+            ### System Requirements
+            - **Windows**: Windows 10 or later (x64)
+            - **macOS**: macOS 11 (Big Sur) or later (Intel & Apple Silicon)
+          files: |
+            artifacts/sassy-browser-windows-exe/sassy-browser.exe
+            artifacts/sassy-browser-windows-zip/SassyBrowser-${{ steps.version.outputs.version }}-windows-x64.zip
+            artifacts/sassy-browser-macos-dmg/SassyBrowser-${{ steps.version.outputs.version }}-macos-universal.dmg

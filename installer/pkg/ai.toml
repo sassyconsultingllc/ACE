@@ -28,6 +28,40 @@ enabled = false
 easter_eggs_notifications = true
 
 # ==============================================================================
+# MCP Server Mode - Expose Browser as MCP Server
+# ==============================================================================
+# Run Sassy Browser as an MCP server that Claude Desktop (or other MCP clients)
+# can connect to and control. This turns Sassy Browser into a browser automation
+# tool that Claude can use.
+#
+# Usage in Claude Desktop (claude_desktop_config.json):
+# {
+#   "mcpServers": {
+#     "sassy-browser": {
+#       "command": "sassy-browser.exe",
+#       "args": ["--mcp-server"]
+#     }
+#   }
+# }
+
+[mcp_server]
+enabled = false
+transport = "stdio"     # "stdio" (for Claude Desktop) or "socket"
+port = 9999             # Port for socket transport
+confirm_destructive = true  # Require confirmation for destructive actions
+
+# Allowed tool categories
+# - navigation: navigate, new_tab, close_tab, list_tabs
+# - reading: read_page, get_text, find_element
+# - interaction: click, type_text, press_key, scroll, form_input
+# - screenshot: screenshot
+# - javascript: execute_js
+# - security: get_trust_level, get_security_info
+# - files: open_file, get_file_info
+allowed_tools = ["navigation", "reading", "interaction", "screenshot", "security", "files"]
+# Note: "javascript" is not enabled by default for security
+
+# ==============================================================================
 # MCP Multi-Agent Coding System
 # ==============================================================================
 # Four AI agents working together for conversational code editing:

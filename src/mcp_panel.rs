@@ -10,6 +10,7 @@ use crate::mcp::{
 };
 use crate::style::Color;
 use crate::syntax::{Language, SyntaxHighlighter};
+use crate::token_meter::TokenMeter;
 
 /// Panel mode
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,6 +19,7 @@ pub enum PanelMode {
     Tasks,
     Edits,
     Settings,
+    TokenMeter,
 }
 
 /// The MCP Panel UI
@@ -33,6 +35,7 @@ pub struct McpPanel {
     pub highlighter: SyntaxHighlighter,
     pub theme: McpTheme,
     pub dark_mode: bool,
+    pub token_meter: TokenMeter,
 }
 
 impl McpPanel {
@@ -49,6 +52,7 @@ impl McpPanel {
             highlighter: SyntaxHighlighter::new(),
             theme: McpTheme::dark(),
             dark_mode: true,
+            token_meter: TokenMeter::new(),
         }
     }
     
@@ -119,12 +123,13 @@ impl McpPanel {
     }
     
     /// Render the panel to a string representation
-    pub fn render(&self) -> PanelRender {
+    pub fn render(&mut self) -> PanelRender {
         match self.mode {
             PanelMode::Chat => self.render_chat(),
             PanelMode::Tasks => self.render_tasks(),
             PanelMode::Edits => self.render_edits(),
             PanelMode::Settings => self.render_settings(),
+            PanelMode::TokenMeter => self.render_token_meter(),
         }
     }
     
@@ -349,6 +354,143 @@ impl McpPanel {
         }
     }
     
+    fn render_token_meter(&mut self) -> PanelRender {
+        let mut elements = Vec::new();
+
+        elements.push(RenderElement::Header {
+            title: "AI Token Meter".to_string(),
+            subtitle: Some(format!("Session: {} | {}", self.token_meter.session_duration(),
+                if self.token_meter.total_requests == 0 { "No requests yet".to_string() }
+                else { format!("{} requests", self.token_meter.total_requests) })),
+        });
+
+        // Compact status line
+        let compact = self.token_meter.render_compact();
+        elements.push(RenderElement::Notification {
+            message: compact,
+            style: match self.token_meter.budget_status() {
+                crate::token_meter::BudgetStatus::Normal => NotificationStyle::Info,
+                crate::token_meter::BudgetStatus::Warning => NotificationStyle::Warning,
+                crate::token_meter::BudgetStatus::Critical => NotificationStyle::Error,
+                crate::token_meter::BudgetStatus::Exceeded => NotificationStyle::Error,
+            },
+        });
+
+        // Per-agent breakdown
+        elements.push(RenderElement::SectionHeader {
+            title: "Per-Agent Usage".to_string(),
+        });
+
+        let agent_order = [
+            AgentRole::Voice,
+            AgentRole::Coder,
+            AgentRole::Orchestrator,
+            AgentRole::Auditor,
+        ];
+
+        for role in &agent_order {
+            if let Some(stats) = self.token_meter.agent_stats.get(role) {
+                let bar = crate::token_meter::context_bar(stats.context_fill_pct(), 16);
+                elements.push(RenderElement::InfoRow {
+                    label: format!("{} ({})", crate::token_meter::AgentMeter::default_name(*role), stats.model),
+                    value: format!(
+                        "{} tokens | {} | {} req | {}ms avg | {}",
+                        TokenMeter::format_tokens(stats.total_tokens),
+                        TokenMeter::format_cost(stats.total_cost),
+                        stats.request_count,
+                        stats.avg_latency_ms,
+                        bar,
+                    ),
+                });
+            }
+        }
+
+        // Show empty state if no agents have been used
+        if self.token_meter.agent_stats.is_empty() {
+            elements.push(RenderElement::EmptyState {
+                icon: String::new(),
+                message: "No AI requests yet".to_string(),
+                hint: "Use the Chat tab to interact with AI agents".to_string(),
+            });
+        }
+
+        // Session totals
+        elements.push(RenderElement::SectionHeader {
+            title: "Session Totals".to_string(),
+        });
+
+        elements.push(RenderElement::InfoRow {
+            label: "Total Tokens".to_string(),
+            value: TokenMeter::format_tokens(self.token_meter.total_tokens),
+        });
+        elements.push(RenderElement::InfoRow {
+            label: "Total Cost".to_string(),
+            value: TokenMeter::format_cost(self.token_meter.total_cost),
+        });
+        elements.push(RenderElement::InfoRow {
+            label: "Total Requests".to_string(),
+            value: self.token_meter.total_requests.to_string(),
+        });
+        elements.push(RenderElement::InfoRow {
+            label: "Requests/min".to_string(),
+            value: self.token_meter.current_rpm().to_string(),
+        });
+
+        // Budget info
+        if self.token_meter.session_budget > 0.0 {
+            let status = self.token_meter.budget_status();
+            elements.push(RenderElement::SectionHeader {
+                title: format!("Budget — {}", status.label()),
+            });
+            elements.push(RenderElement::InfoRow {
+                label: "Session Budget".to_string(),
+                value: format!("{} / {}",
+                    TokenMeter::format_cost(self.token_meter.total_cost),
+                    TokenMeter::format_cost(self.token_meter.session_budget)),
+            });
+        }
+
+        if self.token_meter.monthly_budget > 0.0 {
+            elements.push(RenderElement::InfoRow {
+                label: "Monthly Budget".to_string(),
+                value: format!("{} / {}",
+                    TokenMeter::format_cost(self.token_meter.monthly_spent),
+                    TokenMeter::format_cost(self.token_meter.monthly_budget)),
+            });
+        }
+
+        // Recent requests
+        if !self.token_meter.history.is_empty() {
+            elements.push(RenderElement::SectionHeader {
+                title: "Recent Requests".to_string(),
+            });
+
+            for record in self.token_meter.history.iter().rev().take(8) {
+                elements.push(RenderElement::InfoRow {
+                    label: format!("{} — {}",
+                        record.timestamp.format("%H:%M:%S"),
+                        match record.agent {
+                            AgentRole::Voice => "Grok",
+                            AgentRole::Orchestrator => "Manus",
+                            AgentRole::Coder => "Claude",
+                            AgentRole::Auditor => "Gemini",
+                        }),
+                    value: format!("{} tokens | {} | {}ms",
+                        TokenMeter::format_tokens(record.usage.total_tokens as u64),
+                        TokenMeter::format_cost(record.cost),
+                        record.latency_ms),
+                });
+            }
+        }
+
+        PanelRender {
+            mode: self.mode,
+            elements,
+            width: self.width,
+            scroll_offset: self.scroll_offset,
+        }
+    }
+
     fn render_settings(&self) -> PanelRender {
         let mut elements = Vec::new();
         

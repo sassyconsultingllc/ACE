@@ -133,6 +133,9 @@ pub mod icons;                 // SVG icon system (replaces inline Unicode emoji
 // Self-healing health watchdog (monitors + auto-fixes browser internals)
 mod health;
 
+// AI token meter — tracks context window usage, cost, and budget across MCP agents
+mod token_meter;
+
 use std::env;
 
 fn main() {

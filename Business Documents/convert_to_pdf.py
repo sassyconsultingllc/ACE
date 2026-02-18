@@ -6,7 +6,7 @@ Converts all markdown documents in the Business Documents folder
 (and subfolders) to well-formatted, encrypted PDFs with proper metadata.
 
 Requirements:
-    pip install markdown weasyprint PyPDF2 pymdown-extensions
+    pip install markdown weasyprint PyPDF2 pymdown-extensions Pillow reportlab
 
 Usage:
     cd "V:\\sassy-browser-FIXED\\Business Documents"
@@ -34,6 +34,11 @@ from pathlib import Path
 # Configuration
 # ---------------------------------------------------------------------------
 ENCRYPTION_PASSKEY = "7981024"
+
+# Watermark image — centered on every page at low opacity
+WATERMARK_IMAGE = Path(__file__).parent / "assets" / "watermark.jpg"
+WATERMARK_OPACITY = 0.12  # 12% — visible but doesn't interfere with text
+WATERMARK_SCALE = 0.55    # 55% of page width
 
 METADATA = {
     "author":       "Sassy Consulting LLC",
@@ -404,6 +409,97 @@ def encrypt_pdf(input_path: str, output_path: str, password: str):
         writer.write(f)
 
 
+def create_watermark_pdf(output_path: str, page_width: float, page_height: float) -> str:
+    """Create a single-page PDF with the watermark image centered at low opacity."""
+    from reportlab.lib.units import inch
+    from reportlab.pdfgen import canvas
+    from PIL import Image
+    import io
+
+    if not WATERMARK_IMAGE.exists():
+        print(f"  ⚠ Watermark image not found: {WATERMARK_IMAGE}")
+        return None
+
+    # Get image dimensions to maintain aspect ratio
+    with Image.open(WATERMARK_IMAGE) as img:
+        img_w, img_h = img.size
+        aspect = img_h / img_w
+
+    # Scale watermark to configured percentage of page width
+    wm_width = page_width * WATERMARK_SCALE
+    wm_height = wm_width * aspect
+
+    # If height exceeds 40% of page, scale down by height instead
+    max_height = page_height * 0.40
+    if wm_height > max_height:
+        wm_height = max_height
+        wm_width = wm_height / aspect
+
+    # Center on page
+    x = (page_width - wm_width) / 2
+    y = (page_height - wm_height) / 2
+
+    # Create the watermark PDF
+    c = canvas.Canvas(output_path, pagesize=(page_width, page_height))
+
+    # Save state, set opacity, draw image, restore
+    c.saveState()
+    c.setFillAlpha(WATERMARK_OPACITY)
+    c.setStrokeAlpha(WATERMARK_OPACITY)
+
+    # Draw the image with transparency
+    c.drawImage(
+        str(WATERMARK_IMAGE),
+        x, y, wm_width, wm_height,
+        mask='auto',
+        preserveAspectRatio=True,
+    )
+
+    c.restoreState()
+    c.save()
+    return output_path
+
+
+def apply_watermark(input_path: str, output_path: str):
+    """Stamp the watermark image onto every page of a PDF."""
+    from PyPDF2 import PdfReader, PdfWriter
+    import tempfile
+
+    reader = PdfReader(input_path)
+    writer = PdfWriter()
+
+    # Get page dimensions from first page
+    first_page = reader.pages[0]
+    page_width = float(first_page.mediabox.width)
+    page_height = float(first_page.mediabox.height)
+
+    # Create watermark PDF in temp location
+    wm_path = tempfile.mktemp(suffix="_watermark.pdf")
+    result = create_watermark_pdf(wm_path, page_width, page_height)
+
+    if result is None:
+        # No watermark available, just copy input to output
+        import shutil
+        shutil.copy2(input_path, output_path)
+        return
+
+    try:
+        wm_reader = PdfReader(wm_path)
+        wm_page = wm_reader.pages[0]
+
+        for page in reader.pages:
+            # Merge watermark UNDER the content (so text stays on top)
+            page.merge_page(wm_page, over=False)
+            writer.add_page(page)
+
+        with open(output_path, "wb") as f:
+            writer.write(f)
+    finally:
+        # Clean up temp watermark PDF
+        if Path(wm_path).exists():
+            Path(wm_path).unlink()
+
+
 def extract_title_from_md(md_content: str) -> str:
     """Extract the first H1 heading from markdown content."""
     for line in md_content.splitlines():
@@ -436,6 +532,7 @@ def convert_single_file(md_path: str, output_dir: str = None) -> str:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     temp_pdf = out_dir / f"_temp_{pdf_name}"
+    temp_wm_pdf = out_dir / f"_temp_wm_{pdf_name}"
     final_pdf = out_dir / pdf_name
 
     try:
@@ -445,21 +542,26 @@ def convert_single_file(md_path: str, output_dir: str = None) -> str:
         # Step 2: HTML → PDF (unencrypted temp)
         html_to_pdf(html_content, str(temp_pdf))
 
-        # Step 3: Encrypt PDF and add metadata
-        encrypt_pdf(str(temp_pdf), str(final_pdf), ENCRYPTION_PASSKEY)
+        # Step 3: Apply watermark (centered, 12% opacity, every page)
+        apply_watermark(str(temp_pdf), str(temp_wm_pdf))
 
-        # Clean up temp file
-        if temp_pdf.exists():
-            temp_pdf.unlink()
+        # Step 4: Encrypt PDF and add metadata
+        encrypt_pdf(str(temp_wm_pdf), str(final_pdf), ENCRYPTION_PASSKEY)
 
-        print(f"  ✓ {md_path.name} → {pdf_name}")
+        # Clean up temp files
+        for tmp in [temp_pdf, temp_wm_pdf]:
+            if tmp.exists():
+                tmp.unlink()
+
+        print(f"  ✓ {md_path.name} → {pdf_name} (watermarked + encrypted)")
         return str(final_pdf)
 
     except Exception as e:
         print(f"  ✗ {md_path.name} — ERROR: {e}")
-        # Clean up temp file on error
-        if temp_pdf.exists():
-            temp_pdf.unlink()
+        # Clean up temp files on error
+        for tmp in [temp_pdf, temp_wm_pdf]:
+            if tmp.exists():
+                tmp.unlink()
         return None
 
 
@@ -475,9 +577,12 @@ def convert_all(base_dir: str = None):
         print("No markdown files found.")
         return
 
+    wm_status = "✓ Enabled" if WATERMARK_IMAGE.exists() else "✗ Not found"
+
     print(f"\n{'='*60}")
     print(f"  Sassy Browser — Markdown to PDF Converter")
     print(f"  Documents: {len(md_files)}")
+    print(f"  Watermark: {wm_status} ({WATERMARK_OPACITY*100:.0f}% opacity)")
     print(f"  Encryption: AES-128 (passkey configured)")
     print(f"  Metadata: Sassy Consulting LLC")
     print(f"{'='*60}\n")
@@ -558,6 +663,14 @@ def main():
         from PyPDF2 import PdfReader
     except ImportError:
         missing.append("PyPDF2")
+    try:
+        from PIL import Image
+    except ImportError:
+        missing.append("Pillow")
+    try:
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        missing.append("reportlab")
 
     if missing:
         print(f"\nMissing dependencies: {', '.join(missing)}")
@@ -571,6 +684,13 @@ def main():
             print("  macOS:   brew install pango")
             print("  Linux:   sudo apt install libpango-1.0-0 libpangocairo-1.0-0")
         sys.exit(1)
+
+    # Check watermark image
+    if WATERMARK_IMAGE.exists():
+        print(f"  Watermark: {WATERMARK_IMAGE} ({WATERMARK_IMAGE.stat().st_size // 1024}KB)")
+    else:
+        print(f"  ⚠ Watermark not found at: {WATERMARK_IMAGE}")
+        print(f"    PDFs will be generated without watermark.")
 
     if args.file:
         # Single file mode

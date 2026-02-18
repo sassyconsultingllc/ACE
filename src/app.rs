@@ -6331,7 +6331,7 @@ example.com#@#.approved-ad\n\
                 ui.horizontal(|ui| {
                     let modes = [PanelMode::Chat, PanelMode::Tasks, PanelMode::Edits, PanelMode::Settings];
                     for m in &modes {
-                        let label = match m { PanelMode::Chat=>"Chat", PanelMode::Tasks=>"Tasks", PanelMode::Edits=>"Edits", PanelMode::Settings=>"Settings" };
+                        let label = match m { PanelMode::Chat=>"Chat", PanelMode::Tasks=>"Tasks", PanelMode::Edits=>"Edits", PanelMode::Settings=>"Settings", PanelMode::TokenMeter=>"Tokens" };
                         if ui.selectable_label(std::mem::discriminant(&self.mcp_panel.mode)==std::mem::discriminant(m), RichText::new(label).color(primary)).clicked() {
                             self.mcp_panel.set_mode(m.clone());
                         }
@@ -6866,196 +6866,118 @@ fn parse_ymd(input: &str) -> Option<(i32, u32, u32)> {
 }
 
 fn configure_fonts(ctx: &egui::Context) {
-    // Brand font stack: Azo Sans (preferred) -> Space Grotesk (bundled fallback)
-    // Azo Sans is a commercial font - users can install it for brand consistency.
-    // Space Grotesk is bundled and serves as a similar modern sans-serif fallback.
+    // ────────────────────────────────────────────────
+    // Load Metamorphous for brand-consistent, crisp text
+    // Also keep Space Grotesk as a secondary fallback
+    // ────────────────────────────────────────────────
     let mut fonts = egui::FontDefinitions::default();
 
-    // Embed Space Grotesk as the primary bundled font
+    // Primary: Metamorphous (bundled)
+    let meta_bytes = include_bytes!("../assets/fonts/Metamorphous-7wZ4.ttf");
+    fonts.font_data.insert(
+        "Metamorphous".into(),
+        egui::FontData::from_static(meta_bytes),
+    );
+
+    // Secondary: Space Grotesk (bundled fallback)
     let space_bytes = include_bytes!("../Space_Grotesk/static/SpaceGrotesk-Regular.ttf");
     let fb = egui::FontData::from_static(space_bytes);
-
-    // Register Space Grotesk with common lookup keys
-    let keys = [
-        "Space Grotesk",
-        "SpaceGrotesk",
-        "Space Grotesk Regular",
-        "SpaceGrotesk-Regular",
-        // Also register as Azo Sans fallback for theme compatibility
-        "Azo Sans",
-    ];
-    for &k in &keys {
+    for &k in &["Space Grotesk", "SpaceGrotesk", "Azo Sans"] {
         fonts.font_data.insert(k.into(), fb.clone());
     }
 
-    // Set Space Grotesk as the primary proportional font
+    // Metamorphous first, Space Grotesk second, then system defaults
     fonts
         .families
         .entry(egui::FontFamily::Proportional)
         .or_default()
-        .insert(0, "Space Grotesk".into());
+        .insert(0, "Metamorphous".into());
+    fonts
+        .families
+        .get_mut(&egui::FontFamily::Proportional)
+        .unwrap()
+        .insert(1, "Space Grotesk".into());
+
+    // Also set Metamorphous for monospace so UI is consistent
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .insert(0, "Metamorphous".into());
 
     ctx.set_fonts(fonts);
 }
 
-fn configure_style(ctx: &egui::Context, dark_mode: bool, preset: ThemePreset) {
-    // Brand palette from style guide
-    // Brand Purple: #6C63FF - Primary accent
-    // Dark Blue: #101E32 - Primary background
-    // Dark Gray: #2E384B - Panels/surfaces
-    // Yellow: #FEC337 - Highlights/warnings
-    // Light Gray: #F6F6F6 - Text on dark
-
-    let accent = Color32::from_rgb(0x6C, 0x63, 0xFF); // Brand Purple
-    let accent_hover = Color32::from_rgb(0x7D, 0x75, 0xFF); // Lighter purple for hover
-    let accent_active = Color32::from_rgb(0x5B, 0x53, 0xE6); // Darker purple for active
-    let yellow = Color32::from_rgb(0xFE, 0xC3, 0x37); // Yellow highlight
+fn configure_style(ctx: &egui::Context, dark_mode: bool, _preset: ThemePreset) {
+    // ────────────────────────────────────────────────
+    // Concise, modern styling — brand colors + crisp feel
+    // ────────────────────────────────────────────────
+    let accent  = Color32::from_rgb(108,  99, 255);   // #6C63FF  Brand Purple
+    let yellow  = Color32::from_rgb(254, 195,  55);   // #FEC337  Highlight
+    let bg_dark = Color32::from_rgb( 16,  30,  50);   // #101E32  Deep navy
+    let bg_mid  = Color32::from_rgb( 46,  56,  75);   // #2E384B  Panel surface
 
     let mut visuals = if dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
 
     if dark_mode {
-        match preset {
-            ThemePreset::SassyRedesign => {
-                // Sassy Redesign dark theme (from sassy-redesign prototype)
-                visuals.window_fill = Color32::from_rgb(13, 17, 23);        // #0D1117
-                visuals.panel_fill = Color32::from_rgb(13, 17, 23);         // #0D1117
-                visuals.extreme_bg_color = Color32::from_rgb(8, 10, 15);
-                visuals.faint_bg_color = Color32::from_rgb(22, 27, 34);     // #161B22
-
-                visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(13, 17, 23);
-                visuals.widgets.inactive.bg_fill = Color32::from_rgb(22, 27, 34);   // #161B22
-                visuals.widgets.hovered.bg_fill = Color32::from_rgb(48, 54, 61);    // #30363D
-                visuals.widgets.active.bg_fill = Color32::from_rgb(33, 38, 45);     // #21262D
-
-                visuals.override_text_color = Some(Color32::from_rgb(0xE6, 0xED, 0xF3));
-                visuals.selection.bg_fill = accent;
-                visuals.selection.stroke = egui::Stroke::new(1.5, accent_active);
-                visuals.hyperlink_color = yellow;
-
-                visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(0x8B, 0x94, 0x9E));
-                visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, accent_hover);
-                visuals.widgets.active.fg_stroke = egui::Stroke::new(2.0, accent);
-            }
-            ThemePreset::SassyBrand => {
-                // Original SassyBrand palette
-                // Dark Blue background (#101E32)
-                visuals.window_fill = Color32::from_rgb(0x10, 0x1E, 0x32);
-                // Dark Gray for panels (#2E384B)
-                visuals.panel_fill = Color32::from_rgb(0x2E, 0x38, 0x4B);
-                visuals.extreme_bg_color = Color32::from_rgb(0x0A, 0x14, 0x24);
-                visuals.faint_bg_color = Color32::from_rgb(0x38, 0x44, 0x58);
-
-                visuals.widgets.noninteractive.bg_fill = visuals.panel_fill;
-                visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x38, 0x44, 0x58);
-                visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x44, 0x50, 0x66);
-                visuals.widgets.active.bg_fill = Color32::from_rgb(0x50, 0x5C, 0x74);
-
-                visuals.override_text_color = Some(Color32::from_rgb(0xF6, 0xF6, 0xF6));
-                visuals.selection.bg_fill = accent;
-                visuals.selection.stroke = egui::Stroke::new(1.5, accent_active);
-                visuals.hyperlink_color = yellow;
-
-                visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(0x80, 0x8A, 0x9E));
-                visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, accent_hover);
-                visuals.widgets.active.fg_stroke = egui::Stroke::new(2.0, accent);
-            }
-        }
+        visuals.window_fill       = bg_dark;
+        visuals.panel_fill        = bg_mid;
+        visuals.extreme_bg_color  = Color32::from_rgb(10, 20, 36);
+        visuals.faint_bg_color    = bg_mid.gamma_multiply(1.2);
+        visuals.override_text_color = Some(Color32::from_rgb(230, 237, 243));
+        visuals.hyperlink_color     = yellow;
+        visuals.selection.bg_fill   = accent.gamma_multiply(0.35);
+        visuals.selection.stroke    = egui::Stroke::new(1.5, accent);
     } else {
-        // Light mode with brand colors
-        visuals.window_fill = Color32::from_rgb(0xF6, 0xF6, 0xF6); // Light Gray
-        visuals.panel_fill = Color32::from_rgb(0xEE, 0xEE, 0xF2);
-        visuals.extreme_bg_color = Color32::from_rgb(0xFF, 0xFF, 0xFF);
-        visuals.faint_bg_color = Color32::from_rgb(0xE8, 0xE8, 0xEC);
-
-        visuals.widgets.noninteractive.bg_fill = visuals.panel_fill;
-        visuals.widgets.inactive.bg_fill = Color32::from_rgb(0xE4, 0xE4, 0xE8);
-        visuals.widgets.hovered.bg_fill = Color32::from_rgb(0xD8, 0xD8, 0xDE);
-        visuals.widgets.active.bg_fill = Color32::from_rgb(0xCC, 0xCC, 0xD4);
-
-        // Dark Blue text on light background (#101E32)
-        visuals.override_text_color = Some(Color32::from_rgb(0x10, 0x1E, 0x32));
-
-        // Brand Purple for accents
-        visuals.hyperlink_color = accent;
-        visuals.selection.bg_fill = Color32::from_rgb(0xB8, 0xB4, 0xFF); // Light purple
-        visuals.selection.stroke = egui::Stroke::new(1.5, accent);
+        visuals.window_fill       = Color32::from_rgb(246, 246, 246);
+        visuals.panel_fill        = Color32::WHITE;
+        visuals.override_text_color = Some(bg_dark);
+        visuals.hyperlink_color     = accent;
+        visuals.selection.bg_fill   = Color32::from_rgb(184, 180, 255);
+        visuals.selection.stroke    = egui::Stroke::new(1.5, accent);
     }
 
-    // Window chrome styling
-    visuals.window_stroke = egui::Stroke::new(2.0, Color32::from_rgba_unmultiplied(0x2E, 0x38, 0x4B, 200));
-    visuals.window_rounding = egui::Rounding::same(16.0);
-    visuals.menu_rounding = egui::Rounding::same(12.0);
+    // Slim chrome & consistent rounding
+    visuals.window_rounding = egui::Rounding::same(10.0);
+    visuals.menu_rounding   = egui::Rounding::same(8.0);
+    let widget_r = egui::Rounding::same(8.0);
+    for w in [
+        &mut visuals.widgets.noninteractive,
+        &mut visuals.widgets.inactive,
+        &mut visuals.widgets.hovered,
+        &mut visuals.widgets.active,
+        &mut visuals.widgets.open,
+    ] {
+        w.rounding = widget_r;
+    }
 
-    // Consistent rounding for all widgets
-    let rounding = egui::Rounding::same(12.0);
-    visuals.widgets.noninteractive.rounding = rounding;
-    visuals.widgets.inactive.rounding = rounding;
-    visuals.widgets.hovered.rounding = rounding;
-    visuals.widgets.active.rounding = rounding;
-    visuals.widgets.open.rounding = rounding;
-
-    // Modern elevated shadow with brand dark blue tint
     visuals.window_shadow = egui::Shadow {
-        offset: egui::vec2(0.0, 16.0),
-        blur: 40.0,
-        spread: 8.0,
-        color: Color32::from_rgba_unmultiplied(0x10, 0x1E, 0x32, 140),
+        offset: egui::vec2(0.0, 6.0), blur: 16.0, spread: 0.0,
+        color: Color32::from_black_alpha(60),
     };
-
-    // Menu shadow (slightly smaller than windows)
     visuals.popup_shadow = egui::Shadow {
-        offset: egui::vec2(0.0, 8.0),
-        blur: 24.0,
-        spread: 4.0,
-        color: Color32::from_rgba_unmultiplied(0x10, 0x1E, 0x32, 100),
+        offset: egui::vec2(0.0, 4.0), blur: 12.0, spread: 0.0,
+        color: Color32::from_black_alpha(50),
     };
-
-    // Clip rect shadow for floating elements
-    visuals.clip_rect_margin = 3.0;
 
     ctx.set_visuals(visuals);
 
-    // Typographic scale + spacing tweaks
+    // ────────────────────────────────────────────────
+    // Tight typography & spacing
+    // ────────────────────────────────────────────────
     let mut style = (*ctx.style()).clone();
-    style.text_styles.insert(egui::TextStyle::Heading, FontId::proportional(22.0));
-    style.text_styles.insert(egui::TextStyle::Body, FontId::proportional(16.0));
-    style.text_styles.insert(egui::TextStyle::Monospace, FontId::monospace(15.0));
-    style.text_styles.insert(egui::TextStyle::Button, FontId::proportional(15.0));
-    style.text_styles.insert(egui::TextStyle::Small, FontId::proportional(13.5));
+    style.text_styles.insert(egui::TextStyle::Small,     FontId::proportional(12.5));
+    style.text_styles.insert(egui::TextStyle::Body,      FontId::proportional(14.5));
+    style.text_styles.insert(egui::TextStyle::Monospace,  FontId::monospace(13.0));
+    style.text_styles.insert(egui::TextStyle::Button,    FontId::proportional(14.5));
+    style.text_styles.insert(egui::TextStyle::Heading,   FontId::proportional(19.0));
 
-    style.spacing.item_spacing = egui::vec2(10.0, 8.0);
-    style.spacing.button_padding = egui::vec2(12.0, 10.0);
-    style.spacing.menu_margin = egui::Margin::symmetric(12.0, 10.0);
-    style.spacing.slider_width = 180.0;
-    style.spacing.interact_size = egui::vec2(40.0, 28.0);
-    style.spacing.scroll = egui::style::ScrollStyle {
-        floating: true,                    // Floating scrollbars (appear on hover)
-        bar_width: 8.0,                    // Slim scrollbar
-        handle_min_length: 24.0,           // Minimum handle size
-        bar_inner_margin: 4.0,             // Margin from content
-        bar_outer_margin: 0.0,
-        floating_width: 6.0,               // Width when floating
-        floating_allocated_width: 0.0,     // No space reserved when hidden
-        foreground_color: true,            // Use foreground color for handle
-        dormant_background_opacity: 0.0,   // Fully hidden when dormant
-        active_background_opacity: 0.4,    // Semi-visible background on hover
-        interact_background_opacity: 0.6,  // More visible when interacting
-        dormant_handle_opacity: 0.0,       // Hidden handle when dormant
-        active_handle_opacity: 0.7,        // Visible handle on hover
-        interact_handle_opacity: 1.0,      // Full opacity when interacting
-    };
-
-    // Smooth animations
-    style.animation_time = 0.15;           // 150ms hover transitions
-    style.explanation_tooltips = true;     // Show helpful tooltips
-
-    // Popup shadow with brand color tint
-    style.visuals.popup_shadow = egui::Shadow {
-        offset: egui::vec2(0.0, 12.0),
-        blur: 32.0,
-        spread: 4.0,
-        color: Color32::from_rgba_unmultiplied(0x10, 0x1E, 0x32, 120),
-    };
+    style.spacing.item_spacing     = egui::vec2(9.0, 7.0);
+    style.spacing.button_padding   = egui::vec2(12.0, 7.0);
+    style.spacing.menu_margin      = egui::Margin::symmetric(12.0, 10.0);
+    style.spacing.interact_size    = egui::vec2(40.0, 24.0);
+    style.spacing.scroll.bar_width = 7.0;
+    style.animation_time           = 0.12;
 
     ctx.set_style(style);
 }
