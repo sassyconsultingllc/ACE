@@ -1,4 +1,4 @@
-# SASSY BROWSER v2.0.0
+# SASSY BROWSER
 
 **Universal File Viewer & Browser — Pure Rust — Zero Paid Dependencies**
 
