@@ -32,10 +32,12 @@ impl Icons {
             // 3. Relative to exe's grandparent (common for target/debug/ or target/release/)
             std::env::current_exe()
                 .ok()
-                .and_then(|p| p.parent()
-                    .and_then(|p| p.parent())
-                    .and_then(|p| p.parent())
-                    .map(|p| p.join("assets/icons/svg")))
+                .and_then(|p| {
+                    p.parent()
+                        .and_then(|p| p.parent())
+                        .and_then(|p| p.parent())
+                        .map(|p| p.join("assets/icons/svg"))
+                })
                 .unwrap_or_default(),
             // 4. Compile-time manifest dir (works during cargo run)
             PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/svg")),
@@ -86,11 +88,7 @@ impl Icons {
     }
 
     /// Rasterize a single SVG file to an egui texture at a fixed pixel size.
-    fn load_svg(
-        ctx: &egui::Context,
-        path: &std::path::Path,
-        name: &str,
-    ) -> Option<TextureHandle> {
+    fn load_svg(ctx: &egui::Context, path: &std::path::Path, name: &str) -> Option<TextureHandle> {
         let svg_data = std::fs::read(path).ok()?;
         let opt = usvg::Options::default();
         let tree = usvg::Tree::from_data(&svg_data, &opt).ok()?;
@@ -142,12 +140,7 @@ impl Icons {
     }
 
     /// Render a clickable icon button. Returns the Response.
-    pub fn button(
-        &self,
-        ui: &mut egui::Ui,
-        name: &str,
-        tooltip: &str,
-    ) -> egui::Response {
+    pub fn button(&self, ui: &mut egui::Ui, name: &str, tooltip: &str) -> egui::Response {
         self.button_sized(ui, name, tooltip, DEFAULT_ICON_SIZE)
     }
 
@@ -170,12 +163,7 @@ impl Icons {
 
     /// Render an icon followed by a text label, side by side.
     /// Useful for "Extract All", "Add Files", etc.
-    pub fn label_with_icon(
-        &self,
-        ui: &mut egui::Ui,
-        icon_name: &str,
-        text: &str,
-    ) {
+    pub fn label_with_icon(&self, ui: &mut egui::Ui, icon_name: &str, text: &str) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             if let Some(tex) = self.textures.get(icon_name) {

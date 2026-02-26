@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::sync::{UserManager, FamilyConfig};
+use crate::sync::{FamilyConfig, UserManager};
 
 /// Get the data directory for Sassy Browser
 pub fn data_dir() -> PathBuf {
@@ -80,13 +80,13 @@ pub struct PrivacySettings {
 impl Default for PrivacySettings {
     fn default() -> Self {
         Self {
-            data_stays_local: true,     // Always true - core promise
-            zero_telemetry: true,        // Always true - no exceptions
-            no_crash_reports: true,      // No external reporting
-            block_trackers: true,        // On by default
-            poison_fingerprints: true,   // On by default
-            clear_on_exit: false,        // User choice
-            dns_over_https: true,        // On by default
+            data_stays_local: true,    // Always true - core promise
+            zero_telemetry: true,      // Always true - no exceptions
+            no_crash_reports: true,    // No external reporting
+            block_trackers: true,      // On by default
+            poison_fingerprints: true, // On by default
+            clear_on_exit: false,      // User choice
+            dns_over_https: true,      // On by default
         }
     }
 }
@@ -166,7 +166,7 @@ impl Config {
             .and_then(|s| toml::from_str(&s).ok())
             .unwrap_or_default()
     }
-    
+
     pub fn save(&self) -> Result<(), String> {
         let path = config_dir().join("config.toml");
         let content = toml::to_string_pretty(self).map_err(|e| e.to_string())?;
@@ -228,7 +228,7 @@ impl UserData {
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default()
     }
-    
+
     pub fn save(&self) -> Result<(), String> {
         let path = data_dir().join("users.json");
         let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
@@ -308,7 +308,9 @@ pub struct QuarantinedFileState {
 
 impl SessionRestore {
     pub fn load(user_id: &str) -> Option<Self> {
-        let path = data_dir().join("sessions").join(format!("{}.json", user_id));
+        let path = data_dir()
+            .join("sessions")
+            .join(format!("{}.json", user_id));
         fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())

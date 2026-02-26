@@ -6,7 +6,6 @@
 // Weekly reports. FINALLY, PARENTAL CONTROLS THAT WORK.
 // ==============================================================================
 
-
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -16,10 +15,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ProfileType {
-    Admin,   // Full control, manages other profiles
-    Adult,   // No restrictions
-    Teen,    // Some restrictions, can request access
-    Kid,     // Heavy restrictions, needs approval for most things
+    Admin, // Full control, manages other profiles
+    Adult, // No restrictions
+    Teen,  // Some restrictions, can request access
+    Kid,   // Heavy restrictions, needs approval for most things
 }
 
 impl ProfileType {
@@ -31,7 +30,7 @@ impl ProfileType {
             ProfileType::Kid => "",
         }
     }
-    
+
     pub fn color(&self) -> [u8; 3] {
         match self {
             ProfileType::Admin => [255, 215, 0],   // Gold
@@ -40,7 +39,7 @@ impl ProfileType {
             ProfileType::Kid => [255, 200, 100],   // Orange
         }
     }
-    
+
     pub fn default_restrictions(&self) -> Restrictions {
         match self {
             ProfileType::Admin | ProfileType::Adult => Restrictions::none(),
@@ -59,8 +58,8 @@ pub struct Profile {
     pub id: String,
     pub name: String,
     pub profile_type: ProfileType,
-    pub avatar: Option<String>,       // Path to avatar image or emoji
-    pub pin: Option<String>,          // Hashed PIN for profile switching
+    pub avatar: Option<String>, // Path to avatar image or emoji
+    pub pin: Option<String>,    // Hashed PIN for profile switching
     pub created_at: u64,
     pub last_active: u64,
     pub restrictions: Restrictions,
@@ -74,7 +73,7 @@ impl Profile {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         Self {
             id: generate_id(),
             name: name.to_string(),
@@ -88,19 +87,21 @@ impl Profile {
             usage_stats: UsageStats::default(),
         }
     }
-    
+
     pub fn is_restricted(&self) -> bool {
         !matches!(self.profile_type, ProfileType::Admin | ProfileType::Adult)
     }
-    
+
     pub fn requires_approval(&self, action: &Action) -> bool {
         match &self.profile_type {
             ProfileType::Admin | ProfileType::Adult => false,
             ProfileType::Teen => {
-                matches!(action, 
-                    Action::InstallExtension | 
-                    Action::ChangeSettings |
-                    Action::AccessBlockedSite(_))
+                matches!(
+                    action,
+                    Action::InstallExtension
+                        | Action::ChangeSettings
+                        | Action::AccessBlockedSite(_)
+                )
             }
             ProfileType::Kid => true, // Kids need approval for everything significant
         }
@@ -118,29 +119,29 @@ pub struct Restrictions {
     pub block_violence: bool,
     pub block_gambling: bool,
     pub block_social_media: bool,
-    pub use_allowlist_only: bool,        // Only allow sites on allowlist
+    pub use_allowlist_only: bool, // Only allow sites on allowlist
     pub allowlist: HashSet<String>,
     pub blocklist: HashSet<String>,
-    
+
     // Download restrictions
     pub downloads_need_approval: bool,
     pub block_executable_downloads: bool,
     pub max_download_size_mb: Option<u64>,
-    
+
     // Time limits
     pub daily_limit_minutes: Option<u32>,
-    pub bedtime_start: Option<(u8, u8)>,  // (hour, minute) 24h format
+    pub bedtime_start: Option<(u8, u8)>, // (hour, minute) 24h format
     pub bedtime_end: Option<(u8, u8)>,
     pub weekday_limit_minutes: Option<u32>,
     pub weekend_limit_minutes: Option<u32>,
-    
+
     // Content restrictions
     pub safe_search_enforced: bool,
     pub block_incognito: bool,
     pub block_vpn_proxy: bool,
     pub block_extension_install: bool,
     pub block_settings_access: bool,
-    
+
     // Activity monitoring
     pub log_all_visits: bool,
     pub send_weekly_report: bool,
@@ -175,7 +176,7 @@ impl Restrictions {
             notify_blocked_attempts: false,
         }
     }
-    
+
     pub fn teen_default() -> Self {
         let mut r = Self::none();
         r.block_nsfw = true;
@@ -186,20 +187,20 @@ impl Restrictions {
         r.send_weekly_report = true;
         r
     }
-    
+
     pub fn kid_default() -> Self {
         let mut r = Self::teen_default();
         r.block_violence = true;
         r.block_social_media = true;
         r.downloads_need_approval = true;
         r.daily_limit_minutes = Some(120); // 2 hours
-        r.bedtime_start = Some((20, 0));   // 8 PM
-        r.bedtime_end = Some((7, 0));      // 7 AM
+        r.bedtime_start = Some((20, 0)); // 8 PM
+        r.bedtime_end = Some((7, 0)); // 7 AM
         r.block_incognito = true;
         r.block_extension_install = true;
         r.block_settings_access = true;
         r.notify_blocked_attempts = true;
-        
+
         // Default allowlist for kids
         r.allowlist.insert("youtube.com".to_string());
         r.allowlist.insert("khanacademy.org".to_string());
@@ -209,7 +210,7 @@ impl Restrictions {
         r.allowlist.insert("coolmathgames.com".to_string());
         r.allowlist.insert("nationalgeographic.com".to_string());
         r.allowlist.insert("wikipedia.org".to_string());
-        
+
         r
     }
 }
@@ -222,7 +223,7 @@ impl Restrictions {
 pub struct UsageStats {
     pub total_time_minutes: u64,
     pub today_time_minutes: u32,
-    pub last_reset_date: u64,           // Unix timestamp of last daily reset
+    pub last_reset_date: u64, // Unix timestamp of last daily reset
     pub sites_visited: HashMap<String, u32>, // domain -> visit count
     pub blocked_attempts: Vec<BlockedAttempt>,
     pub downloads: Vec<DownloadRecord>,
@@ -281,9 +282,15 @@ pub struct DownloadRecord {
 
 #[derive(Debug, Clone)]
 pub enum Action {
-    Download { filename: String, url: String, size: u64 },
+    Download {
+        filename: String,
+        url: String,
+        size: u64,
+    },
     AccessBlockedSite(String),
-    ExtendTimeLimit { minutes: u32 },
+    ExtendTimeLimit {
+        minutes: u32,
+    },
     InstallExtension,
     ChangeSettings,
     AddToAllowlist(String),
@@ -320,7 +327,7 @@ pub struct WeeklyReport {
     pub week_start: u64,
     pub week_end: u64,
     pub total_time_minutes: u32,
-    pub daily_breakdown: [u32; 7],  // Minutes per day, Mon-Sun
+    pub daily_breakdown: [u32; 7],     // Minutes per day, Mon-Sun
     pub top_sites: Vec<(String, u32)>, // (domain, minutes)
     pub blocked_attempts: u32,
     pub downloads: u32,
@@ -341,10 +348,10 @@ pub struct ProfileManager {
 }
 
 impl ProfileManager {
-        /// Public getter for all approval requests (for UI display)
-        pub fn all_approval_requests(&self) -> &[ApprovalRequest] {
-            &self.approval_requests
-        }
+    /// Public getter for all approval requests (for UI display)
+    pub fn all_approval_requests(&self) -> &[ApprovalRequest] {
+        &self.approval_requests
+    }
     pub fn new() -> Self {
         Self {
             profiles: Vec::new(),
@@ -354,11 +361,11 @@ impl ProfileManager {
             last_activity: std::time::Instant::now(),
         }
     }
-    
+
     // ==============================================================================
     // PROFILE MANAGEMENT
     // ==============================================================================
-    
+
     pub fn create_admin(&mut self, name: &str, pin: &str) -> String {
         let mut profile = Profile::new(name, ProfileType::Admin);
         profile.pin = Some(hash_pin(pin));
@@ -366,8 +373,13 @@ impl ProfileManager {
         self.profiles.push(profile);
         id
     }
-    
-    pub fn create_profile(&mut self, name: &str, profile_type: ProfileType, parent_id: Option<&str>) -> Result<String, String> {
+
+    pub fn create_profile(
+        &mut self,
+        name: &str,
+        profile_type: ProfileType,
+        parent_id: Option<&str>,
+    ) -> Result<String, String> {
         // Verify parent exists for restricted profiles
         if matches!(profile_type, ProfileType::Teen | ProfileType::Kid) {
             if let Some(pid) = parent_id {
@@ -375,42 +387,50 @@ impl ProfileManager {
                 if parent.is_none() {
                     return Err("Parent profile not found".to_string());
                 }
-                if !matches!(parent.unwrap().profile_type, ProfileType::Admin | ProfileType::Adult) {
+                if !matches!(
+                    parent.unwrap().profile_type,
+                    ProfileType::Admin | ProfileType::Adult
+                ) {
                     return Err("Parent must be Admin or Adult".to_string());
                 }
             } else {
                 return Err("Teen/Kid profiles require a parent".to_string());
             }
         }
-        
+
         let mut profile = Profile::new(name, profile_type);
         profile.parent_profile_id = parent_id.map(|s| s.to_string());
         let id = profile.id.clone();
         self.profiles.push(profile);
         Ok(id)
     }
-    
+
     pub fn delete_profile(&mut self, id: &str) -> Result<(), String> {
         // Can't delete the last admin
-        let admin_count = self.profiles.iter()
+        let admin_count = self
+            .profiles
+            .iter()
             .filter(|p| p.profile_type == ProfileType::Admin && p.id != id)
             .count();
-        
+
         let profile = self.profiles.iter().find(|p| p.id == id);
         if let Some(p) = profile {
             if p.profile_type == ProfileType::Admin && admin_count == 0 {
                 return Err("Cannot delete the last admin profile".to_string());
             }
         }
-        
+
         self.profiles.retain(|p| p.id != id);
         Ok(())
     }
-    
+
     pub fn switch_profile(&mut self, id: &str, pin: Option<&str>) -> Result<(), String> {
-        let profile = self.profiles.iter().find(|p| p.id == id)
+        let profile = self
+            .profiles
+            .iter()
+            .find(|p| p.id == id)
             .ok_or("Profile not found")?;
-        
+
         // Verify PIN if set
         if let Some(stored_pin) = &profile.pin {
             let provided_pin = pin.ok_or("PIN required")?;
@@ -418,15 +438,15 @@ impl ProfileManager {
                 return Err("Incorrect PIN".to_string());
             }
         }
-        
+
         // Check if profile is allowed at this time
         if let Some(reason) = self.check_time_restrictions(&profile.restrictions) {
             return Err(reason.description().to_string());
         }
-        
+
         self.active_profile_id = Some(id.to_string());
         self.session_start = std::time::Instant::now();
-        
+
         // Update last_active
         if let Some(p) = self.profiles.iter_mut().find(|p| p.id == id) {
             p.last_active = SystemTime::now()
@@ -434,128 +454,139 @@ impl ProfileManager {
                 .unwrap()
                 .as_secs();
         }
-        
+
         Ok(())
     }
-    
+
     pub fn active_profile(&self) -> Option<&Profile> {
-        self.active_profile_id.as_ref()
+        self.active_profile_id
+            .as_ref()
             .and_then(|id| self.profiles.iter().find(|p| &p.id == id))
     }
-    
+
     pub fn active_profile_mut(&mut self) -> Option<&mut Profile> {
         let id = self.active_profile_id.clone()?;
         self.profiles.iter_mut().find(|p| p.id == id)
     }
-    
+
     pub fn profiles(&self) -> &[Profile] {
         &self.profiles
     }
-    
+
     pub fn get_profile(&self, id: &str) -> Option<&Profile> {
         self.profiles.iter().find(|p| p.id == id)
     }
-    
+
     pub fn get_profile_mut(&mut self, id: &str) -> Option<&mut Profile> {
         self.profiles.iter_mut().find(|p| p.id == id)
     }
-    
+
     // ==============================================================================
     // ACCESS CONTROL
     // ==============================================================================
-    
+
     pub fn can_access_url(&mut self, url: &str) -> Result<(), BlockReason> {
         let profile = match self.active_profile() {
             Some(p) => p.clone(),
             None => return Ok(()), // No profile = no restrictions
         };
-        
+
         let restrictions = &profile.restrictions;
         let domain = crate::fontcase::ascii_lower(&extract_domain(url));
-        
+
         // Check time limits first
         if let Some(reason) = self.check_time_restrictions(restrictions) {
             self.record_blocked_attempt(url, reason.clone());
             return Err(reason);
         }
-        
+
         // Check allowlist mode
         if restrictions.use_allowlist_only
-            && !restrictions.allowlist.iter().any(|a| domain.contains(&crate::fontcase::ascii_lower(a))) {
-                let reason = BlockReason::NotOnAllowlist;
-                self.record_blocked_attempt(url, reason.clone());
-                return Err(reason);
-            }
-        
+            && !restrictions
+                .allowlist
+                .iter()
+                .any(|a| domain.contains(&crate::fontcase::ascii_lower(a)))
+        {
+            let reason = BlockReason::NotOnAllowlist;
+            self.record_blocked_attempt(url, reason.clone());
+            return Err(reason);
+        }
+
         // Check blocklist
-        if restrictions.blocklist.iter().any(|b| domain.contains(&crate::fontcase::ascii_lower(b))) {
+        if restrictions
+            .blocklist
+            .iter()
+            .any(|b| domain.contains(&crate::fontcase::ascii_lower(b)))
+        {
             let reason = BlockReason::OnBlocklist;
             self.record_blocked_attempt(url, reason.clone());
             return Err(reason);
         }
-        
+
         // Check content categories
         if restrictions.block_nsfw && is_nsfw_domain(&domain) {
             let reason = BlockReason::Nsfw;
             self.record_blocked_attempt(url, reason.clone());
             return Err(reason);
         }
-        
+
         if restrictions.block_gambling && is_gambling_domain(&domain) {
             let reason = BlockReason::Gambling;
             self.record_blocked_attempt(url, reason.clone());
             return Err(reason);
         }
-        
+
         if restrictions.block_social_media && is_social_media_domain(&domain) {
             let reason = BlockReason::SocialMedia;
             self.record_blocked_attempt(url, reason.clone());
             return Err(reason);
         }
-        
+
         Ok(())
     }
-    
+
     pub fn can_download(&self, filename: &str, size: u64) -> Result<(), String> {
         let profile = match self.active_profile() {
             Some(p) => p,
             None => return Ok(()),
         };
-        
+
         let restrictions = &profile.restrictions;
-        
+
         if restrictions.downloads_need_approval {
             return Err("Download requires parent approval".to_string());
         }
-        
+
         if restrictions.block_executable_downloads {
             let ext = crate::fontcase::ascii_lower(filename.rsplit('.').next().unwrap_or(""));
-            let executables = ["exe", "msi", "bat", "cmd", "ps1", "sh", "app", "dmg", "deb", "rpm"];
+            let executables = [
+                "exe", "msi", "bat", "cmd", "ps1", "sh", "app", "dmg", "deb", "rpm",
+            ];
             if executables.contains(&ext.as_str()) {
                 return Err("Executable downloads are blocked".to_string());
             }
         }
-        
+
         if let Some(max_mb) = restrictions.max_download_size_mb {
             if size > max_mb * 1024 * 1024 {
                 return Err(format!("File too large (max {} MB)", max_mb));
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn check_time_restrictions(&self, restrictions: &Restrictions) -> Option<BlockReason> {
         let now = chrono_lite::now();
         let (hour, minute) = (now.hour, now.minute);
         let is_weekend = now.weekday >= 5;
-        
+
         // Check bedtime
         if let (Some(start), Some(end)) = (restrictions.bedtime_start, restrictions.bedtime_end) {
             let current_mins = hour as u32 * 60 + minute as u32;
             let start_mins = start.0 as u32 * 60 + start.1 as u32;
             let end_mins = end.0 as u32 * 60 + end.1 as u32;
-            
+
             // Handle overnight bedtime (e.g., 20:00 - 07:00)
             if start_mins > end_mins {
                 if current_mins >= start_mins || current_mins < end_mins {
@@ -565,25 +596,29 @@ impl ProfileManager {
                 return Some(BlockReason::Bedtime);
             }
         }
-        
+
         // Check daily limit
         if let Some(profile) = self.active_profile() {
             let limit = if is_weekend {
-                restrictions.weekend_limit_minutes.or(restrictions.daily_limit_minutes)
+                restrictions
+                    .weekend_limit_minutes
+                    .or(restrictions.daily_limit_minutes)
             } else {
-                restrictions.weekday_limit_minutes.or(restrictions.daily_limit_minutes)
+                restrictions
+                    .weekday_limit_minutes
+                    .or(restrictions.daily_limit_minutes)
             };
-            
+
             if let Some(limit_mins) = limit {
                 if profile.usage_stats.today_time_minutes >= limit_mins {
                     return Some(BlockReason::TimeLimitReached);
                 }
             }
         }
-        
+
         None
     }
-    
+
     fn record_blocked_attempt(&mut self, url: &str, reason: BlockReason) {
         if let Some(profile) = self.active_profile_mut() {
             if profile.restrictions.log_all_visits || profile.restrictions.notify_blocked_attempts {
@@ -598,16 +633,16 @@ impl ProfileManager {
             }
         }
     }
-    
+
     // ==============================================================================
     // USAGE TRACKING
     // ==============================================================================
-    
+
     pub fn record_activity(&mut self) {
         let now = std::time::Instant::now();
         let elapsed = now.duration_since(self.last_activity);
         self.last_activity = now;
-        
+
         // Only count if less than 5 minutes since last activity
         if elapsed < Duration::from_secs(300) {
             if let Some(profile) = self.active_profile_mut() {
@@ -617,18 +652,27 @@ impl ProfileManager {
             }
         }
     }
-    
+
     pub fn record_site_visit(&mut self, domain: &str) {
         if let Some(profile) = self.active_profile_mut() {
             if profile.restrictions.log_all_visits {
-                *profile.usage_stats.sites_visited
+                *profile
+                    .usage_stats
+                    .sites_visited
                     .entry(domain.to_string())
                     .or_insert(0) += 1;
             }
         }
     }
 
-    pub fn record_download(&mut self, filename: &str, url: &str, size_bytes: u64, approved: bool, approved_by: Option<String>) {
+    pub fn record_download(
+        &mut self,
+        filename: &str,
+        url: &str,
+        size_bytes: u64,
+        approved: bool,
+        approved_by: Option<String>,
+    ) {
         if let Some(profile) = self.active_profile_mut() {
             profile.usage_stats.downloads.push(DownloadRecord {
                 timestamp: SystemTime::now()
@@ -643,7 +687,7 @@ impl ProfileManager {
             });
         }
     }
-    
+
     pub fn record_search(&mut self, query: &str) {
         if let Some(profile) = self.active_profile_mut() {
             if profile.restrictions.log_all_visits {
@@ -655,13 +699,14 @@ impl ProfileManager {
             }
         }
     }
-    
+
     pub fn reset_daily_stats(&mut self) {
         let today = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() / 86400;
-        
+            .as_secs()
+            / 86400;
+
         for profile in &mut self.profiles {
             let last_reset = profile.usage_stats.last_reset_date / 86400;
             if today > last_reset {
@@ -670,19 +715,19 @@ impl ProfileManager {
             }
         }
     }
-    
+
     pub fn remaining_time_minutes(&self) -> Option<u32> {
         let profile = self.active_profile()?;
         let restrictions = &profile.restrictions;
-        
+
         let limit = restrictions.daily_limit_minutes?;
         Some(limit.saturating_sub(profile.usage_stats.today_time_minutes))
     }
-    
+
     // ==============================================================================
     // APPROVAL REQUESTS
     // ==============================================================================
-    
+
     pub fn request_approval(&mut self, action: Action) -> String {
         let request = ApprovalRequest {
             id: generate_id(),
@@ -696,88 +741,111 @@ impl ProfileManager {
             parent_response: None,
             responded_at: None,
         };
-        
+
         let id = request.id.clone();
         self.approval_requests.push(request);
         id
     }
-    
+
     pub fn approve_request(&mut self, request_id: &str, parent_id: &str) -> Result<(), String> {
-        let request = self.approval_requests.iter_mut()
+        let request = self
+            .approval_requests
+            .iter_mut()
             .find(|r| r.id == request_id)
             .ok_or("Request not found")?;
-        
+
         // Verify parent has permission
-        let parent = self.profiles.iter().find(|p| p.id == parent_id)
+        let parent = self
+            .profiles
+            .iter()
+            .find(|p| p.id == parent_id)
             .ok_or("Parent profile not found")?;
-        
+
         if !matches!(parent.profile_type, ProfileType::Admin | ProfileType::Adult) {
             return Err("Only Admin/Adult can approve requests".to_string());
         }
-        
+
         request.status = ApprovalStatus::Approved;
-        request.responded_at = Some(SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs());
-        
+        request.responded_at = Some(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        );
+
         Ok(())
     }
-    
-    pub fn deny_request(&mut self, request_id: &str, _parent_id: &str, reason: Option<&str>) -> Result<(), String> {
-        let request = self.approval_requests.iter_mut()
+
+    pub fn deny_request(
+        &mut self,
+        request_id: &str,
+        _parent_id: &str,
+        reason: Option<&str>,
+    ) -> Result<(), String> {
+        let request = self
+            .approval_requests
+            .iter_mut()
             .find(|r| r.id == request_id)
             .ok_or("Request not found")?;
-        
+
         request.status = ApprovalStatus::Denied;
         request.parent_response = reason.map(|s| s.to_string());
-        request.responded_at = Some(SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs());
-        
+        request.responded_at = Some(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        );
+
         Ok(())
     }
-    
+
     pub fn pending_requests(&self) -> Vec<&ApprovalRequest> {
-        self.approval_requests.iter()
+        self.approval_requests
+            .iter()
             .filter(|r| r.status == ApprovalStatus::Pending)
             .collect()
     }
-    
+
     pub fn pending_for_parent(&self, parent_id: &str) -> Vec<&ApprovalRequest> {
-        self.approval_requests.iter()
+        self.approval_requests
+            .iter()
             .filter(|r| {
-                r.status == ApprovalStatus::Pending &&
-                self.profiles.iter()
-                    .find(|p| p.id == r.profile_id)
-                    .map(|p| p.parent_profile_id.as_deref() == Some(parent_id))
-                    .unwrap_or(false)
+                r.status == ApprovalStatus::Pending
+                    && self
+                        .profiles
+                        .iter()
+                        .find(|p| p.id == r.profile_id)
+                        .map(|p| p.parent_profile_id.as_deref() == Some(parent_id))
+                        .unwrap_or(false)
             })
             .collect()
     }
-    
+
     // ==============================================================================
     // WEEKLY REPORTS
     // ==============================================================================
-    
+
     pub fn generate_weekly_report(&self, profile_id: &str) -> Option<WeeklyReport> {
         let profile = self.profiles.iter().find(|p| p.id == profile_id)?;
-        
+
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let week_start = now - (now % 604800); // Start of week
         let week_end = week_start + 604800;
-        
-        let mut top_sites: Vec<_> = profile.usage_stats.sites_visited.iter()
+
+        let mut top_sites: Vec<_> = profile
+            .usage_stats
+            .sites_visited
+            .iter()
             .map(|(d, c)| (d.clone(), *c))
             .collect();
         top_sites.sort_by(|a, b| b.1.cmp(&a.1));
         top_sites.truncate(10);
-        
+
         Some(WeeklyReport {
             profile_id: profile_id.to_string(),
             profile_name: profile.name.clone(),
@@ -800,27 +868,31 @@ impl ProfileManager {
 
 mod chrono_lite {
     use std::time::{SystemTime, UNIX_EPOCH};
-    
+
     pub struct Now {
         pub hour: u8,
         pub minute: u8,
         pub weekday: u8, // 0=Mon, 6=Sun
     }
-    
+
     pub fn now() -> Now {
         let secs = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         // Simple calculation (ignoring timezone for now)
         let days = secs / 86400;
         let day_secs = secs % 86400;
         let hour = (day_secs / 3600) as u8;
         let minute = ((day_secs % 3600) / 60) as u8;
         let weekday = ((days + 3) % 7) as u8; // Jan 1, 1970 was Thursday (3)
-        
-        Now { hour, minute, weekday }
+
+        Now {
+            hour,
+            minute,
+            weekday,
+        }
     }
 }
 
@@ -838,8 +910,8 @@ fn generate_id() -> String {
 }
 
 fn hash_pin(pin: &str) -> String {
-    use argon2::{Argon2, PasswordHasher};
     use argon2::password_hash::SaltString;
+    use argon2::{Argon2, PasswordHasher};
     use rand::rngs::OsRng;
     let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
@@ -849,8 +921,8 @@ fn hash_pin(pin: &str) -> String {
 }
 
 fn verify_pin(pin: &str, stored: &str) -> bool {
-    use argon2::{Argon2, PasswordVerifier};
     use argon2::PasswordHash;
+    use argon2::{Argon2, PasswordVerifier};
     // Support legacy DefaultHasher format (16-char hex) for migration
     if stored.len() <= 16 && stored.chars().all(|c| c.is_ascii_hexdigit()) {
         // Legacy hash — verify with old method, caller should re-hash on success
@@ -861,17 +933,24 @@ fn verify_pin(pin: &str, stored: &str) -> bool {
         return format!("{:x}", hasher.finish()) == stored;
     }
     // Argon2 hash format: $argon2id$v=...
-    let Ok(parsed) = PasswordHash::new(stored) else { return false };
-    Argon2::default().verify_password(pin.as_bytes(), &parsed).is_ok()
+    let Ok(parsed) = PasswordHash::new(stored) else {
+        return false;
+    };
+    Argon2::default()
+        .verify_password(pin.as_bytes(), &parsed)
+        .is_ok()
 }
 
 pub fn extract_domain(url: &str) -> String {
-    let url = url.trim_start_matches("https://")
+    let url = url
+        .trim_start_matches("https://")
         .trim_start_matches("http://");
-    
-    url.split('/').next()
+
+    url.split('/')
+        .next()
         .unwrap_or(url)
-        .split(':').next()
+        .split(':')
+        .next()
         .unwrap_or(url)
         .to_string()
 }
@@ -882,13 +961,29 @@ fn is_nsfw_domain(domain: &str) -> bool {
 }
 
 fn is_gambling_domain(domain: &str) -> bool {
-    let gambling = ["casino", "poker", "bet365", "draftkings", "fanduel", "gambling", "slots"];
+    let gambling = [
+        "casino",
+        "poker",
+        "bet365",
+        "draftkings",
+        "fanduel",
+        "gambling",
+        "slots",
+    ];
     gambling.iter().any(|k| domain.contains(k))
 }
 
 fn is_social_media_domain(domain: &str) -> bool {
-    let social = ["facebook.com", "instagram.com", "twitter.com", "x.com", "tiktok.com", 
-                  "snapchat.com", "reddit.com", "discord.com"];
+    let social = [
+        "facebook.com",
+        "instagram.com",
+        "twitter.com",
+        "x.com",
+        "tiktok.com",
+        "snapchat.com",
+        "reddit.com",
+        "discord.com",
+    ];
     social.iter().any(|s| domain.contains(s))
 }
 
@@ -899,36 +994,36 @@ fn is_social_media_domain(domain: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_profile_creation() {
         let mut manager = ProfileManager::new();
-        
+
         let admin_id = manager.create_admin("Parent", "1234");
         assert!(manager.get_profile(&admin_id).is_some());
-        
+
         let kid_id = manager.create_profile("Child", ProfileType::Kid, Some(&admin_id));
         assert!(kid_id.is_ok());
     }
-    
+
     #[test]
     fn test_kid_restrictions() {
         let restrictions = Restrictions::kid_default();
-        
+
         assert!(restrictions.block_nsfw);
         assert!(restrictions.block_violence);
         assert!(restrictions.downloads_need_approval);
         assert!(restrictions.daily_limit_minutes.is_some());
     }
-    
+
     #[test]
     fn test_domain_detection() {
         assert!(is_nsfw_domain("example-porn.com"));
         assert!(!is_nsfw_domain("example.com"));
-        
+
         assert!(is_gambling_domain("bet365.com"));
         assert!(!is_gambling_domain("news.com"));
-        
+
         assert!(is_social_media_domain("facebook.com"));
         assert!(!is_social_media_domain("github.com"));
     }

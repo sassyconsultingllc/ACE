@@ -4,9 +4,9 @@
 //!
 //! Connects to ws://127.0.0.1:9998, sends Hello + GetBrowserInfo, prints responses.
 
+use futures::{SinkExt, StreamExt};
 use sassy_browser::mcp_codec::{build_frame_body, parse_frame_body};
 use sassy_browser::mcp_protocol::{McpCommand, McpResponse, PROTOCOL_VERSION};
-use futures::{SinkExt, StreamExt};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 
 #[tokio::main]

@@ -1,5 +1,5 @@
 //! Universal File Handler - Detection, loading, saving, printing, export
-//! 
+//!
 //! Supports virtually every file format without paid dependencies:
 //! - Images: PNG, JPG, GIF, WebP, BMP, TIFF, SVG, AVIF, HEIC, RAW (CR2, NEF, ARW, DNG), PSD, EXR
 //! - Documents: PDF, DOCX, ODT, RTF, EPUB, MOBI, TXT, MD
@@ -24,8 +24,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FileType {
     Image,
-    ImageRaw,       // RAW camera files
-    ImagePsd,       // Photoshop files
+    ImageRaw, // RAW camera files
+    ImagePsd, // Photoshop files
     Pdf,
     Document,
     Spreadsheet,
@@ -60,7 +60,7 @@ impl FileType {
             Self::Unknown => "",
         }
     }
-    
+
     pub fn description(&self) -> &'static str {
         match self {
             Self::Image => "Image",
@@ -97,7 +97,7 @@ pub struct OpenFile {
     pub modified: bool,
     pub mime_type: Option<String>,
     pub hash: Option<String>,
-    
+
     // Convenience typed accessors (populated from content enum)
     pub video: Option<VideoContent>,
     pub audio: Option<AudioContent>,
@@ -112,10 +112,11 @@ pub struct OpenFile {
 
 impl OpenFile {
     pub fn new(path: PathBuf, file_type: FileType, content: FileContent, size: u64) -> Self {
-        let name = path.file_name()
+        let name = path
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "Unknown".to_string());
-        
+
         // Extract typed content for convenience (boxed enum variants)
         let video = match &content {
             FileContent::Video(v) => Some((**v).clone()),
@@ -153,7 +154,7 @@ impl OpenFile {
             FileContent::Spreadsheet(s) => Some((**s).clone()),
             _ => None,
         };
-        
+
         Self {
             path,
             name,
@@ -178,9 +179,16 @@ impl OpenFile {
     /// Build a summary string describing this file, exercising all content type fields
     pub fn summary(&self) -> String {
         let mut s = String::new();
-        s.push_str(&format!("{} {} ({} bytes)", self.file_type.icon(), self.file_type.description(), self.size));
-        s.push_str(&format!(" modified={} hash={:?} mime={:?}",
-            self.modified, self.hash, self.mime_type));
+        s.push_str(&format!(
+            "{} {} ({} bytes)",
+            self.file_type.icon(),
+            self.file_type.description(),
+            self.size
+        ));
+        s.push_str(&format!(
+            " modified={} hash={:?} mime={:?}",
+            self.modified, self.hash, self.mime_type
+        ));
 
         // Read convenience typed accessors
         s.push_str(&format!(" video={} audio={} ebook={} archive={} model3d={} font={} chemical={} document={} spreadsheet={}",
@@ -193,8 +201,17 @@ impl OpenFile {
                 s.push_str(&format!(" binary={}", data.len()));
                 s.push_str(&format_hex_dump(data, 16));
             }
-            FileContent::Text { content, syntax, encoding } => {
-                s.push_str(&format!(" text len={} syntax={:?} enc={}", content.len(), syntax, encoding));
+            FileContent::Text {
+                content,
+                syntax,
+                encoding,
+            } => {
+                s.push_str(&format!(
+                    " text len={} syntax={:?} enc={}",
+                    content.len(),
+                    syntax,
+                    encoding
+                ));
             }
             FileContent::Document(doc) => {
                 s.push_str(&Self::summarize_document(doc));
@@ -230,9 +247,16 @@ impl OpenFile {
     fn summarize_document(doc: &DocumentContent) -> String {
         let mut s = String::new();
         for p in &doc.paragraphs {
-            s.push_str(&format!(" para={} bold={} italic={} underline={} size={} family={:?} heading={:?}",
-                p.text.len(), p.style.bold, p.style.italic, p.style.underline,
-                p.style.font_size, p.style.font_family, p.style.heading_level));
+            s.push_str(&format!(
+                " para={} bold={} italic={} underline={} size={} family={:?} heading={:?}",
+                p.text.len(),
+                p.style.bold,
+                p.style.italic,
+                p.style.underline,
+                p.style.font_size,
+                p.style.font_family,
+                p.style.heading_level
+            ));
             let _align = match p.style.alignment {
                 TextAlignment::Left => "left",
                 TextAlignment::Center => "center",
@@ -241,37 +265,68 @@ impl OpenFile {
             };
         }
         for img in &doc.images {
-            s.push_str(&format!(" img={}bytes fmt={} w={:?} h={:?}",
-                img.data.len(), img.format, img.width, img.height));
+            s.push_str(&format!(
+                " img={}bytes fmt={} w={:?} h={:?}",
+                img.data.len(),
+                img.format,
+                img.width,
+                img.height
+            ));
         }
         let m = &doc.metadata;
-        s.push_str(&format!(" title={:?} author={:?} subject={:?} created={:?} modified={:?} pages={:?} words={:?}",
-            m.title, m.author, m.subject, m.created, m.modified, m.page_count, m.word_count));
+        s.push_str(&format!(
+            " title={:?} author={:?} subject={:?} created={:?} modified={:?} pages={:?} words={:?}",
+            m.title, m.author, m.subject, m.created, m.modified, m.page_count, m.word_count
+        ));
         s
     }
 
     fn summarize_spreadsheet(ss: &SpreadsheetContent) -> String {
         let mut s = format!(" active_sheet={}", ss.active_sheet);
         for sheet in &ss.sheets {
-            s.push_str(&format!(" sheet={} rows={} col_widths={} row_heights={} freeze=({},{}) merged={}",
-                sheet.name, sheet.cells.len(), sheet.column_widths.len(),
-                sheet.row_heights.len(), sheet.freeze_row, sheet.freeze_col,
-                sheet.merged_cells.len()));
+            s.push_str(&format!(
+                " sheet={} rows={} col_widths={} row_heights={} freeze=({},{}) merged={}",
+                sheet.name,
+                sheet.cells.len(),
+                sheet.column_widths.len(),
+                sheet.row_heights.len(),
+                sheet.freeze_row,
+                sheet.freeze_col,
+                sheet.merged_cells.len()
+            ));
             for mr in &sheet.merged_cells {
-                s.push_str(&format!(" merge=({},{})..({},{})",
-                    mr.start_row, mr.start_col, mr.end_row, mr.end_col));
+                s.push_str(&format!(
+                    " merge=({},{})..({},{})",
+                    mr.start_row, mr.start_col, mr.end_row, mr.end_col
+                ));
             }
             for row in &sheet.cells {
                 for cell in row {
                     match cell {
-                        CellValue::Empty => { s.push_str(" empty"); }
-                        CellValue::Text(t) => { s.push_str(&format!(" text={}", t.len())); }
-                        CellValue::Number(n) => { s.push_str(&format!(" num={}", n)); }
-                        CellValue::Boolean(b) => { s.push_str(&format!(" bool={}", b)); }
-                        CellValue::Formula(f) => { s.push_str(&format!(" formula={}", f)); }
-                        CellValue::Error(e) => { s.push_str(&format!(" error={}", e)); }
-                        CellValue::Date(d) => { s.push_str(&format!(" date={}", d)); }
-                        CellValue::Currency(v, c) => { s.push_str(&format!(" currency={}{}", c, v)); }
+                        CellValue::Empty => {
+                            s.push_str(" empty");
+                        }
+                        CellValue::Text(t) => {
+                            s.push_str(&format!(" text={}", t.len()));
+                        }
+                        CellValue::Number(n) => {
+                            s.push_str(&format!(" num={}", n));
+                        }
+                        CellValue::Boolean(b) => {
+                            s.push_str(&format!(" bool={}", b));
+                        }
+                        CellValue::Formula(f) => {
+                            s.push_str(&format!(" formula={}", f));
+                        }
+                        CellValue::Error(e) => {
+                            s.push_str(&format!(" error={}", e));
+                        }
+                        CellValue::Date(d) => {
+                            s.push_str(&format!(" date={}", d));
+                        }
+                        CellValue::Currency(v, c) => {
+                            s.push_str(&format!(" currency={}{}", c, v));
+                        }
                     }
                 }
             }
@@ -280,18 +335,37 @@ impl OpenFile {
     }
 
     fn summarize_chemical(chem: &ChemicalContent) -> String {
-        let mut s = format!(" title={} atoms={} bonds={} meta={} ss={} chains={}",
-            chem.title, chem.atoms.len(), chem.bonds.len(),
-            chem.metadata.len(), chem.secondary_structure.len(), chem.chains.len());
+        let mut s = format!(
+            " title={} atoms={} bonds={} meta={} ss={} chains={}",
+            chem.title,
+            chem.atoms.len(),
+            chem.bonds.len(),
+            chem.metadata.len(),
+            chem.secondary_structure.len(),
+            chem.chains.len()
+        );
         for atom in &chem.atoms {
-            s.push_str(&format!(" {}#{} {}/{} pos=({},{},{}) occ={} bf={} q={}",
-                atom.element, atom.serial, atom.name, atom.residue,
-                atom.x, atom.y, atom.z, atom.occupancy, atom.b_factor, atom.charge));
+            s.push_str(&format!(
+                " {}#{} {}/{} pos=({},{},{}) occ={} bf={} q={}",
+                atom.element,
+                atom.serial,
+                atom.name,
+                atom.residue,
+                atom.x,
+                atom.y,
+                atom.z,
+                atom.occupancy,
+                atom.b_factor,
+                atom.charge
+            ));
             let _ = atom.residue_seq;
             let _ = atom.chain;
         }
         for bond in &chem.bonds {
-            s.push_str(&format!(" bond={}-{} order={}", bond.atom1, bond.atom2, bond.order));
+            s.push_str(&format!(
+                " bond={}-{} order={}",
+                bond.atom1, bond.atom2, bond.order
+            ));
             let _ = match bond.bond_type {
                 BondType::Single => 1,
                 BondType::Double => 2,
@@ -308,17 +382,25 @@ impl OpenFile {
                 SecondaryStructureType::Turn => "T",
                 SecondaryStructureType::Coil => "C",
             };
-            s.push_str(&format!(" ss={}..{} chain={}", ss.start_residue, ss.end_residue, ss.chain));
+            s.push_str(&format!(
+                " ss={}..{} chain={}",
+                ss.start_residue, ss.end_residue, ss.chain
+            ));
         }
         for chain in &chem.chains {
-            s.push_str(&format!(" chain={} type={} residues={}", chain.id, chain.molecule_type, chain.residue_count));
+            s.push_str(&format!(
+                " chain={} type={} residues={}",
+                chain.id, chain.molecule_type, chain.residue_count
+            ));
         }
         s
     }
 
     fn summarize_archive(arc: &ArchiveContent) -> String {
-        let mut s = format!(" total={} compressed={} comment={:?}",
-            arc.total_size, arc.compressed_size, arc.comment);
+        let mut s = format!(
+            " total={} compressed={} comment={:?}",
+            arc.total_size, arc.compressed_size, arc.comment
+        );
         let _ = match arc.format {
             ArchiveFormat::Zip => "zip",
             ArchiveFormat::Rar => "rar",
@@ -330,9 +412,16 @@ impl OpenFile {
             ArchiveFormat::TarZstd => "tar.zst",
         };
         for entry in &arc.entries {
-            s.push_str(&format!(" {} dir={} size={}/{} mod={:?} crc={:?} enc={}",
-                entry.path, entry.is_dir, entry.size, entry.compressed_size,
-                entry.modified, entry.crc, entry.is_encrypted));
+            s.push_str(&format!(
+                " {} dir={} size={}/{} mod={:?} crc={:?} enc={}",
+                entry.path,
+                entry.is_dir,
+                entry.size,
+                entry.compressed_size,
+                entry.modified,
+                entry.crc,
+                entry.is_encrypted
+            ));
         }
         s
     }
@@ -346,10 +435,16 @@ impl OpenFile {
             Model3DFormat::Glb => "glb",
             Model3DFormat::Ply => "ply",
         };
-        s.push_str(&format!(" verts={} faces={} normals={} texcoords={} mats={} bounds=({:?}..{:?})",
-            model.vertices.len(), model.faces.len(), model.normals.len(),
-            model.texcoords.len(), model.materials.len(),
-            model.bounds.min, model.bounds.max));
+        s.push_str(&format!(
+            " verts={} faces={} normals={} texcoords={} mats={} bounds=({:?}..{:?})",
+            model.vertices.len(),
+            model.faces.len(),
+            model.normals.len(),
+            model.texcoords.len(),
+            model.materials.len(),
+            model.bounds.min,
+            model.bounds.max
+        ));
         for v in &model.vertices {
             let _ = (v.position, v.normal, v.texcoord, v.color);
         }
@@ -357,8 +452,10 @@ impl OpenFile {
             let _ = (&f.vertices, f.material);
         }
         for m in &model.materials {
-            s.push_str(&format!(" mat={} diff={:?} spec={:?} amb={:?} shin={} tex={:?}",
-                m.name, m.diffuse, m.specular, m.ambient, m.shininess, m.texture));
+            s.push_str(&format!(
+                " mat={} diff={:?} spec={:?} amb={:?} shin={} tex={:?}",
+                m.name, m.diffuse, m.specular, m.ambient, m.shininess, m.texture
+            ));
         }
         s
     }
@@ -379,10 +476,19 @@ impl OpenFile {
     }
 
     fn summarize_video(video: &VideoContent) -> String {
-        format!(" fmt={} dur={} {}x{} fps={} vc={:?} ac={:?} br={:?} title={:?} thumb={:?}",
-            video.format, video.duration, video.width, video.height,
-            video.frame_rate, video.video_codec, video.audio_codec,
-            video.bitrate, video.title, video.thumbnail.as_ref().map(|t| t.len()))
+        format!(
+            " fmt={} dur={} {}x{} fps={} vc={:?} ac={:?} br={:?} title={:?} thumb={:?}",
+            video.format,
+            video.duration,
+            video.width,
+            video.height,
+            video.frame_rate,
+            video.video_codec,
+            video.audio_codec,
+            video.bitrate,
+            video.title,
+            video.thumbnail.as_ref().map(|t| t.len())
+        )
     }
 
     fn summarize_ebook(ebook: &EbookContent) -> String {
@@ -392,17 +498,31 @@ impl OpenFile {
             EbookFormat::Mobi => "mobi",
             EbookFormat::Azw3 => "azw3",
         };
-        s.push_str(&format!(" title={:?} author={:?} pub={:?} lang={:?} isbn={:?} cover={:?} toc={} chapters={}",
-            ebook.title, ebook.author, ebook.publisher, ebook.language,
-            ebook.isbn, ebook.cover_image.as_ref().map(|c| c.len()),
-            ebook.toc.len(), ebook.chapters.len()));
+        s.push_str(&format!(
+            " title={:?} author={:?} pub={:?} lang={:?} isbn={:?} cover={:?} toc={} chapters={}",
+            ebook.title,
+            ebook.author,
+            ebook.publisher,
+            ebook.language,
+            ebook.isbn,
+            ebook.cover_image.as_ref().map(|c| c.len()),
+            ebook.toc.len(),
+            ebook.chapters.len()
+        ));
         let _ = &ebook.table_of_contents;
         for toc in &ebook.toc {
-            s.push_str(&format!(" toc={} href={} level={}", toc.title, toc.href, toc.level));
+            s.push_str(&format!(
+                " toc={} href={} level={}",
+                toc.title, toc.href, toc.level
+            ));
         }
         for ch in &ebook.chapters {
-            s.push_str(&format!(" ch title={:?} content={} imgs={}",
-                ch.title, ch.content.len(), ch.images.len()));
+            s.push_str(&format!(
+                " ch title={:?} content={} imgs={}",
+                ch.title,
+                ch.content.len(),
+                ch.images.len()
+            ));
         }
         s
     }
@@ -411,7 +531,11 @@ impl OpenFile {
 #[derive(Debug, Clone)]
 pub enum FileContent {
     Binary(Vec<u8>),
-    Text { content: String, syntax: Option<String>, encoding: String },
+    Text {
+        content: String,
+        syntax: Option<String>,
+        encoding: String,
+    },
     Document(Box<DocumentContent>),
     Spreadsheet(Box<SpreadsheetContent>),
     Chemical(Box<ChemicalContent>),
@@ -508,8 +632,7 @@ pub struct MergedRange {
     pub end_col: usize,
 }
 
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub enum CellValue {
     #[default]
     Empty,
@@ -521,7 +644,6 @@ pub enum CellValue {
     Date(String),
     Currency(f64, String),
 }
-
 
 // -------------------------------------------------------------------------------
 // CHEMICAL CONTENT
@@ -557,7 +679,9 @@ impl Default for Atom {
     fn default() -> Self {
         Self {
             element: String::new(),
-            x: 0.0, y: 0.0, z: 0.0,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
             serial: 0,
             name: String::new(),
             residue: String::new(),
@@ -819,201 +943,193 @@ impl FileHandler {
             max_cache_size: 50,
         }
     }
-    
+
     /// Detect file type by extension and magic bytes
     pub fn detect_file_type(path: &Path) -> FileType {
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
-        
+
         // Try magic byte detection first for accuracy
         if let Ok(data) = fs::read(path).map(|d| d.into_iter().take(32).collect::<Vec<_>>()) {
             if let Some(ft) = Self::detect_by_magic(&data) {
                 return ft;
             }
         }
-        
+
         // Fall back to extension
         Self::detect_by_extension(&ext)
     }
-    
+
     fn detect_by_magic(data: &[u8]) -> Option<FileType> {
         if data.len() < 4 {
             return None;
         }
-        
+
         // PDF
         if data.starts_with(b"%PDF") {
             return Some(FileType::Pdf);
         }
-        
+
         // PNG
         if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
             return Some(FileType::Image);
         }
-        
+
         // JPEG
         if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
             return Some(FileType::Image);
         }
-        
+
         // GIF
         if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
             return Some(FileType::Image);
         }
-        
+
         // WebP
         if data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP" {
             return Some(FileType::Image);
         }
-        
+
         // ZIP (including DOCX, XLSX, EPUB, etc.)
         if data.starts_with(&[0x50, 0x4B, 0x03, 0x04]) {
             // Could be ZIP, DOCX, XLSX, EPUB, etc.
             return None; // Let extension decide
         }
-        
+
         // RAR
         if data.starts_with(&[0x52, 0x61, 0x72, 0x21]) {
             return Some(FileType::Archive);
         }
-        
+
         // 7z
         if data.starts_with(&[0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C]) {
             return Some(FileType::Archive);
         }
-        
+
         // PSD
         if data.starts_with(b"8BPS") {
             return Some(FileType::ImagePsd);
         }
-        
+
         // GLTF binary
         if data.starts_with(b"glTF") {
             return Some(FileType::Model3D);
         }
-        
+
         // OGG
         if data.starts_with(b"OggS") {
             return Some(FileType::Audio);
         }
-        
+
         // MP3 (ID3 tag or sync)
-        if data.starts_with(b"ID3") || (data.len() >= 2 && data[0] == 0xFF && (data[1] & 0xE0) == 0xE0) {
+        if data.starts_with(b"ID3")
+            || (data.len() >= 2 && data[0] == 0xFF && (data[1] & 0xE0) == 0xE0)
+        {
             return Some(FileType::Audio);
         }
-        
+
         // FLAC
         if data.starts_with(b"fLaC") {
             return Some(FileType::Audio);
         }
-        
+
         // WAV
         if data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WAVE" {
             return Some(FileType::Audio);
         }
-        
+
         None
     }
-    
+
     fn detect_by_extension(ext: &str) -> FileType {
         match ext {
             // Standard images
-            "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "ico" | 
-            "tiff" | "tif" | "tga" | "svg" | "avif" | "heic" | "heif" |
-            "dds" | "hdr" | "exr" | "pbm" | "pgm" | "ppm" | "pam" | 
-            "qoi" | "jxl" | "apng" => FileType::Image,
-            
+            "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "ico" | "tiff" | "tif" | "tga"
+            | "svg" | "avif" | "heic" | "heif" | "dds" | "hdr" | "exr" | "pbm" | "pgm" | "ppm"
+            | "pam" | "qoi" | "jxl" | "apng" => FileType::Image,
+
             // RAW camera formats
-            "cr2" | "cr3" | "nef" | "arw" | "dng" | "orf" | "rw2" |
-            "raf" | "pef" | "srw" | "x3f" | "raw" | "rwl" | "dcr" |
-            "kdc" | "mrw" | "nrw" | "erf" => FileType::ImageRaw,
-            
+            "cr2" | "cr3" | "nef" | "arw" | "dng" | "orf" | "rw2" | "raf" | "pef" | "srw"
+            | "x3f" | "raw" | "rwl" | "dcr" | "kdc" | "mrw" | "nrw" | "erf" => FileType::ImageRaw,
+
             // Photoshop
             "psd" | "psb" => FileType::ImagePsd,
-            
+
             // PDF
             "pdf" => FileType::Pdf,
-            
+
             // Documents
             "docx" | "doc" | "odt" | "rtf" | "wpd" | "wps" | "pages" => FileType::Document,
-            
+
             // Spreadsheets
             "xlsx" | "xls" | "ods" | "csv" | "tsv" | "numbers" => FileType::Spreadsheet,
-            
+
             // Chemical/Biological
-            "pdb" | "mol" | "mol2" | "sdf" | "cif" | "mmcif" | "xyz" |
-            "gro" | "pqr" | "ent" => FileType::Chemical,
-            
+            "pdb" | "mol" | "mol2" | "sdf" | "cif" | "mmcif" | "xyz" | "gro" | "pqr" | "ent" => {
+                FileType::Chemical
+            }
+
             // Archives
-            "zip" | "rar" | "7z" | "tar" | "gz" | "tgz" | "xz" | "txz" |
-            "bz2" | "tbz2" | "zst" | "tzst" | "lz4" | "lzma" | "cab" |
-            "iso" | "dmg" | "pkg" | "deb" | "rpm" | "apk" | "jar" | "war" => FileType::Archive,
-            
+            "zip" | "rar" | "7z" | "tar" | "gz" | "tgz" | "xz" | "txz" | "bz2" | "tbz2" | "zst"
+            | "tzst" | "lz4" | "lzma" | "cab" | "iso" | "dmg" | "pkg" | "deb" | "rpm" | "apk"
+            | "jar" | "war" => FileType::Archive,
+
             // 3D Models
-            "obj" | "stl" | "gltf" | "glb" | "ply" | "fbx" | "dae" |
-            "3ds" | "blend" | "step" | "stp" | "iges" | "igs" => FileType::Model3D,
-            
+            "obj" | "stl" | "gltf" | "glb" | "ply" | "fbx" | "dae" | "3ds" | "blend" | "step"
+            | "stp" | "iges" | "igs" => FileType::Model3D,
+
             // Fonts
             "ttf" | "otf" | "woff" | "woff2" | "eot" | "ttc" | "dfont" => FileType::Font,
-            
+
             // Audio
-            "mp3" | "wav" | "flac" | "ogg" | "oga" | "opus" | "aac" |
-            "m4a" | "wma" | "aiff" | "aif" | "ape" | "mka" | "mpc" |
-            "spx" | "mid" | "midi" => FileType::Audio,
-            
+            "mp3" | "wav" | "flac" | "ogg" | "oga" | "opus" | "aac" | "m4a" | "wma" | "aiff"
+            | "aif" | "ape" | "mka" | "mpc" | "spx" | "mid" | "midi" => FileType::Audio,
+
             // Video
-            "mp4" | "webm" | "mkv" | "avi" | "mov" | "wmv" | "flv" |
-            "m4v" | "mpeg" | "mpg" | "3gp" | "ogv" => FileType::Video,
-            
+            "mp4" | "webm" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "m4v" | "mpeg" | "mpg"
+            | "3gp" | "ogv" => FileType::Video,
+
             // eBooks
-            "epub" | "mobi" | "azw" | "azw3" | "kf8" | "kfx" | "prc" |
-            "djvu" | "fb2" | "cbz" | "cbr" => FileType::Ebook,
-            
+            "epub" | "mobi" | "azw" | "azw3" | "kf8" | "kfx" | "prc" | "djvu" | "fb2" | "cbz"
+            | "cbr" => FileType::Ebook,
+
             // Markdown
             "md" | "markdown" | "mdown" | "mkdn" | "mdx" | "rmd" => FileType::Markdown,
-            
+
             // Text/Code
-            "txt" | "text" | "log" | "nfo" | "diz" |
-            "rs" | "py" | "pyw" | "pyi" | "pyx" |
-            "js" | "mjs" | "cjs" | "ts" | "mts" | "cts" | "jsx" | "tsx" |
-            "html" | "htm" | "xhtml" | "css" | "scss" | "sass" | "less" | "styl" |
-            "json" | "json5" | "jsonc" | "xml" | "xsl" | "xslt" | "xsd" | "dtd" |
-            "yaml" | "yml" | "toml" | "ini" | "cfg" | "conf" | "properties" |
-            "c" | "h" | "cpp" | "cc" | "cxx" | "hpp" | "hxx" | "hh" |
-            "java" | "kt" | "kts" | "groovy" | "gradle" | "scala" | "sc" |
-            "swift" | "go" | "rb" | "rake" | "gemspec" | 
-            "php" | "php3" | "php4" | "php5" | "phtml" |
-            "pl" | "pm" | "pod" | "t" |
-            "sh" | "bash" | "zsh" | "fish" | "ksh" | "csh" | "tcsh" |
-            "ps1" | "psm1" | "psd1" | "bat" | "cmd" |
-            "sql" | "mysql" | "pgsql" | "plsql" |
-            "lua" | "vim" | "vimrc" | "el" | "clj" | "cljs" | "cljc" | "edn" |
-            "ex" | "exs" | "erl" | "hrl" | "hs" | "lhs" | "cabal" |
-            "ml" | "mli" | "fs" | "fsi" | "fsx" | "fsscript" |
-            "r" | "rdata" | "jl" | "nim" | "nimble" | "zig" | "v" |
-            "cr" | "d" | "dart" | "elm" | "purs" | "idr" | "agda" |
-            "vue" | "svelte" | "astro" |
-            "graphql" | "gql" | "proto" | "protobuf" | "thrift" | "avsc" |
-            "tf" | "tfvars" | "hcl" |
-            "dockerfile" | "containerfile" |
-            "makefile" | "gnumakefile" | "cmake" | "meson" | "build" | "ninja" |
-            "gitignore" | "gitattributes" | "gitmodules" | "editorconfig" |
-            "prettierrc" | "eslintrc" | "babelrc" | "nvmrc" |
-            "env" | "env.local" | "env.development" | "env.production" |
-            "lock" | "sum" => FileType::Text,
-            
+            "txt" | "text" | "log" | "nfo" | "diz" | "rs" | "py" | "pyw" | "pyi" | "pyx" | "js"
+            | "mjs" | "cjs" | "ts" | "mts" | "cts" | "jsx" | "tsx" | "html" | "htm" | "xhtml"
+            | "css" | "scss" | "sass" | "less" | "styl" | "json" | "json5" | "jsonc" | "xml"
+            | "xsl" | "xslt" | "xsd" | "dtd" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "conf"
+            | "properties" | "c" | "h" | "cpp" | "cc" | "cxx" | "hpp" | "hxx" | "hh" | "java"
+            | "kt" | "kts" | "groovy" | "gradle" | "scala" | "sc" | "swift" | "go" | "rb"
+            | "rake" | "gemspec" | "php" | "php3" | "php4" | "php5" | "phtml" | "pl" | "pm"
+            | "pod" | "t" | "sh" | "bash" | "zsh" | "fish" | "ksh" | "csh" | "tcsh" | "ps1"
+            | "psm1" | "psd1" | "bat" | "cmd" | "sql" | "mysql" | "pgsql" | "plsql" | "lua"
+            | "vim" | "vimrc" | "el" | "clj" | "cljs" | "cljc" | "edn" | "ex" | "exs" | "erl"
+            | "hrl" | "hs" | "lhs" | "cabal" | "ml" | "mli" | "fs" | "fsi" | "fsx" | "fsscript"
+            | "r" | "rdata" | "jl" | "nim" | "nimble" | "zig" | "v" | "cr" | "d" | "dart"
+            | "elm" | "purs" | "idr" | "agda" | "vue" | "svelte" | "astro" | "graphql" | "gql"
+            | "proto" | "protobuf" | "thrift" | "avsc" | "tf" | "tfvars" | "hcl" | "dockerfile"
+            | "containerfile" | "makefile" | "gnumakefile" | "cmake" | "meson" | "build"
+            | "ninja" | "gitignore" | "gitattributes" | "gitmodules" | "editorconfig"
+            | "prettierrc" | "eslintrc" | "babelrc" | "nvmrc" | "env" | "env.local"
+            | "env.development" | "env.production" | "lock" | "sum" => FileType::Text,
+
             _ => FileType::Unknown,
         }
     }
-    
+
     /// Get syntax highlighting name for a file
     pub fn detect_syntax(path: &Path) -> Option<String> {
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(crate::fontcase::ascii_lower)?;
-        
+
         let syntax = match ext.as_str() {
             "rs" => "Rust",
             "py" | "pyw" | "pyi" => "Python",
@@ -1067,62 +1183,40 @@ impl FileHandler {
             "cmake" => "CMake",
             _ => return None,
         };
-        
+
         Some(syntax.into())
     }
-    
+
     /// Load a file and parse its content
     pub fn load_file(&mut self, path: &Path) -> Result<OpenFile> {
         // Check cache first
         if let Some(cached) = self.cache.get(path) {
             return Ok(cached.clone());
         }
-        
+
         let metadata = fs::metadata(path)?;
         let size = metadata.len();
         let file_type = Self::detect_file_type(path);
-        let mime_type = mime_guess::from_path(path)
-            .first()
-            .map(|m| m.to_string());
-        
+        let mime_type = mime_guess::from_path(path).first().map(|m| m.to_string());
+
         let content = match file_type {
             FileType::Image | FileType::ImageRaw | FileType::ImagePsd => {
                 FileContent::Binary(fs::read(path)?)
             }
-            FileType::Pdf => {
-                FileContent::Binary(fs::read(path)?)
-            }
-            FileType::Document => {
-                self.load_document(path)?
-            }
-            FileType::Spreadsheet => {
-                self.load_spreadsheet(path)?
-            }
-            FileType::Chemical => {
-                self.load_chemical(path)?
-            }
-            FileType::Archive => {
-                self.load_archive(path)?
-            }
-            FileType::Model3D => {
-                self.load_3d_model(path)?
-            }
-            FileType::Font => {
-                self.load_font(path)?
-            }
-            FileType::Audio => {
-                self.load_audio(path)?
-            }
-            FileType::Video => {
-                self.load_video(path)?
-            }
-            FileType::Ebook => {
-                self.load_ebook(path)?
-            }
+            FileType::Pdf => FileContent::Binary(fs::read(path)?),
+            FileType::Document => self.load_document(path)?,
+            FileType::Spreadsheet => self.load_spreadsheet(path)?,
+            FileType::Chemical => self.load_chemical(path)?,
+            FileType::Archive => self.load_archive(path)?,
+            FileType::Model3D => self.load_3d_model(path)?,
+            FileType::Font => self.load_font(path)?,
+            FileType::Audio => self.load_audio(path)?,
+            FileType::Video => self.load_video(path)?,
+            FileType::Ebook => self.load_ebook(path)?,
             FileType::Markdown => {
                 let text = self.read_text_with_encoding(path)?;
-                FileContent::Text { 
-                    content: text, 
+                FileContent::Text {
+                    content: text,
                     syntax: Some("Markdown".into()),
                     encoding: "UTF-8".into(),
                 }
@@ -1130,14 +1224,14 @@ impl FileHandler {
             FileType::Text | FileType::Unknown => {
                 let text = self.read_text_with_encoding(path)?;
                 let syntax = Self::detect_syntax(path);
-                FileContent::Text { 
-                    content: text, 
+                FileContent::Text {
+                    content: text,
                     syntax,
                     encoding: "UTF-8".into(),
                 }
             }
         };
-        
+
         let mut file = OpenFile::new(path.to_path_buf(), file_type, content, size);
         file.mime_type = mime_type;
 
@@ -1163,33 +1257,34 @@ impl FileHandler {
 
         Ok(file)
     }
-    
+
     fn read_text_with_encoding(&self, path: &Path) -> Result<String> {
         let data = fs::read(path)?;
-        
+
         // Try UTF-8 first
         if let Ok(text) = String::from_utf8(data.clone()) {
             return Ok(text);
         }
-        
+
         // Try to detect encoding and convert
         let (decoded, _, had_errors) = encoding_rs::UTF_8.decode(&data);
         if !had_errors {
             return Ok(decoded.into_owned());
         }
-        
+
         // Try Latin-1 as fallback
         let (decoded, _, _) = encoding_rs::WINDOWS_1252.decode(&data);
         Ok(decoded.into_owned())
     }
-    
+
     // Document loading is continued in the implementation below...
     fn load_document(&self, path: &Path) -> Result<FileContent> {
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
-        
+
         match ext.as_str() {
             "docx" => self.load_docx(path),
             "odt" => self.load_odt(path),
@@ -1197,24 +1292,24 @@ impl FileHandler {
             _ => Err(anyhow!("Unsupported document format: {}", ext)),
         }
     }
-    
+
     fn load_docx(&self, path: &Path) -> Result<FileContent> {
         use std::io::Read;
         use zip::ZipArchive;
-        
+
         let file = fs::File::open(path)?;
         let mut archive = ZipArchive::new(file)?;
-        
+
         let mut doc_content = String::new();
         if let Ok(mut doc_file) = archive.by_name("word/document.xml") {
             doc_file.read_to_string(&mut doc_content)?;
         }
-        
+
         let mut document = DocumentContent::default();
         let mut current_para = String::new();
         let mut in_text = false;
         let mut chars = doc_content.chars().peekable();
-        
+
         while let Some(c) = chars.next() {
             if c == '<' {
                 let mut tag = String::new();
@@ -1225,51 +1320,50 @@ impl FileHandler {
                     }
                     tag.push(chars.next().unwrap());
                 }
-                
+
                 if tag.starts_with("w:t") && !tag.contains('/') {
                     in_text = true;
                 } else if tag == "/w:t" {
                     in_text = false;
-                } else if tag == "/w:p"
-                    && !current_para.is_empty() {
-                        document.paragraphs.push(Paragraph {
-                            text: current_para.clone(),
-                            style: ParagraphStyle::default(),
-                        });
-                        current_para.clear();
-                    }
+                } else if tag == "/w:p" && !current_para.is_empty() {
+                    document.paragraphs.push(Paragraph {
+                        text: current_para.clone(),
+                        style: ParagraphStyle::default(),
+                    });
+                    current_para.clear();
+                }
             } else if in_text {
                 current_para.push(c);
             }
         }
-        
+
         if !current_para.is_empty() {
             document.paragraphs.push(Paragraph {
                 text: current_para,
                 style: ParagraphStyle::default(),
             });
         }
-        
+
         Ok(FileContent::Document(Box::new(document)))
     }
-    
+
     fn load_odt(&self, path: &Path) -> Result<FileContent> {
         use std::io::Read;
         use zip::ZipArchive;
-        
+
         let file = fs::File::open(path)?;
         let mut archive = ZipArchive::new(file)?;
-        
+
         let mut content_xml = String::new();
         if let Ok(mut content_file) = archive.by_name("content.xml") {
             content_file.read_to_string(&mut content_xml)?;
         }
-        
+
         let mut document = DocumentContent::default();
         let mut current_para = String::new();
         let mut in_text = false;
         let mut chars = content_xml.chars().peekable();
-        
+
         while let Some(c) = chars.next() {
             if c == '<' {
                 let mut tag = String::new();
@@ -1280,7 +1374,7 @@ impl FileHandler {
                     }
                     tag.push(chars.next().unwrap());
                 }
-                
+
                 if (tag.starts_with("text:p") || tag.starts_with("text:h")) && !tag.contains('/') {
                     in_text = true;
                 } else if tag == "/text:p" || tag == "/text:h" {
@@ -1297,16 +1391,16 @@ impl FileHandler {
                 current_para.push(c);
             }
         }
-        
+
         Ok(FileContent::Document(Box::new(document)))
     }
-    
+
     fn load_rtf(&self, path: &Path) -> Result<FileContent> {
         let content = fs::read_to_string(path)?;
         let mut text = String::new();
         let mut in_control = false;
         let mut brace_depth: i32 = 0;
-        
+
         for ch in content.chars() {
             match ch {
                 '{' => brace_depth += 1,
@@ -1324,24 +1418,28 @@ impl FileHandler {
                 _ => {}
             }
         }
-        
+
         let document = DocumentContent {
-            paragraphs: text.lines().map(|l| Paragraph {
-                text: l.to_string(),
-                style: ParagraphStyle::default(),
-            }).collect(),
+            paragraphs: text
+                .lines()
+                .map(|l| Paragraph {
+                    text: l.to_string(),
+                    style: ParagraphStyle::default(),
+                })
+                .collect(),
             ..Default::default()
         };
-        
+
         Ok(FileContent::Document(Box::new(document)))
     }
-    
+
     fn load_spreadsheet(&self, path: &Path) -> Result<FileContent> {
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
-        
+
         match ext.as_str() {
             "csv" => self.load_csv(path, ','),
             "tsv" => self.load_csv(path, '\t'),
@@ -1349,14 +1447,14 @@ impl FileHandler {
             _ => Err(anyhow!("Unsupported spreadsheet format: {}", ext)),
         }
     }
-    
+
     fn load_csv(&self, path: &Path, delimiter: char) -> Result<FileContent> {
         let content = fs::read_to_string(path)?;
         let mut sheet = Sheet {
             name: "Sheet1".into(),
             ..Default::default()
         };
-        
+
         for line in content.lines() {
             let row: Vec<CellValue> = line
                 .split(delimiter)
@@ -1377,29 +1475,30 @@ impl FileHandler {
                 .collect();
             sheet.cells.push(row);
         }
-        
+
         Ok(FileContent::Spreadsheet(Box::new(SpreadsheetContent {
             sheets: vec![sheet],
             active_sheet: 0,
         })))
     }
-    
+
     fn load_excel(&self, path: &Path) -> Result<FileContent> {
-        use calamine::{Reader, open_workbook_auto, Data};
-        
+        use calamine::{open_workbook_auto, Data, Reader};
+
         let mut workbook = open_workbook_auto(path)?;
         let mut spreadsheet = SpreadsheetContent::default();
-        
+
         for sheet_name in workbook.sheet_names().to_vec() {
             if let Ok(range) = workbook.worksheet_range(&sheet_name) {
                 let mut sheet = Sheet {
                     name: sheet_name,
                     ..Default::default()
                 };
-                
+
                 for row in range.rows() {
-                    let cells: Vec<CellValue> = row.iter().map(|cell| {
-                        match cell {
+                    let cells: Vec<CellValue> = row
+                        .iter()
+                        .map(|cell| match cell {
                             Data::Empty => CellValue::Empty,
                             Data::String(s) => CellValue::Text(s.clone()),
                             Data::Float(f) => CellValue::Number(*f),
@@ -1408,24 +1507,25 @@ impl FileHandler {
                             Data::Error(e) => CellValue::Error(format!("{:?}", e)),
                             Data::DateTime(dt) => CellValue::Date(format!("{}", dt)),
                             _ => CellValue::Empty,
-                        }
-                    }).collect();
+                        })
+                        .collect();
                     sheet.cells.push(cells);
                 }
-                
+
                 spreadsheet.sheets.push(sheet);
             }
         }
-        
+
         Ok(FileContent::Spreadsheet(Box::new(spreadsheet)))
     }
-    
+
     fn load_chemical(&self, path: &Path) -> Result<FileContent> {
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
-        
+
         match ext.as_str() {
             "pdb" | "ent" => self.load_pdb(path),
             "mol" | "sdf" => self.load_mol(path),
@@ -1434,37 +1534,44 @@ impl FileHandler {
             _ => Err(anyhow!("Unsupported chemical format: {}", ext)),
         }
     }
-    
+
     fn load_pdb(&self, path: &Path) -> Result<FileContent> {
         let path_str = path.to_str().ok_or_else(|| anyhow!("Invalid path"))?;
-        let (pdb, _errors) = pdbtbx::open(path_str)
-            .map_err(|e| anyhow!("PDB parse error: {:?}", e))?;
-        
+        let (pdb, _errors) =
+            pdbtbx::open(path_str).map_err(|e| anyhow!("PDB parse error: {:?}", e))?;
+
         let mut chemical = ChemicalContent {
             title: pdb.identifier.clone().unwrap_or_default(),
             ..Default::default()
         };
-        
+
         for model in pdb.models() {
             for chain in model.chains() {
                 let chain_id = chain.id().chars().next().unwrap_or('A');
-                
+
                 chemical.chains.push(ChainInfo {
                     id: chain_id,
                     molecule_type: String::new(),
                     residue_count: chain.residue_count(),
                 });
-                
+
                 for residue in chain.residues() {
                     let residue_name = residue.name().map(|n| n.to_string()).unwrap_or_default();
                     let residue_seq = residue.serial_number() as i32;
-                    
+
                     for conformer in residue.conformers() {
                         for atom in conformer.atoms() {
                             chemical.atoms.push(Atom {
-                                element: atom.element().map(|e| e.symbol().to_string())
-                                    .unwrap_or_else(|| atom.name().chars().next()
-                                        .map(|c| c.to_string()).unwrap_or_default()),
+                                element: atom
+                                    .element()
+                                    .map(|e| e.symbol().to_string())
+                                    .unwrap_or_else(|| {
+                                        atom.name()
+                                            .chars()
+                                            .next()
+                                            .map(|c| c.to_string())
+                                            .unwrap_or_default()
+                                    }),
                                 x: atom.x() as f32,
                                 y: atom.y() as f32,
                                 z: atom.z() as f32,
@@ -1482,25 +1589,25 @@ impl FileHandler {
                 }
             }
         }
-        
+
         Ok(FileContent::Chemical(Box::new(chemical)))
     }
-    
+
     fn load_mol(&self, path: &Path) -> Result<FileContent> {
         let content = fs::read_to_string(path)?;
         let lines: Vec<&str> = content.lines().collect();
-        
+
         let mut chemical = ChemicalContent::default();
-        
+
         if lines.len() > 3 {
             chemical.title = lines[0].trim().to_string();
-            
+
             if let Some(counts_line) = lines.get(3) {
                 let parts: Vec<&str> = counts_line.split_whitespace().collect();
                 if parts.len() >= 2 {
                     let num_atoms: usize = parts[0].parse().unwrap_or(0);
                     let num_bonds: usize = parts[1].parse().unwrap_or(0);
-                    
+
                     for i in 0..num_atoms {
                         if let Some(line) = lines.get(4 + i) {
                             let parts: Vec<&str> = line.split_whitespace().collect();
@@ -1516,7 +1623,7 @@ impl FileHandler {
                             }
                         }
                     }
-                    
+
                     for i in 0..num_bonds {
                         if let Some(line) = lines.get(4 + num_atoms + i) {
                             let parts: Vec<&str> = line.split_whitespace().collect();
@@ -1540,20 +1647,20 @@ impl FileHandler {
                 }
             }
         }
-        
+
         Ok(FileContent::Chemical(Box::new(chemical)))
     }
-    
+
     fn load_xyz(&self, path: &Path) -> Result<FileContent> {
         let content = fs::read_to_string(path)?;
         let lines: Vec<&str> = content.lines().collect();
-        
+
         let mut chemical = ChemicalContent::default();
-        
+
         if lines.len() > 2 {
             let num_atoms: usize = lines[0].trim().parse().unwrap_or(0);
             chemical.title = lines.get(1).unwrap_or(&"").trim().to_string();
-            
+
             for i in 0..num_atoms {
                 if let Some(line) = lines.get(2 + i) {
                     let parts: Vec<&str> = line.split_whitespace().collect();
@@ -1570,21 +1677,22 @@ impl FileHandler {
                 }
             }
         }
-        
+
         Ok(FileContent::Chemical(Box::new(chemical)))
     }
-    
+
     fn load_cif(&self, path: &Path) -> Result<FileContent> {
         // CIF/mmCIF files are also supported by pdbtbx
         self.load_pdb(path)
     }
-    
+
     fn load_archive(&self, path: &Path) -> Result<FileContent> {
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
-        
+
         match ext.as_str() {
             "zip" | "docx" | "xlsx" | "epub" | "jar" | "apk" => self.load_zip_archive(path),
             "tar" => self.load_tar_archive(path, None),
@@ -1596,19 +1704,23 @@ impl FileHandler {
             _ => Err(anyhow!("Unsupported archive format: {}", ext)),
         }
     }
-    
+
     fn load_zip_archive(&self, path: &Path) -> Result<FileContent> {
         use zip::ZipArchive;
-        
+
         let file = fs::File::open(path)?;
         let mut archive = ZipArchive::new(file)?;
-        
+
         let mut content = ArchiveContent {
             format: ArchiveFormat::Zip,
-            comment: archive.comment().is_empty().then_some(()).map(|_| String::from_utf8_lossy(archive.comment()).to_string()),
+            comment: archive
+                .comment()
+                .is_empty()
+                .then_some(())
+                .map(|_| String::from_utf8_lossy(archive.comment()).to_string()),
             ..Default::default()
         };
-        
+
         for i in 0..archive.len() {
             if let Ok(file) = archive.by_index(i) {
                 content.entries.push(ArchiveEntry {
@@ -1617,9 +1729,15 @@ impl FileHandler {
                     size: file.size(),
                     compressed_size: file.compressed_size(),
                     modified: file.last_modified().map(|dt| {
-                        format!("{}-{:02}-{:02} {:02}:{:02}:{:02}",
-                            dt.year(), dt.month(), dt.day(),
-                            dt.hour(), dt.minute(), dt.second())
+                        format!(
+                            "{}-{:02}-{:02} {:02}:{:02}:{:02}",
+                            dt.year(),
+                            dt.month(),
+                            dt.day(),
+                            dt.hour(),
+                            dt.minute(),
+                            dt.second()
+                        )
                     }),
                     crc: Some(file.crc32()),
                     is_encrypted: file.encrypted(),
@@ -1628,17 +1746,17 @@ impl FileHandler {
                 content.compressed_size += file.compressed_size();
             }
         }
-        
+
         Ok(FileContent::Archive(Box::new(content)))
     }
-    
+
     fn load_tar_archive(&self, path: &Path, compression: Option<&str>) -> Result<FileContent> {
         use tar::Archive;
-        
+
         let file = fs::File::open(path)?;
-        
+
         let mut content = ArchiveContent::default();
-        
+
         match compression {
             Some("gz") => {
                 content.format = ArchiveFormat::TarGz;
@@ -1664,15 +1782,19 @@ impl FileHandler {
                 self.read_tar_entries(&mut archive, &mut content)?;
             }
         }
-        
+
         Ok(FileContent::Archive(Box::new(content)))
     }
-    
-    fn read_tar_entries<R: Read>(&self, archive: &mut tar::Archive<R>, content: &mut ArchiveContent) -> Result<()> {
+
+    fn read_tar_entries<R: Read>(
+        &self,
+        archive: &mut tar::Archive<R>,
+        content: &mut ArchiveContent,
+    ) -> Result<()> {
         for entry in (archive.entries()?).flatten() {
             let path = entry.path()?.to_string_lossy().to_string();
             let size = entry.size();
-            
+
             content.entries.push(ArchiveEntry {
                 path,
                 is_dir: entry.header().entry_type().is_dir(),
@@ -1690,18 +1812,18 @@ impl FileHandler {
         }
         Ok(())
     }
-    
+
     fn load_7z_archive(&self, path: &Path) -> Result<FileContent> {
         let mut content = ArchiveContent {
             format: ArchiveFormat::SevenZ,
             ..Default::default()
         };
-        
+
         let _path_str = path.to_str().ok_or_else(|| anyhow!("Invalid path"))?;
 
         sevenz_rust::decompress_file(path, tempfile::tempdir()?.path())
             .map_err(|e| anyhow!("7z error: {:?}", e))?;
-        
+
         // For now, just note it's a 7z file
         // Full enumeration requires extracting
         content.entries.push(ArchiveEntry {
@@ -1713,20 +1835,20 @@ impl FileHandler {
             crc: None,
             is_encrypted: false,
         });
-        
+
         Ok(FileContent::Archive(Box::new(content)))
     }
-    
+
     fn load_rar_archive(&self, path: &Path) -> Result<FileContent> {
         let mut content = ArchiveContent {
             format: ArchiveFormat::Rar,
             ..Default::default()
         };
-        
+
         let archive = unrar::Archive::new(path)
             .open_for_listing()
             .map_err(|e| anyhow!("RAR error: {:?}", e))?;
-        
+
         for entry in archive.flatten() {
             content.entries.push(ArchiveEntry {
                 path: entry.filename.to_string_lossy().to_string(),
@@ -1740,16 +1862,17 @@ impl FileHandler {
             content.total_size += entry.unpacked_size;
             content.compressed_size += entry.unpacked_size;
         }
-        
+
         Ok(FileContent::Archive(Box::new(content)))
     }
-    
+
     fn load_3d_model(&self, path: &Path) -> Result<FileContent> {
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
-        
+
         match ext.as_str() {
             "obj" => self.load_obj(path),
             "stl" => self.load_stl(path),
@@ -1758,20 +1881,20 @@ impl FileHandler {
             _ => Err(anyhow!("Unsupported 3D format: {}", ext)),
         }
     }
-    
+
     fn load_obj(&self, path: &Path) -> Result<FileContent> {
         use obj::Obj;
         use std::io::BufReader;
-        
+
         let file = fs::File::open(path)?;
         let reader = BufReader::new(file);
         let obj: Obj = obj::load_obj(reader)?;
-        
+
         let mut model = Model3DContent {
             format: Model3DFormat::Obj,
             ..Default::default()
         };
-        
+
         // Extract vertices from positions
         for vert in &obj.vertices {
             model.vertices.push(Vertex3D {
@@ -1781,33 +1904,37 @@ impl FileHandler {
                 color: None,
             });
         }
-        
+
         // Extract faces from indices
         for idx_chunk in obj.indices.chunks(3) {
             if idx_chunk.len() == 3 {
                 let face = Face3D {
-                    vertices: vec![idx_chunk[0] as usize, idx_chunk[1] as usize, idx_chunk[2] as usize],
+                    vertices: vec![
+                        idx_chunk[0] as usize,
+                        idx_chunk[1] as usize,
+                        idx_chunk[2] as usize,
+                    ],
                     material: None,
                 };
                 model.faces.push(face);
             }
         }
-        
+
         // Calculate bounding box
         model.bounds = Self::calculate_bounds(&model.vertices);
-        
+
         Ok(FileContent::Model3D(Box::new(model)))
     }
-    
+
     fn load_stl(&self, path: &Path) -> Result<FileContent> {
         let mut file = fs::File::open(path)?;
         let stl = stl_io::read_stl(&mut file)?;
-        
+
         let mut model = Model3DContent {
             format: Model3DFormat::Stl,
             ..Default::default()
         };
-        
+
         // First, add all vertices from the mesh
         for v in &stl.vertices {
             model.vertices.push(Vertex3D {
@@ -1817,32 +1944,36 @@ impl FileHandler {
                 color: None,
             });
         }
-        
+
         // Then add faces using the indices
         for triangle in &stl.faces {
             let normal: [f32; 3] = [triangle.normal[0], triangle.normal[1], triangle.normal[2]];
-            
+
             // Update normals for the vertices
             for &idx in &triangle.vertices {
                 if idx < model.vertices.len() {
                     model.vertices[idx].normal = Some(normal);
                 }
             }
-            
+
             model.faces.push(Face3D {
-                vertices: vec![triangle.vertices[0], triangle.vertices[1], triangle.vertices[2]],
+                vertices: vec![
+                    triangle.vertices[0],
+                    triangle.vertices[1],
+                    triangle.vertices[2],
+                ],
                 material: None,
             });
         }
-        
+
         model.bounds = Self::calculate_bounds(&model.vertices);
-        
+
         Ok(FileContent::Model3D(Box::new(model)))
     }
-    
+
     fn load_gltf(&self, path: &Path) -> Result<FileContent> {
         let (document, buffers, _images) = gltf::import(path)?;
-        
+
         let mut model = Model3DContent {
             format: if path.extension().map(|e| e == "glb").unwrap_or(false) {
                 Model3DFormat::Glb
@@ -1851,16 +1982,16 @@ impl FileHandler {
             },
             ..Default::default()
         };
-        
+
         // Extract mesh data
         for mesh in document.meshes() {
             for primitive in mesh.primitives() {
                 let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-                
+
                 // Read positions
                 if let Some(positions) = reader.read_positions() {
                     let base_idx = model.vertices.len();
-                    
+
                     for pos in positions {
                         model.vertices.push(Vertex3D {
                             position: pos,
@@ -1869,10 +2000,11 @@ impl FileHandler {
                             color: None,
                         });
                     }
-                    
+
                     // Read indices
                     if let Some(indices) = reader.read_indices() {
-                        let indices: Vec<usize> = indices.into_u32().map(|i| i as usize + base_idx).collect();
+                        let indices: Vec<usize> =
+                            indices.into_u32().map(|i| i as usize + base_idx).collect();
                         for chunk in indices.chunks(3) {
                             if chunk.len() == 3 {
                                 model.faces.push(Face3D {
@@ -1885,38 +2017,47 @@ impl FileHandler {
                 }
             }
         }
-        
+
         model.bounds = Self::calculate_bounds(&model.vertices);
-        
+
         Ok(FileContent::Model3D(Box::new(model)))
     }
-    
+
     fn load_ply(&self, path: &Path) -> Result<FileContent> {
         let mut file = fs::File::open(path)?;
         let parser = ply_rs::parser::Parser::<ply_rs::ply::DefaultElement>::new();
         let ply = parser.read_ply(&mut file)?;
-        
+
         let mut model = Model3DContent {
             format: Model3DFormat::Ply,
             ..Default::default()
         };
-        
+
         // Extract vertices
         if let Some(vertices) = ply.payload.get("vertex") {
             for vertex in vertices {
-                let x = vertex.get("x").and_then(|p| match p {
-                    ply_rs::ply::Property::Float(f) => Some(*f),
-                    _ => None,
-                }).unwrap_or(0.0);
-                let y = vertex.get("y").and_then(|p| match p {
-                    ply_rs::ply::Property::Float(f) => Some(*f),
-                    _ => None,
-                }).unwrap_or(0.0);
-                let z = vertex.get("z").and_then(|p| match p {
-                    ply_rs::ply::Property::Float(f) => Some(*f),
-                    _ => None,
-                }).unwrap_or(0.0);
-                
+                let x = vertex
+                    .get("x")
+                    .and_then(|p| match p {
+                        ply_rs::ply::Property::Float(f) => Some(*f),
+                        _ => None,
+                    })
+                    .unwrap_or(0.0);
+                let y = vertex
+                    .get("y")
+                    .and_then(|p| match p {
+                        ply_rs::ply::Property::Float(f) => Some(*f),
+                        _ => None,
+                    })
+                    .unwrap_or(0.0);
+                let z = vertex
+                    .get("z")
+                    .and_then(|p| match p {
+                        ply_rs::ply::Property::Float(f) => Some(*f),
+                        _ => None,
+                    })
+                    .unwrap_or(0.0);
+
                 model.vertices.push(Vertex3D {
                     position: [x, y, z],
                     normal: None,
@@ -1925,7 +2066,7 @@ impl FileHandler {
                 });
             }
         }
-        
+
         // Extract faces
         if let Some(faces) = ply.payload.get("face") {
             for face in faces {
@@ -1937,49 +2078,57 @@ impl FileHandler {
                 }
             }
         }
-        
+
         model.bounds = Self::calculate_bounds(&model.vertices);
-        
+
         Ok(FileContent::Model3D(Box::new(model)))
     }
-    
+
     fn calculate_bounds(vertices: &[Vertex3D]) -> BoundingBox {
         if vertices.is_empty() {
             return BoundingBox::default();
         }
-        
+
         let mut min = [f32::MAX; 3];
         let mut max = [f32::MIN; 3];
-        
+
         for v in vertices {
             for i in 0..3 {
                 min[i] = min[i].min(v.position[i]);
                 max[i] = max[i].max(v.position[i]);
             }
         }
-        
+
         BoundingBox { min, max }
     }
-    
+
     fn load_font(&self, path: &Path) -> Result<FileContent> {
         let data = fs::read(path)?;
-        let face = ttf_parser::Face::parse(&data, 0)
-            .map_err(|e| anyhow!("Font parse error: {:?}", e))?;
-        
+        let face =
+            ttf_parser::Face::parse(&data, 0).map_err(|e| anyhow!("Font parse error: {:?}", e))?;
+
         let font = FontContent {
-            family_name: face.names().into_iter()
+            family_name: face
+                .names()
+                .into_iter()
                 .find(|n| n.name_id == ttf_parser::name_id::FAMILY)
                 .and_then(|n| n.to_string())
                 .unwrap_or_else(|| "Unknown".into()),
-            subfamily: face.names().into_iter()
+            subfamily: face
+                .names()
+                .into_iter()
                 .find(|n| n.name_id == ttf_parser::name_id::SUBFAMILY)
                 .and_then(|n| n.to_string())
                 .unwrap_or_else(|| "Regular".into()),
-            full_name: face.names().into_iter()
+            full_name: face
+                .names()
+                .into_iter()
                 .find(|n| n.name_id == ttf_parser::name_id::FULL_NAME)
                 .and_then(|n| n.to_string())
                 .unwrap_or_default(),
-            version: face.names().into_iter()
+            version: face
+                .names()
+                .into_iter()
                 .find(|n| n.name_id == ttf_parser::name_id::VERSION)
                 .and_then(|n| n.to_string())
                 .unwrap_or_default(),
@@ -1991,10 +2140,10 @@ impl FileHandler {
             is_monospace: face.is_monospaced(),
             preview_data: data,
         };
-        
+
         Ok(FileContent::Font(Box::new(font)))
     }
-    
+
     fn load_audio(&self, path: &Path) -> Result<FileContent> {
         use symphonia::core::audio::SampleBuffer;
         use symphonia::core::codecs::DecoderOptions;
@@ -2025,7 +2174,11 @@ impl FileHandler {
         // Get track info
         let track_id = if let Some(track) = format.tracks().first() {
             audio.sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
-            audio.channels = track.codec_params.channels.map(|c| c.count() as u8).unwrap_or(2);
+            audio.channels = track
+                .codec_params
+                .channels
+                .map(|c| c.count() as u8)
+                .unwrap_or(2);
             audio.bit_depth = track.codec_params.bits_per_sample.unwrap_or(16) as u8;
 
             if let Some(n_frames) = track.codec_params.n_frames {
@@ -2060,8 +2213,8 @@ impl FileHandler {
         if let Some(tid) = track_id {
             if let Some(track) = format.tracks().iter().find(|t| t.id == tid) {
                 let dec_opts = DecoderOptions::default();
-                if let Ok(mut decoder) = symphonia::default::get_codecs()
-                    .make(&track.codec_params, &dec_opts)
+                if let Ok(mut decoder) =
+                    symphonia::default::get_codecs().make(&track.codec_params, &dec_opts)
                 {
                     let mut all_samples: Vec<f32> = Vec::new();
                     let max_samples = audio.sample_rate as usize * 30; // max 30 seconds of samples
@@ -2069,13 +2222,14 @@ impl FileHandler {
                     loop {
                         match format.next_packet() {
                             Ok(packet) => {
-                                if packet.track_id() != tid { continue; }
+                                if packet.track_id() != tid {
+                                    continue;
+                                }
                                 if let Ok(decoded) = decoder.decode(&packet) {
                                     let spec = *decoded.spec();
                                     let duration = decoded.capacity();
-                                    let mut sample_buf = SampleBuffer::<f32>::new(
-                                        duration as u64, spec,
-                                    );
+                                    let mut sample_buf =
+                                        SampleBuffer::<f32>::new(duration as u64, spec);
                                     sample_buf.copy_interleaved_ref(decoded);
                                     let samples = sample_buf.samples();
                                     let channels = spec.channels.count().max(1);
@@ -2084,9 +2238,13 @@ impl FileHandler {
                                     for chunk in samples.chunks(channels) {
                                         let avg = chunk.iter().sum::<f32>() / channels as f32;
                                         all_samples.push(avg);
-                                        if all_samples.len() >= max_samples { break; }
+                                        if all_samples.len() >= max_samples {
+                                            break;
+                                        }
                                     }
-                                    if all_samples.len() >= max_samples { break; }
+                                    if all_samples.len() >= max_samples {
+                                        break;
+                                    }
                                 }
                             }
                             Err(_) => break,
@@ -2099,16 +2257,15 @@ impl FileHandler {
                         let bucket_size = (all_samples.len() / target_points).max(1);
                         audio.waveform_data = all_samples
                             .chunks(bucket_size)
-                            .map(|chunk| {
-                                chunk.iter().fold(0.0f32, |acc, &s| acc.max(s.abs()))
-                            })
+                            .map(|chunk| chunk.iter().fold(0.0f32, |acc, &s| acc.max(s.abs())))
                             .collect();
                     }
                 }
             }
         }
 
-        audio.format = path.extension()
+        audio.format = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_uppercase())
             .unwrap_or_else(|| "AUDIO".into());
@@ -2117,7 +2274,10 @@ impl FileHandler {
     }
 
     /// Extract metadata tags and cover art from a symphonia MetadataRevision
-    fn extract_audio_metadata(audio: &mut AudioContent, metadata: &symphonia::core::meta::MetadataRevision) {
+    fn extract_audio_metadata(
+        audio: &mut AudioContent,
+        metadata: &symphonia::core::meta::MetadataRevision,
+    ) {
         use symphonia::core::meta::StandardTagKey;
 
         for tag in metadata.tags() {
@@ -2161,12 +2321,13 @@ impl FileHandler {
             }
         }
     }
-    
+
     fn load_video(&self, path: &Path) -> Result<FileContent> {
         let data = fs::read(path)?;
 
         let mut video = VideoContent {
-            format: path.extension()
+            format: path
+                .extension()
                 .and_then(|e| e.to_str())
                 .map(|e| e.to_uppercase())
                 .unwrap_or_else(|| "VIDEO".into()),
@@ -2179,7 +2340,11 @@ impl FileHandler {
         // Try to parse MP4 metadata
         if let Ok(context) = mp4parse::read_mp4(&mut std::io::Cursor::new(&data)) {
             // Video track info
-            if let Some(track) = context.tracks.iter().find(|t| t.track_type == mp4parse::TrackType::Video) {
+            if let Some(track) = context
+                .tracks
+                .iter()
+                .find(|t| t.track_type == mp4parse::TrackType::Video)
+            {
                 if let Some(tkhd) = &track.tkhd {
                     video.width = tkhd.width;
                     video.height = tkhd.height;
@@ -2197,8 +2362,12 @@ impl FileHandler {
                         if let mp4parse::SampleEntry::Video(entry) = desc {
                             let codec_str = format!("{:?}", entry.codec_type);
                             let codec_name = match codec_str.as_str() {
-                                s if s.contains("AVC") || s.contains("H264") => "H.264 / AVC".to_string(),
-                                s if s.contains("HEVC") || s.contains("H265") => "H.265 / HEVC".to_string(),
+                                s if s.contains("AVC") || s.contains("H264") => {
+                                    "H.264 / AVC".to_string()
+                                }
+                                s if s.contains("HEVC") || s.contains("H265") => {
+                                    "H.265 / HEVC".to_string()
+                                }
                                 s if s.contains("VP8") => "VP8".to_string(),
                                 s if s.contains("VP9") => "VP9".to_string(),
                                 s if s.contains("AV1") => "AV1".to_string(),
@@ -2213,9 +2382,8 @@ impl FileHandler {
                 // Calculate frame rate from sample count and duration
                 if video.duration > 0.0 {
                     if let Some(stts) = &track.stts {
-                        let total_samples: u64 = stts.samples.iter()
-                            .map(|s| s.sample_count as u64)
-                            .sum();
+                        let total_samples: u64 =
+                            stts.samples.iter().map(|s| s.sample_count as u64).sum();
                         if total_samples > 0 {
                             video.frame_rate = (total_samples as f64 / video.duration) as f32;
                         }
@@ -2224,7 +2392,11 @@ impl FileHandler {
             }
 
             // Audio track info (codec)
-            if let Some(audio_track) = context.tracks.iter().find(|t| t.track_type == mp4parse::TrackType::Audio) {
+            if let Some(audio_track) = context
+                .tracks
+                .iter()
+                .find(|t| t.track_type == mp4parse::TrackType::Audio)
+            {
                 if let Some(stsd) = &audio_track.stsd {
                     for desc in &stsd.descriptions {
                         if let mp4parse::SampleEntry::Audio(entry) = desc {
@@ -2275,23 +2447,23 @@ impl FileHandler {
 
         Ok(FileContent::Video(Box::new(video)))
     }
-    
+
     fn load_ebook(&self, path: &Path) -> Result<FileContent> {
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
-        
+
         match ext.as_str() {
             "epub" => self.load_epub(path),
             _ => Err(anyhow!("Unsupported ebook format: {}", ext)),
         }
     }
-    
+
     fn load_epub(&self, path: &Path) -> Result<FileContent> {
-        let mut doc = epub::doc::EpubDoc::new(path)
-            .map_err(|e| anyhow!("EPUB error: {:?}", e))?;
-        
+        let mut doc = epub::doc::EpubDoc::new(path).map_err(|e| anyhow!("EPUB error: {:?}", e))?;
+
         let mut ebook = EbookContent {
             format: EbookFormat::Epub,
             title: doc.mdata("title").map(|m| m.value.clone()),
@@ -2300,14 +2472,14 @@ impl FileHandler {
             language: doc.mdata("language").map(|m| m.value.clone()),
             ..Default::default()
         };
-        
+
         // Get cover image
         if let Some(cover_id) = doc.get_cover_id() {
             if let Some((data, _mime)) = doc.get_resource(&cover_id) {
                 ebook.cover_image = Some(data);
             }
         }
-        
+
         // Build TOC from navigation points
         for nav_point in doc.toc.iter() {
             ebook.toc.push(TocEntry {
@@ -2316,14 +2488,14 @@ impl FileHandler {
                 level: 0,
             });
         }
-        
+
         // Build table_of_contents for viewer compatibility
         let mut table_of_contents: Vec<String> = Vec::new();
         for nav_point in doc.toc.iter() {
             table_of_contents.push(nav_point.label.clone());
         }
         ebook.table_of_contents = table_of_contents;
-        
+
         // Get chapter content from spine
         for spine_item in doc.spine.clone() {
             if let Some((content, _)) = doc.get_resource(&spine_item.idref) {
@@ -2336,10 +2508,10 @@ impl FileHandler {
                 }
             }
         }
-        
+
         Ok(FileContent::Ebook(Box::new(ebook)))
     }
-    
+
     /// Save a file
     pub fn save_file(&self, file: &OpenFile) -> Result<()> {
         match &file.content {
@@ -2364,19 +2536,23 @@ impl FileHandler {
         }
         Ok(())
     }
-    
+
     fn save_document(&self, path: &Path, doc: &DocumentContent) -> Result<()> {
-        let content: String = doc.paragraphs.iter()
+        let content: String = doc
+            .paragraphs
+            .iter()
             .map(|p| p.text.as_str())
             .collect::<Vec<_>>()
             .join("\n\n");
         fs::write(path, content)?;
         Ok(())
     }
-    
+
     fn save_spreadsheet(&self, path: &Path, spreadsheet: &SpreadsheetContent) -> Result<()> {
         if let Some(sheet) = spreadsheet.sheets.first() {
-            let content: String = sheet.cells.iter()
+            let content: String = sheet
+                .cells
+                .iter()
                 .map(|row| {
                     row.iter()
                         .map(|cell| match cell {
@@ -2404,19 +2580,22 @@ impl FileHandler {
         }
         Ok(())
     }
-    
+
     fn save_chemical(&self, path: &Path, chem: &ChemicalContent) -> Result<()> {
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(crate::fontcase::ascii_lower)
             .unwrap_or_default();
-        
+
         match ext.as_str() {
             "xyz" => {
                 let mut content = format!("{}\n{}\n", chem.atoms.len(), chem.title);
                 for atom in &chem.atoms {
-                    content.push_str(&format!("{} {:.6} {:.6} {:.6}\n", 
-                        atom.element, atom.x, atom.y, atom.z));
+                    content.push_str(&format!(
+                        "{} {:.6} {:.6} {:.6}\n",
+                        atom.element, atom.x, atom.y, atom.z
+                    ));
                 }
                 fs::write(path, content)?;
             }
@@ -2426,12 +2605,12 @@ impl FileHandler {
         }
         Ok(())
     }
-    
+
     /// Clear the file cache
     pub fn clear_cache(&mut self) {
         self.cache.clear();
     }
-    
+
     /// Print a file
     pub fn print_file(&self, file: &OpenFile) -> Result<()> {
         #[cfg(windows)]
@@ -2441,15 +2620,13 @@ impl FileHandler {
                 .args(["/C", "print", file.path.to_str().unwrap_or("")])
                 .spawn()?;
         }
-        
+
         #[cfg(not(windows))]
         {
             use std::process::Command;
-            Command::new("lpr")
-                .arg(&file.path)
-                .spawn()?;
+            Command::new("lpr").arg(&file.path).spawn()?;
         }
-        
+
         Ok(())
     }
 }
@@ -2458,32 +2635,40 @@ impl FileHandler {
 pub fn format_hex_dump(data: &[u8], max_bytes: usize) -> String {
     let mut result = String::new();
     let limit = data.len().min(max_bytes);
-    
+
     for (i, chunk) in data[..limit].chunks(16).enumerate() {
         result.push_str(&format!("{:08x}  ", i * 16));
-        
+
         for (j, byte) in chunk.iter().enumerate() {
             result.push_str(&format!("{:02x} ", byte));
-            if j == 7 { result.push(' '); }
+            if j == 7 {
+                result.push(' ');
+            }
         }
-        
+
         for j in chunk.len()..16 {
             result.push_str("   ");
-            if j == 7 { result.push(' '); }
+            if j == 7 {
+                result.push(' ');
+            }
         }
-        
+
         result.push_str(" |");
         for byte in chunk {
             let c = *byte as char;
-            result.push(if c.is_ascii_graphic() || c == ' ' { c } else { '.' });
+            result.push(if c.is_ascii_graphic() || c == ' ' {
+                c
+            } else {
+                '.'
+            });
         }
         result.push_str("|\n");
     }
-    
+
     if data.len() > max_bytes {
         result.push_str(&format!("... truncated ({} bytes total)\n", data.len()));
     }
-    
+
     result
 }
 
@@ -2494,11 +2679,21 @@ mod tests {
     #[test]
     fn test_file_type_icon_and_description() {
         let types = [
-            FileType::Image, FileType::ImageRaw, FileType::ImagePsd,
-            FileType::Pdf, FileType::Document, FileType::Spreadsheet,
-            FileType::Chemical, FileType::Archive, FileType::Model3D,
-            FileType::Font, FileType::Audio, FileType::Video,
-            FileType::Text, FileType::Markdown, FileType::Ebook,
+            FileType::Image,
+            FileType::ImageRaw,
+            FileType::ImagePsd,
+            FileType::Pdf,
+            FileType::Document,
+            FileType::Spreadsheet,
+            FileType::Chemical,
+            FileType::Archive,
+            FileType::Model3D,
+            FileType::Font,
+            FileType::Audio,
+            FileType::Video,
+            FileType::Text,
+            FileType::Markdown,
+            FileType::Ebook,
             FileType::Unknown,
         ];
         for ft in &types {
@@ -2596,7 +2791,10 @@ mod tests {
         assert_eq!(doc.paragraphs[0].style.font_size, 12.0);
         assert!(doc.paragraphs[0].style.font_family.is_some());
         assert_eq!(doc.paragraphs[0].style.heading_level, Some(1));
-        assert!(matches!(doc.paragraphs[0].style.alignment, TextAlignment::Justify));
+        assert!(matches!(
+            doc.paragraphs[0].style.alignment,
+            TextAlignment::Justify
+        ));
         assert!(doc.metadata.title.is_some());
         assert!(doc.metadata.author.is_some());
         assert!(doc.metadata.subject.is_some());
@@ -2980,11 +3178,7 @@ mod tests {
 
     #[test]
     fn test_ebook_format_variants() {
-        let _formats = [
-            EbookFormat::Epub,
-            EbookFormat::Mobi,
-            EbookFormat::Azw3,
-        ];
+        let _formats = [EbookFormat::Epub, EbookFormat::Mobi, EbookFormat::Azw3];
     }
 
     #[test]

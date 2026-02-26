@@ -8,7 +8,7 @@ fn main() {
         res.set("ProductName", "Sassy Browser");
         res.set("FileDescription", "Pure Rust Web Browser");
         res.set("LegalCopyright", "Sassy Consulting LLC");
-        
+
         if let Err(e) = res.compile() {
             eprintln!("Warning: Failed to compile Windows resources: {}", e);
         }

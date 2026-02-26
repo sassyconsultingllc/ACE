@@ -44,8 +44,8 @@ const CAPTCHA_DOMAINS: &[&str] = &[
     "recaptcha.net",
     "hcaptcha.com",
     "challenges.cloudflare.com",
-    "captcha",  // Generic pattern
-    "verify",   // Generic pattern
+    "captcha", // Generic pattern
+    "verify",  // Generic pattern
 ];
 
 const PAYMENT_DOMAINS: &[&str] = &[
@@ -73,7 +73,7 @@ pub struct PopupRequest {
 pub enum PopupDecision {
     Allow { reason: &'static str },
     Block { reason: &'static str },
-    Prompt { reason: &'static str },  // Ask user
+    Prompt { reason: &'static str }, // Ask user
 }
 
 /// Blocked popup record
@@ -106,34 +106,39 @@ impl PopupHandler {
             page_loaded_at: None,
         }
     }
-    
+
     /// Called when page starts loading
     pub fn page_loading(&mut self) {
         self.page_loaded_at = None;
     }
-    
+
     /// Called when page finishes loading
     pub fn page_loaded(&mut self) {
         self.page_loaded_at = Some(Instant::now());
     }
-    
+
     /// Evaluate a popup request
     pub fn evaluate(&mut self, request: &PopupRequest) -> PopupDecision {
         self.recent_attempts.push_back(request.timestamp);
-        
+
         // Clean old attempts (keep last 30 seconds)
         let cutoff = Instant::now() - Duration::from_secs(30);
-        while self.recent_attempts.front().map(|t| *t < cutoff).unwrap_or(false) {
+        while self
+            .recent_attempts
+            .front()
+            .map(|t| *t < cutoff)
+            .unwrap_or(false)
+        {
             self.recent_attempts.pop_front();
         }
-        
+
         // Check: Too many popups?
         if self.recent_attempts.len() > 5 {
             return PopupDecision::Block {
                 reason: "Too many popup attempts",
             };
         }
-        
+
         // Check: During page load?
         if let Some(loaded_at) = self.page_loaded_at {
             if loaded_at.elapsed() < Duration::from_millis(500) {
@@ -146,22 +151,26 @@ impl PopupHandler {
                 reason: "Page still loading",
             };
         }
-        
+
         // Check: User gesture?
         if request.user_gesture {
             return PopupDecision::Allow {
                 reason: "User initiated",
             };
         }
-        
+
         // Check: Session allowed?
         let target_domain = extract_domain(&request.target_url);
-        if self.session_allowed.iter().any(|d| target_domain.contains(d)) {
+        if self
+            .session_allowed
+            .iter()
+            .any(|d| target_domain.contains(d))
+        {
             return PopupDecision::Allow {
                 reason: "Previously allowed",
             };
         }
-        
+
         // Check: OAuth domain?
         for domain in OAUTH_DOMAINS {
             if request.target_url.contains(domain) {
@@ -170,7 +179,7 @@ impl PopupHandler {
                 };
             }
         }
-        
+
         // Check: CAPTCHA domain?
         for domain in CAPTCHA_DOMAINS {
             if request.target_url.contains(domain) {
@@ -179,7 +188,7 @@ impl PopupHandler {
                 };
             }
         }
-        
+
         // Check: Payment processor?
         for domain in PAYMENT_DOMAINS {
             if request.target_url.contains(domain) {
@@ -188,7 +197,7 @@ impl PopupHandler {
                 };
             }
         }
-        
+
         // Check: Suspicious size?
         if let (Some(w), Some(h)) = (request.width, request.height) {
             // Tiny popup (probably trying to hide)
@@ -204,7 +213,7 @@ impl PopupHandler {
                 };
             }
         }
-        
+
         // Check: Same domain as source?
         let source_domain = extract_domain(&request.source_url);
         if source_domain == target_domain && !source_domain.is_empty() {
@@ -212,13 +221,13 @@ impl PopupHandler {
                 reason: "Same-site popup without gesture",
             };
         }
-        
+
         // Default: Block
         PopupDecision::Block {
             reason: "No user gesture, unknown domain",
         }
     }
-    
+
     /// Handle the decision
     pub fn handle(&mut self, request: PopupRequest, decision: &PopupDecision) -> bool {
         match decision {
@@ -243,24 +252,24 @@ impl PopupHandler {
             }
         }
     }
-    
+
     /// Allow a domain for this session
     pub fn allow_domain(&mut self, domain: &str) {
         if !self.session_allowed.contains(&domain.to_string()) {
             self.session_allowed.push(domain.to_string());
         }
     }
-    
+
     /// Get blocked popup count
     pub fn blocked_count(&self) -> usize {
         self.blocked.len()
     }
-    
+
     /// Get recent blocked popups
     pub fn recent_blocked(&self) -> &[BlockedPopup] {
         &self.blocked
     }
-    
+
     /// Clear blocked list
     pub fn clear_blocked(&mut self) {
         self.blocked.clear();
@@ -271,17 +280,36 @@ impl PopupHandler {
         let recent = self.recent_attempts.len();
         let blocked_total = self.blocked.len();
         let allowed_domains = self.session_allowed.len();
-        let last_blocked = self.blocked.last().map(|b| {
-            format!("{} -> {} ({:?} ago)", b.reason, b.request.target_url, b.timestamp.elapsed())
-        }).unwrap_or_default();
+        let last_blocked = self
+            .blocked
+            .last()
+            .map(|b| {
+                format!(
+                    "{} -> {} ({:?} ago)",
+                    b.reason,
+                    b.request.target_url,
+                    b.timestamp.elapsed()
+                )
+            })
+            .unwrap_or_default();
         // Read blocked popup details for diagnostics
-        let _blocked_details: Vec<String> = self.blocked.iter().map(|b| {
-            format!("src={} tgt={} w={:?} h={:?} gesture={} age={:?} reason={} ts={:?}",
-                b.request.source_url, b.request.target_url,
-                b.request.width, b.request.height,
-                b.request.user_gesture, b.request.timestamp.elapsed(),
-                b.reason, b.timestamp.elapsed())
-        }).collect();
+        let _blocked_details: Vec<String> = self
+            .blocked
+            .iter()
+            .map(|b| {
+                format!(
+                    "src={} tgt={} w={:?} h={:?} gesture={} age={:?} reason={} ts={:?}",
+                    b.request.source_url,
+                    b.request.target_url,
+                    b.request.width,
+                    b.request.height,
+                    b.request.user_gesture,
+                    b.request.timestamp.elapsed(),
+                    b.reason,
+                    b.timestamp.elapsed()
+                )
+            })
+            .collect();
         format!(
             "PopupHandler[recent_attempts={}, blocked={}, session_allowed={}, loaded={:?}, last={}]",
             recent, blocked_total, allowed_domains,
@@ -289,7 +317,7 @@ impl PopupHandler {
             last_blocked,
         )
     }
-    
+
     /// Retry a blocked popup (user clicked "allow")
     pub fn allow_blocked(&mut self, index: usize) -> Option<PopupRequest> {
         if index < self.blocked.len() {
@@ -323,15 +351,15 @@ fn extract_domain(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_oauth_allowed() {
         let mut handler = PopupHandler::new();
         handler.page_loaded();
-        
+
         // Wait a bit for page load check
         std::thread::sleep(Duration::from_millis(600));
-        
+
         let request = PopupRequest {
             source_url: "https://example.com".into(),
             target_url: "https://accounts.google.com/oauth".into(),
@@ -340,17 +368,17 @@ mod tests {
             user_gesture: false,
             timestamp: Instant::now(),
         };
-        
+
         let decision = handler.evaluate(&request);
         assert!(matches!(decision, PopupDecision::Allow { .. }));
     }
-    
+
     #[test]
     fn test_captcha_allowed() {
         let mut handler = PopupHandler::new();
         handler.page_loaded();
         std::thread::sleep(Duration::from_millis(600));
-        
+
         let request = PopupRequest {
             source_url: "https://example.com".into(),
             target_url: "https://challenges.cloudflare.com/verify".into(),
@@ -359,17 +387,17 @@ mod tests {
             user_gesture: false,
             timestamp: Instant::now(),
         };
-        
+
         let decision = handler.evaluate(&request);
         assert!(matches!(decision, PopupDecision::Allow { .. }));
     }
-    
+
     #[test]
     fn test_spam_blocked() {
         let mut handler = PopupHandler::new();
         handler.page_loaded();
         std::thread::sleep(Duration::from_millis(600));
-        
+
         let request = PopupRequest {
             source_url: "https://example.com".into(),
             target_url: "https://totally-not-spam.xyz/winner".into(),
@@ -378,7 +406,7 @@ mod tests {
             user_gesture: false,
             timestamp: Instant::now(),
         };
-        
+
         let decision = handler.evaluate(&request);
         assert!(matches!(decision, PopupDecision::Block { .. }));
     }

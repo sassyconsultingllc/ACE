@@ -6,9 +6,8 @@
 //! - Cursor changes (pointer, text, etc.)
 //! - Recording meaningful interactions for page sandbox
 
- 
-use crate::layout::{LayoutBox, Rect};
 use crate::dom::{NodeRef, NodeType};
+use crate::layout::{LayoutBox, Rect};
 
 /// Result of a hit test
 #[derive(Debug, Clone)]
@@ -80,27 +79,28 @@ pub fn hit_test(layout: &LayoutBox, x: f32, y: f32) -> Option<HitResult> {
     if !total_bounds.contains(x, y) {
         return None;
     }
-    
+
     // Check children first (front to back)
     for child in layout.children.iter().rev() {
         if let Some(hit) = hit_test(child, x, y) {
             return Some(hit);
         }
     }
-    
+
     // This box is hit
     let element_type = get_element_type(layout);
     let href = get_href(layout);
     let is_editable = matches!(element_type, ElementType::Input | ElementType::Textarea);
-    let is_clickable = href.is_some() || matches!(element_type, ElementType::Button | ElementType::Link);
-    
+    let is_clickable =
+        href.is_some() || matches!(element_type, ElementType::Button | ElementType::Link);
+
     let cursor = match element_type {
         ElementType::Link | ElementType::Button if href.is_some() => CursorType::Pointer,
         ElementType::Input | ElementType::Textarea => CursorType::Text,
         ElementType::Image if href.is_some() => CursorType::Pointer,
         _ => CursorType::Default,
     };
-    
+
     Some(HitResult {
         node: layout.node.clone(),
         element_type,
@@ -118,7 +118,7 @@ fn get_total_bounds(layout: &LayoutBox) -> Rect {
     let box_y = layout.bounds.y;
     let box_w = layout.bounds.width;
     let box_h = layout.bounds.height;
-    
+
     Rect::new(box_x, box_y, box_w, box_h)
 }
 
@@ -134,19 +134,20 @@ fn hit_test_all_recursive(layout: &LayoutBox, x: f32, y: f32, results: &mut Vec<
     if !total_bounds.contains(x, y) {
         return;
     }
-    
+
     // Add this box
     let element_type = get_element_type(layout);
     let href = get_href(layout);
     let is_editable = matches!(element_type, ElementType::Input | ElementType::Textarea);
-    let is_clickable = href.is_some() || matches!(element_type, ElementType::Button | ElementType::Link);
-    
+    let is_clickable =
+        href.is_some() || matches!(element_type, ElementType::Button | ElementType::Link);
+
     let cursor = match element_type {
         ElementType::Link | ElementType::Button if href.is_some() => CursorType::Pointer,
         ElementType::Input | ElementType::Textarea => CursorType::Text,
         _ => CursorType::Default,
     };
-    
+
     results.push(HitResult {
         node: layout.node.clone(),
         element_type,
@@ -156,7 +157,7 @@ fn hit_test_all_recursive(layout: &LayoutBox, x: f32, y: f32, results: &mut Vec<
         is_editable,
         is_clickable,
     });
-    
+
     // Check children
     for child in &layout.children {
         hit_test_all_recursive(child, x, y, results);
@@ -196,13 +197,13 @@ fn get_element_type(layout: &LayoutBox) -> ElementType {
             return ElementType::Text;
         }
     }
-    
+
     ElementType::Other
 }
 
 // Interaction tracking for page trust score
 pub struct InteractionTracker {
-    pub interacted: Vec<usize>,  // Simple indices for now
+    pub interacted: Vec<usize>, // Simple indices for now
     pub total_actions: usize,
     pub edited_fields: Vec<usize>,
     pub keystroke_count: usize,
@@ -217,7 +218,7 @@ impl InteractionTracker {
             keystroke_count: 0,
         }
     }
-    
+
     pub fn record_click(&mut self, _hit: &HitResult) -> InteractionQuality {
         self.total_actions += 1;
         self.interacted.push(self.total_actions);
@@ -248,9 +249,14 @@ impl InteractionTracker {
 
     /// Summary of tracker state for diagnostics
     pub fn describe(&self) -> String {
-        format!("InteractionTracker[actions={}, interacted={}, edited={}, keystrokes={}, score={:.2}]",
-            self.total_actions, self.interacted.len(), self.edited_fields.len(),
-            self.keystroke_count, self.get_quality_score())
+        format!(
+            "InteractionTracker[actions={}, interacted={}, edited={}, keystrokes={}, score={:.2}]",
+            self.total_actions,
+            self.interacted.len(),
+            self.edited_fields.len(),
+            self.keystroke_count,
+            self.get_quality_score()
+        )
     }
 }
 

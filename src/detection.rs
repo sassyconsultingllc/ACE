@@ -33,10 +33,10 @@
 //! - A page that trips a honeypot proves it was doing something it shouldn't
 
 use crate::sandbox::{TrustLevel, ViolationSeverity};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use serde::{Deserialize, Serialize};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Suspicion Level — maps to our ViolationSeverity system
@@ -299,7 +299,8 @@ impl HoneypotConfig {
 
         if self.inject_fake_storage {
             // Plant fake keys that fingerprinters will try to read
-            js.push_str(&format!(r#"
+            js.push_str(&format!(
+                r#"
 (function() {{
     try {{
         var _hp_key = 'sassy_session_{tok}';
@@ -308,18 +309,24 @@ impl HoneypotConfig {
         // Monitor reads via proxy (SassyScript intercepts)
         window.__sassy_hp_storage_token = _hp_key;
     }} catch(e) {{}}
-}})();"#, tok = tok));
+}})();"#,
+                tok = tok
+            ));
         }
 
         if self.inject_canary_cookie {
             // Plant canary cookie
-            js.push_str(&format!(r#"
-document.cookie = 'sassy_hp_{tok}=canary_{tok};path=/;SameSite=Strict';"#, tok = tok));
+            js.push_str(&format!(
+                r#"
+document.cookie = 'sassy_hp_{tok}=canary_{tok};path=/;SameSite=Strict';"#,
+                tok = tok
+            ));
         }
 
         if self.inject_canvas_bait {
             // Canvas bait — creates a hidden canvas with known content
-            js.push_str(&format!(r#"
+            js.push_str(&format!(
+                r#"
 (function() {{
     try {{
         var c = document.createElement('canvas');
@@ -330,7 +337,9 @@ document.cookie = 'sassy_hp_{tok}=canary_{tok};path=/;SameSite=Strict';"#, tok =
         document.body.appendChild(c);
         window.__sassy_hp_canvas_id = c.id;
     }} catch(e) {{}}
-}})();"#, tok = tok));
+}})();"#,
+                tok = tok
+            ));
         }
 
         js
@@ -338,7 +347,10 @@ document.cookie = 'sassy_hp_{tok}=canary_{tok};path=/;SameSite=Strict';"#, tok =
 
     /// Check if honeypots should be active for this trust level
     pub fn should_activate(trust_level: TrustLevel) -> bool {
-        matches!(trust_level, TrustLevel::Untrusted | TrustLevel::Acknowledged)
+        matches!(
+            trust_level,
+            TrustLevel::Untrusted | TrustLevel::Acknowledged
+        )
     }
 }
 
@@ -362,38 +374,53 @@ pub struct DetectionRule {
 
 /// Known malicious tracker / ad network domains
 const MALICIOUS_DOMAINS: &[&str] = &[
-    "doubleclick.net", "googletagservices.com", "adservice.google.com",
-    "scorecardresearch.com", "quantserve.com", "googlesyndication.com",
-    "2mdn.net", "moatads.com", "taboola.com", "outbrain.com",
+    "doubleclick.net",
+    "googletagservices.com",
+    "adservice.google.com",
+    "scorecardresearch.com",
+    "quantserve.com",
+    "googlesyndication.com",
+    "2mdn.net",
+    "moatads.com",
+    "taboola.com",
+    "outbrain.com",
 ];
 
 /// Crypto miner domains
 const MINER_DOMAINS: &[&str] = &[
-    "coinhive.com", "jsecoin.com", "cryptoloot.pro", "coin-hive.com",
-    "authedmine.com", "minero.cc", "webmine.cz",
+    "coinhive.com",
+    "jsecoin.com",
+    "cryptoloot.pro",
+    "coin-hive.com",
+    "authedmine.com",
+    "minero.cc",
+    "webmine.cz",
 ];
 
 const BUILT_IN_RULES: &[DetectionRule] = &[
     // ─── HONEYPOT RULES (only fire on levels 0-1) ───
-
     DetectionRule {
         name: "honeypot_form_touched",
         pattern: |ctx| {
-            if !HoneypotConfig::should_activate(ctx.trust_level) { return None; }
+            if !HoneypotConfig::should_activate(ctx.trust_level) {
+                return None;
+            }
             if ctx.honeypot_form_touched {
                 Some(SuspicionLevel::Critical) // Only bots touch hidden forms
             } else {
                 None
             }
         },
-        description: "Hidden honeypot form field was filled — automated credential harvester detected",
+        description:
+            "Hidden honeypot form field was filled — automated credential harvester detected",
         action: DetectionAction::QuarantinePage,
     },
-
     DetectionRule {
         name: "honeypot_link_followed",
         pattern: |ctx| {
-            if !HoneypotConfig::should_activate(ctx.trust_level) { return None; }
+            if !HoneypotConfig::should_activate(ctx.trust_level) {
+                return None;
+            }
             if ctx.honeypot_link_followed {
                 Some(SuspicionLevel::High)
             } else {
@@ -403,25 +430,28 @@ const BUILT_IN_RULES: &[DetectionRule] = &[
         description: "Invisible honeypot link was followed — automated crawler/scraper detected",
         action: DetectionAction::ResetTrust,
     },
-
     DetectionRule {
         name: "honeypot_storage_scraped",
         pattern: |ctx| {
-            if !HoneypotConfig::should_activate(ctx.trust_level) { return None; }
+            if !HoneypotConfig::should_activate(ctx.trust_level) {
+                return None;
+            }
             if ctx.honeypot_storage_read {
                 Some(SuspicionLevel::High)
             } else {
                 None
             }
         },
-        description: "Honeypot localStorage/sessionStorage key was read — fingerprint script detected",
+        description:
+            "Honeypot localStorage/sessionStorage key was read — fingerprint script detected",
         action: DetectionAction::WarnUser,
     },
-
     DetectionRule {
         name: "honeypot_cookie_exfiltrated",
         pattern: |ctx| {
-            if !HoneypotConfig::should_activate(ctx.trust_level) { return None; }
+            if !HoneypotConfig::should_activate(ctx.trust_level) {
+                return None;
+            }
             if ctx.honeypot_cookie_exfiltrated {
                 Some(SuspicionLevel::Critical)
             } else {
@@ -431,11 +461,12 @@ const BUILT_IN_RULES: &[DetectionRule] = &[
         description: "Canary cookie was sent to external domain — cookie theft detected",
         action: DetectionAction::QuarantinePage,
     },
-
     DetectionRule {
         name: "honeypot_canvas_probed",
         pattern: |ctx| {
-            if !HoneypotConfig::should_activate(ctx.trust_level) { return None; }
+            if !HoneypotConfig::should_activate(ctx.trust_level) {
+                return None;
+            }
             if ctx.honeypot_canvas_probed {
                 Some(SuspicionLevel::Medium)
             } else {
@@ -445,13 +476,15 @@ const BUILT_IN_RULES: &[DetectionRule] = &[
         description: "Honeypot canvas element was read — canvas fingerprinting script detected",
         action: DetectionAction::WarnUser,
     },
-
     // ─── BEHAVIORAL RULES (fire at any trust level) ───
-
     DetectionRule {
         name: "known_malicious_tracker",
         pattern: |ctx| {
-            if ctx.known_trackers.iter().any(|t| MALICIOUS_DOMAINS.contains(&t.as_str())) {
+            if ctx
+                .known_trackers
+                .iter()
+                .any(|t| MALICIOUS_DOMAINS.contains(&t.as_str()))
+            {
                 Some(SuspicionLevel::High)
             } else {
                 None
@@ -460,28 +493,42 @@ const BUILT_IN_RULES: &[DetectionRule] = &[
         description: "Known malicious or heavy-tracking domain detected",
         action: DetectionAction::WarnUser,
     },
-
     DetectionRule {
         name: "canvas_fingerprinting",
-        pattern: |ctx| if ctx.canvas_calls { Some(SuspicionLevel::Medium) } else { None },
+        pattern: |ctx| {
+            if ctx.canvas_calls {
+                Some(SuspicionLevel::Medium)
+            } else {
+                None
+            }
+        },
         description: "Canvas fingerprinting attempt detected",
         action: DetectionAction::LogOnly,
     },
-
     DetectionRule {
         name: "webgl_fingerprinting",
-        pattern: |ctx| if ctx.webgl_calls { Some(SuspicionLevel::Medium) } else { None },
+        pattern: |ctx| {
+            if ctx.webgl_calls {
+                Some(SuspicionLevel::Medium)
+            } else {
+                None
+            }
+        },
         description: "WebGL fingerprinting attempt detected",
         action: DetectionAction::LogOnly,
     },
-
     DetectionRule {
         name: "battery_api_abuse",
-        pattern: |ctx| if ctx.battery_api_calls { Some(SuspicionLevel::Low) } else { None },
+        pattern: |ctx| {
+            if ctx.battery_api_calls {
+                Some(SuspicionLevel::Low)
+            } else {
+                None
+            }
+        },
         description: "Battery API used for potential fingerprinting",
         action: DetectionAction::LogOnly,
     },
-
     DetectionRule {
         name: "clipboard_hijack_attempt",
         pattern: |ctx| {
@@ -496,7 +543,6 @@ const BUILT_IN_RULES: &[DetectionRule] = &[
         description: "Page attempted to access clipboard without user gesture",
         action: DetectionAction::BlockResource,
     },
-
     DetectionRule {
         name: "credential_phishing_form",
         pattern: |ctx| {
@@ -509,13 +555,16 @@ const BUILT_IN_RULES: &[DetectionRule] = &[
         description: "Suspicious login form on untrusted domain — potential phishing",
         action: DetectionAction::QuarantinePage,
     },
-
     DetectionRule {
         name: "crypto_miner_detected",
         pattern: |ctx| {
             if ctx.crypto_miner_indicators {
                 Some(SuspicionLevel::High)
-            } else if ctx.scripts_src.iter().any(|s| MINER_DOMAINS.iter().any(|d| s.contains(d))) {
+            } else if ctx
+                .scripts_src
+                .iter()
+                .any(|s| MINER_DOMAINS.iter().any(|d| s.contains(d)))
+            {
                 Some(SuspicionLevel::Critical)
             } else {
                 None
@@ -524,7 +573,6 @@ const BUILT_IN_RULES: &[DetectionRule] = &[
         description: "Cryptocurrency miner script behavior detected",
         action: DetectionAction::BlockResource,
     },
-
     DetectionRule {
         name: "excessive_redirects",
         pattern: |ctx| {
@@ -539,7 +587,6 @@ const BUILT_IN_RULES: &[DetectionRule] = &[
         description: "Excessive redirect chain — possible malicious redirect loop",
         action: DetectionAction::WarnUser,
     },
-
     DetectionRule {
         name: "iframe_overload",
         pattern: |ctx| {
@@ -636,7 +683,9 @@ impl DetectionEngine {
                 };
 
                 // Update behavior record
-                let entry = self.behaviors.entry(rule.name.to_string())
+                let entry = self
+                    .behaviors
+                    .entry(rule.name.to_string())
                     .or_insert(BehaviorRecord {
                         first_seen: now,
                         count: 0,
@@ -675,7 +724,11 @@ impl DetectionEngine {
     }
 
     /// Set up honeypots for a tab at trust levels 0-1
-    pub fn setup_honeypots(&mut self, tab_id: u64, trust_level: TrustLevel) -> Option<HoneypotConfig> {
+    pub fn setup_honeypots(
+        &mut self,
+        tab_id: u64,
+        trust_level: TrustLevel,
+    ) -> Option<HoneypotConfig> {
         if HoneypotConfig::should_activate(trust_level) {
             let config = HoneypotConfig::default();
             self.honeypots.insert(tab_id, config.clone());
@@ -767,7 +820,8 @@ impl DetectionEngine {
 
         let snapshots: Vec<AlertSnapshot> = {
             let active = self.recent_alerts(5);
-            active.iter()
+            active
+                .iter()
                 .filter(|a| a.timestamp > cutoff)
                 .map(|a| AlertSnapshot {
                     rule_name: a.rule_name.clone(),
@@ -783,7 +837,10 @@ impl DetectionEngine {
             return false;
         }
 
-        let banner_color = if snapshots.iter().any(|a| a.level == SuspicionLevel::Critical) {
+        let banner_color = if snapshots
+            .iter()
+            .any(|a| a.level == SuspicionLevel::Critical)
+        {
             Color32::from_rgb(180, 40, 40) // Red for critical
         } else if snapshots.iter().any(|a| a.level == SuspicionLevel::High) {
             Color32::from_rgb(200, 120, 40) // Orange for high
@@ -795,29 +852,44 @@ impl DetectionEngine {
         let snap_len = snapshots.len();
 
         ui.horizontal(|ui| {
-            ui.colored_label(banner_color,
-                RichText::new("SECURITY").strong().color(text_color));
+            ui.colored_label(
+                banner_color,
+                RichText::new("SECURITY").strong().color(text_color),
+            );
 
             for alert in snapshots.iter().take(3) {
-                let prefix = if alert.honeypot_triggered { "[HP] " } else { "" };
+                let prefix = if alert.honeypot_triggered {
+                    "[HP] "
+                } else {
+                    ""
+                };
                 ui.separator();
-                ui.colored_label(banner_color,
-                    RichText::new(format!("{}{}: {}", prefix, alert.rule_name, alert.description))
-                        .color(text_color)
-                        .small());
+                ui.colored_label(
+                    banner_color,
+                    RichText::new(format!(
+                        "{}{}: {}",
+                        prefix, alert.rule_name, alert.description
+                    ))
+                    .color(text_color)
+                    .small(),
+                );
             }
 
             if snap_len > 3 {
                 ui.separator();
-                ui.colored_label(banner_color,
+                ui.colored_label(
+                    banner_color,
                     RichText::new(format!("+{} more", snap_len - 3))
                         .color(text_color)
-                        .small());
+                        .small(),
+                );
             }
 
             // Dismiss button — safe to mutate self.alerts now (no outstanding borrows)
             if ui.small_button("X").clicked() {
-                let cutoff_idx = self.alerts.iter()
+                let cutoff_idx = self
+                    .alerts
+                    .iter()
                     .position(|a| a.timestamp > cutoff)
                     .unwrap_or(self.alerts.len());
                 self.alerts.drain(cutoff_idx..);
@@ -851,7 +923,9 @@ mod tests {
         let mut ctx = untrusted_ctx();
         ctx.honeypot_form_touched = true;
         let alerts = engine.analyze(&ctx);
-        assert!(alerts.iter().any(|a| a.rule_name == "honeypot_form_touched"));
+        assert!(alerts
+            .iter()
+            .any(|a| a.rule_name == "honeypot_form_touched"));
         assert!(alerts.iter().any(|a| a.level == SuspicionLevel::Critical));
     }
 
@@ -862,7 +936,9 @@ mod tests {
         ctx.trust_level = TrustLevel::Reviewed; // Level 2 — honeypots off
         ctx.honeypot_form_touched = true;
         let alerts = engine.analyze(&ctx);
-        assert!(alerts.iter().all(|a| a.rule_name != "honeypot_form_touched"));
+        assert!(alerts
+            .iter()
+            .all(|a| a.rule_name != "honeypot_form_touched"));
     }
 
     #[test]
@@ -872,7 +948,9 @@ mod tests {
         ctx.login_form_detected = true;
         ctx.phishing_keywords = true;
         let alerts = engine.analyze(&ctx);
-        assert!(alerts.iter().any(|a| a.rule_name == "credential_phishing_form"));
+        assert!(alerts
+            .iter()
+            .any(|a| a.rule_name == "credential_phishing_form"));
     }
 
     #[test]
@@ -982,8 +1060,10 @@ mod tests {
         ctx.url = "https://test.com".to_string();
         ctx.domain = "test.com".to_string();
         ctx.trust_level = TrustLevel::Untrusted;
-        ctx.headers.insert("Content-Type".into(), "text/html".into());
-        ctx.scripts_src.push("https://cdn.example.com/script.js".into());
+        ctx.headers
+            .insert("Content-Type".into(), "text/html".into());
+        ctx.scripts_src
+            .push("https://cdn.example.com/script.js".into());
         ctx.inline_script_hashes.push("sha256-abc".into());
         ctx.iframes.push("https://frame.example.com".into());
         ctx.canvas_calls = true;

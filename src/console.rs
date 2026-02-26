@@ -3,9 +3,8 @@
 //! Interactive JavaScript console, network inspector, and DOM explorer.
 //! The core feature that makes Sassy the developer's browser.
 
- 
 use crate::style::Color;
-use crate::syntax::{SyntaxHighlighter, Language};
+use crate::syntax::{Language, SyntaxHighlighter};
 use eframe::egui;
 use std::collections::VecDeque;
 
@@ -43,7 +42,14 @@ impl LogLevel {
     /// Describe this log level for rendering
     pub fn describe(&self) -> String {
         let c = self.color();
-        format!("{}{:?}(#{:02x}{:02x}{:02x})", self.prefix(), self, c.r, c.g, c.b)
+        format!(
+            "{}{:?}(#{:02x}{:02x}{:02x})",
+            self.prefix(),
+            self,
+            c.r,
+            c.g,
+            c.b
+        )
     }
 }
 
@@ -53,7 +59,7 @@ pub struct ConsoleEntry {
     pub level: LogLevel,
     pub message: String,
     pub timestamp: chrono::DateTime<chrono::Local>,
-    pub source: Option<String>,  // File:line
+    pub source: Option<String>, // File:line
     pub stack_trace: Option<String>,
 }
 
@@ -67,7 +73,7 @@ impl ConsoleEntry {
             stack_trace: None,
         }
     }
-    
+
     pub fn with_source(mut self, source: String) -> Self {
         self.source = Some(source);
         self
@@ -116,7 +122,7 @@ pub struct WaterfallTiming {
     pub queued_ms: f64,
     /// DNS lookup time (ms)
     pub dns_ms: f64,
-    /// TCP connect time (ms) 
+    /// TCP connect time (ms)
     pub connect_ms: f64,
     /// TLS/SSL handshake time (ms)
     pub ssl_ms: f64,
@@ -128,17 +134,27 @@ pub struct WaterfallTiming {
 
 impl WaterfallTiming {
     pub fn total_ms(&self) -> f64 {
-        self.queued_ms + self.dns_ms + self.connect_ms + self.ssl_ms + self.ttfb_ms + self.download_ms
+        self.queued_ms
+            + self.dns_ms
+            + self.connect_ms
+            + self.ssl_ms
+            + self.ttfb_ms
+            + self.download_ms
     }
-    
+
     /// Get waterfall bar segments for rendering
     /// Returns: (phase_name, start_ms, duration_ms, color)
     pub fn segments(&self) -> Vec<(&'static str, f64, f64, Color)> {
         let mut segments = Vec::new();
         let mut offset = 0.0;
-        
+
         if self.queued_ms > 0.0 {
-            segments.push(("Queued", offset, self.queued_ms, Color::new(128, 128, 128, 255)));
+            segments.push((
+                "Queued",
+                offset,
+                self.queued_ms,
+                Color::new(128, 128, 128, 255),
+            ));
             offset += self.queued_ms;
         }
         if self.dns_ms > 0.0 {
@@ -146,7 +162,12 @@ impl WaterfallTiming {
             offset += self.dns_ms;
         }
         if self.connect_ms > 0.0 {
-            segments.push(("Connect", offset, self.connect_ms, Color::new(255, 165, 0, 255)));
+            segments.push((
+                "Connect",
+                offset,
+                self.connect_ms,
+                Color::new(255, 165, 0, 255),
+            ));
             offset += self.connect_ms;
         }
         if self.ssl_ms > 0.0 {
@@ -158,16 +179,22 @@ impl WaterfallTiming {
             offset += self.ttfb_ms;
         }
         if self.download_ms > 0.0 {
-            segments.push(("Download", offset, self.download_ms, Color::new(100, 100, 255, 255)));
+            segments.push((
+                "Download",
+                offset,
+                self.download_ms,
+                Color::new(100, 100, 255, 255),
+            ));
         }
-        
+
         segments
     }
 
     /// Describe waterfall timing for status display
     pub fn describe(&self) -> String {
         let segs = self.segments();
-        let parts: Vec<String> = segs.iter()
+        let parts: Vec<String> = segs
+            .iter()
             .map(|(name, start, dur, _color)| format!("{}:+{:.1}@{:.1}", name, dur, start))
             .collect();
         format!("total={:.1}ms [{}]", self.total_ms(), parts.join(", "))
@@ -195,18 +222,19 @@ impl NetworkEntry {
             waterfall: WaterfallTiming::default(),
         }
     }
-    
+
     pub fn complete(&mut self, status: u16, status_text: &str) {
         self.status = Some(status);
         self.status_text = Some(status_text.to_string());
         self.end_time = Some(chrono::Local::now());
         self.duration_ms = Some(
-            self.end_time.unwrap()
+            self.end_time
+                .unwrap()
                 .signed_duration_since(self.start_time)
-                .num_milliseconds() as u64
+                .num_milliseconds() as u64,
         );
     }
-    
+
     pub fn status_color(&self) -> Color {
         match self.status {
             Some(s) if (200..300).contains(&s) => Color::new(100, 200, 100, 255),
@@ -217,9 +245,13 @@ impl NetworkEntry {
             _ => Color::new(220, 220, 220, 255),
         }
     }
-    
+
     /// Update waterfall timing from network bar request timing
-    pub fn update_waterfall(&mut self, timing: &crate::ui::network_bar::RequestTiming, _started: std::time::Instant) {
+    pub fn update_waterfall(
+        &mut self,
+        timing: &crate::ui::network_bar::RequestTiming,
+        _started: std::time::Instant,
+    ) {
         // Calculate each phase duration
         if let Some(dns) = timing.dns_duration_ms() {
             self.waterfall.dns_ms = dns;
@@ -251,7 +283,9 @@ impl NetworkEntry {
         let dur = self.duration_ms.unwrap_or(0);
         let err = self.error.as_deref().unwrap_or("none");
         let start = self.start_time.format("%H:%M:%S");
-        let end = self.end_time.map_or("pending".to_string(), |t| t.format("%H:%M:%S").to_string());
+        let end = self
+            .end_time
+            .map_or("pending".to_string(), |t| t.format("%H:%M:%S").to_string());
         let wf = self.waterfall.describe();
         format!(
             "[{}] {} {} -> {} (#{:02x}{:02x}{:02x}) hdrs={} req={}B res={}B type={} len={} dur={}ms err={} {}-{} wf={}",
@@ -300,25 +334,25 @@ impl ConsolePanel {
 /// Developer console state
 pub struct DevConsole {
     pub visible: bool,
-    pub height: u32,  // Height when open
+    pub height: u32, // Height when open
     pub active_panel: ConsolePanel,
-    
+
     // Console log
     pub console_entries: VecDeque<ConsoleEntry>,
     pub max_console_entries: usize,
-    
+
     // Network log
     pub network_entries: VecDeque<NetworkEntry>,
     pub max_network_entries: usize,
     pub next_request_id: u64,
     pub selected_network_entry: Option<u64>,
-    
+
     // Command input
     pub input_buffer: String,
     pub input_cursor: usize,
     pub command_history: Vec<String>,
     pub history_index: Option<usize>,
-    
+
     // Filters
     pub console_filter: String,
     pub network_filter: String,
@@ -326,10 +360,10 @@ pub struct DevConsole {
     pub show_info: bool,
     pub show_warn: bool,
     pub show_error: bool,
-    
+
     // Elements inspector
     pub inspector: ElementInspector,
-    
+
     // Syntax highlighter for code display
     highlighter: SyntaxHighlighter,
 }
@@ -355,20 +389,30 @@ pub struct ElementInspector {
 #[derive(Debug, Clone)]
 pub struct CssRuleMatch {
     pub selector: String,
-    pub source: String,  // e.g. "style.css:42"
+    pub source: String,                          // e.g. "style.css:42"
     pub properties: Vec<(String, String, bool)>, // name, value, is_overridden
 }
 
 impl CssRuleMatch {
     /// Describe this CSS rule match for rendering
     pub fn describe(&self) -> String {
-        let props: Vec<String> = self.properties.iter()
+        let props: Vec<String> = self
+            .properties
+            .iter()
             .map(|(name, val, overridden)| {
-                if *overridden { format!("~~{}:{}~~", name, val) }
-                else { format!("{}:{}", name, val) }
+                if *overridden {
+                    format!("~~{}:{}~~", name, val)
+                } else {
+                    format!("{}:{}", name, val)
+                }
             })
             .collect();
-        format!("{} ({}) {{ {} }}", self.selector, self.source, props.join("; "))
+        format!(
+            "{} ({}) {{ {} }}",
+            self.selector,
+            self.source,
+            props.join("; ")
+        )
     }
 }
 
@@ -386,8 +430,10 @@ impl BoxModel {
     pub fn describe(&self) -> String {
         format!(
             "margin=[{}] border=[{}] padding=[{}] content=[{}]",
-            self.margin.describe(), self.border.describe(),
-            self.padding.describe(), self.content.describe()
+            self.margin.describe(),
+            self.border.describe(),
+            self.padding.describe(),
+            self.content.describe()
         )
     }
 }
@@ -428,39 +474,77 @@ impl ElementInspector {
             self.hovered_path.clear();
         }
     }
-    
+
     /// Select an element by path
     pub fn select_element(&mut self, path: Vec<usize>) {
         self.selected_path = path;
         self.pick_mode = false;
     }
-    
+
     /// Update computed styles from a ComputedStyle
     pub fn update_from_computed(&mut self, style: &crate::style::ComputedStyle) {
         self.computed_styles.clear();
-        
+
         // Extract key style properties
-        self.computed_styles.push(("display".to_string(), format!("{:?}", style.display)));
-        self.computed_styles.push(("position".to_string(), format!("{:?}", style.position)));
-        self.computed_styles.push(("width".to_string(), format!("{:?}", style.width)));
-        self.computed_styles.push(("height".to_string(), format!("{:?}", style.height)));
-        self.computed_styles.push(("color".to_string(), 
-            format!("rgba({}, {}, {}, {})", style.color.r, style.color.g, style.color.b, style.color.a)));
-        self.computed_styles.push(("background-color".to_string(),
-            format!("rgba({}, {}, {}, {})", style.background_color.r, style.background_color.g, 
-                    style.background_color.b, style.background_color.a)));
-        self.computed_styles.push(("font-size".to_string(), format!("{}px", style.font_size)));
-        self.computed_styles.push(("font-weight".to_string(), format!("{}", style.font_weight)));
-        self.computed_styles.push(("font-family".to_string(), style.font_family.clone()));
-        self.computed_styles.push(("margin".to_string(), 
-            format!("{} {} {} {}", style.margin.top, style.margin.right, style.margin.bottom, style.margin.left)));
-        self.computed_styles.push(("padding".to_string(),
-            format!("{} {} {} {}", style.padding.top, style.padding.right, style.padding.bottom, style.padding.left)));
-        self.computed_styles.push(("border-width".to_string(),
-            format!("{} {} {} {}", style.border.top, style.border.right, style.border.bottom, style.border.left)));
-        self.computed_styles.push(("flex-direction".to_string(), format!("{:?}", style.flex_direction)));
-        self.computed_styles.push(("opacity".to_string(), format!("{}", style.opacity)));
-        
+        self.computed_styles
+            .push(("display".to_string(), format!("{:?}", style.display)));
+        self.computed_styles
+            .push(("position".to_string(), format!("{:?}", style.position)));
+        self.computed_styles
+            .push(("width".to_string(), format!("{:?}", style.width)));
+        self.computed_styles
+            .push(("height".to_string(), format!("{:?}", style.height)));
+        self.computed_styles.push((
+            "color".to_string(),
+            format!(
+                "rgba({}, {}, {}, {})",
+                style.color.r, style.color.g, style.color.b, style.color.a
+            ),
+        ));
+        self.computed_styles.push((
+            "background-color".to_string(),
+            format!(
+                "rgba({}, {}, {}, {})",
+                style.background_color.r,
+                style.background_color.g,
+                style.background_color.b,
+                style.background_color.a
+            ),
+        ));
+        self.computed_styles
+            .push(("font-size".to_string(), format!("{}px", style.font_size)));
+        self.computed_styles
+            .push(("font-weight".to_string(), format!("{}", style.font_weight)));
+        self.computed_styles
+            .push(("font-family".to_string(), style.font_family.clone()));
+        self.computed_styles.push((
+            "margin".to_string(),
+            format!(
+                "{} {} {} {}",
+                style.margin.top, style.margin.right, style.margin.bottom, style.margin.left
+            ),
+        ));
+        self.computed_styles.push((
+            "padding".to_string(),
+            format!(
+                "{} {} {} {}",
+                style.padding.top, style.padding.right, style.padding.bottom, style.padding.left
+            ),
+        ));
+        self.computed_styles.push((
+            "border-width".to_string(),
+            format!(
+                "{} {} {} {}",
+                style.border.top, style.border.right, style.border.bottom, style.border.left
+            ),
+        ));
+        self.computed_styles.push((
+            "flex-direction".to_string(),
+            format!("{:?}", style.flex_direction),
+        ));
+        self.computed_styles
+            .push(("opacity".to_string(), format!("{}", style.opacity)));
+
         // Update box model
         self.box_model.margin = EdgeBox {
             top: style.margin.top,
@@ -481,13 +565,13 @@ impl ElementInspector {
             left: style.border.left,
         };
     }
-    
+
     /// Update content box dimensions from layout
     pub fn set_content_size(&mut self, width: f32, height: f32) {
         self.box_model.content.width = width;
         self.box_model.content.height = height;
     }
-    
+
     /// Clear selection
     pub fn clear(&mut self) {
         self.selected_path.clear();
@@ -507,8 +591,12 @@ impl ElementInspector {
         let bm = self.box_model.describe();
         format!(
             "path=[{}] hover=[{}] pick={} styles={} rules=[{}] box={}",
-            path_str.join("/"), hover_str.join("/"),
-            self.pick_mode, styles_count, rules.join("; "), bm
+            path_str.join("/"),
+            hover_str.join("/"),
+            self.pick_mode,
+            styles_count,
+            rules.join("; "),
+            bm
         )
     }
 }
@@ -539,12 +627,12 @@ impl DevConsole {
             highlighter: SyntaxHighlighter::new(),
         }
     }
-    
+
     /// Toggle visibility
     pub fn toggle(&mut self) {
         self.visible = !self.visible;
     }
-    
+
     /// Log a message
     pub fn log(&mut self, level: LogLevel, message: String) {
         self.log_with_source(level, message, String::new());
@@ -563,22 +651,22 @@ impl DevConsole {
             self.console_entries.pop_front();
         }
     }
-    
+
     /// Start tracking a network request
     pub fn start_request(&mut self, method: &str, url: &str) -> u64 {
         let id = self.next_request_id;
         self.next_request_id += 1;
-        
+
         let entry = NetworkEntry::new(id, method, url);
         self.network_entries.push_back(entry);
-        
+
         while self.network_entries.len() > self.max_network_entries {
             self.network_entries.pop_front();
         }
-        
+
         id
     }
-    
+
     /// Complete a network request
     pub fn complete_request(&mut self, id: u64, status: u16, status_text: &str) {
         if let Some(entry) = self.network_entries.iter_mut().find(|e| e.id == id) {
@@ -589,7 +677,7 @@ impl DevConsole {
             self.fail_request(id, &format!("Server error: {} {}", status, status_text));
         }
     }
-    
+
     /// Mark a request as failed
     pub fn fail_request(&mut self, id: u64, error: &str) {
         if let Some(entry) = self.network_entries.iter_mut().find(|e| e.id == id) {
@@ -597,21 +685,21 @@ impl DevConsole {
             entry.end_time = Some(chrono::Local::now());
         }
     }
-    
+
     /// Execute a console command
     pub fn execute_command(&mut self, js_executor: impl FnOnce(&str) -> Result<String, String>) {
         let command = self.input_buffer.clone();
         if command.is_empty() {
             return;
         }
-        
+
         // Add to history
         self.command_history.push(command.clone());
         self.history_index = None;
-        
+
         // Log the command
         self.log(LogLevel::Log, format!("> {}", command));
-        
+
         // Execute
         match js_executor(&command) {
             Ok(result) => {
@@ -623,12 +711,12 @@ impl DevConsole {
                 self.log(LogLevel::Error, err);
             }
         }
-        
+
         // Clear input
         self.input_buffer.clear();
         self.input_cursor = 0;
     }
-    
+
     /// Handle keyboard input for the console input buffer.
     /// Use "Enter" key to execute the current command (via a no-op executor).
     pub fn handle_key(&mut self, key: &str, ctrl: bool) {
@@ -705,51 +793,62 @@ impl DevConsole {
             }
             _ if key.len() == 1 => {
                 // Insert character
-                self.input_buffer.insert(self.input_cursor, key.chars().next().unwrap());
+                self.input_buffer
+                    .insert(self.input_cursor, key.chars().next().unwrap());
                 self.input_cursor += 1;
             }
             _ => {}
         }
     }
-    
+
     /// Get filtered console entries
     pub fn filtered_console_entries(&self) -> Vec<&ConsoleEntry> {
-        self.console_entries.iter().filter(|e| {
-            // Filter by level
-            match e.level {
-                LogLevel::Log => self.show_log,
-                LogLevel::Info => self.show_info,
-                LogLevel::Warn => self.show_warn,
-                LogLevel::Error => self.show_error,
-                LogLevel::Debug => self.show_log,
-            }
-        }).filter(|e| {
-            // Filter by text
-            if self.console_filter.is_empty() {
-                true
-            } else {
-                crate::fontcase::ascii_lower(&e.message).contains(&crate::fontcase::ascii_lower(&self.console_filter))
-            }
-        }).collect()
+        self.console_entries
+            .iter()
+            .filter(|e| {
+                // Filter by level
+                match e.level {
+                    LogLevel::Log => self.show_log,
+                    LogLevel::Info => self.show_info,
+                    LogLevel::Warn => self.show_warn,
+                    LogLevel::Error => self.show_error,
+                    LogLevel::Debug => self.show_log,
+                }
+            })
+            .filter(|e| {
+                // Filter by text
+                if self.console_filter.is_empty() {
+                    true
+                } else {
+                    crate::fontcase::ascii_lower(&e.message)
+                        .contains(&crate::fontcase::ascii_lower(&self.console_filter))
+                }
+            })
+            .collect()
     }
-    
+
     /// Get filtered network entries
     pub fn filtered_network_entries(&self) -> Vec<&NetworkEntry> {
-        self.network_entries.iter().filter(|e| {
-            if self.network_filter.is_empty() {
-                true
-            } else {
-                crate::fontcase::ascii_lower(&e.url).contains(&crate::fontcase::ascii_lower(&self.network_filter)) ||
-                crate::fontcase::ascii_lower(&e.method).contains(&crate::fontcase::ascii_lower(&self.network_filter))
-            }
-        }).collect()
+        self.network_entries
+            .iter()
+            .filter(|e| {
+                if self.network_filter.is_empty() {
+                    true
+                } else {
+                    crate::fontcase::ascii_lower(&e.url)
+                        .contains(&crate::fontcase::ascii_lower(&self.network_filter))
+                        || crate::fontcase::ascii_lower(&e.method)
+                            .contains(&crate::fontcase::ascii_lower(&self.network_filter))
+                }
+            })
+            .collect()
     }
-    
+
     /// Highlight JavaScript code for display
     pub fn highlight_js(&self, code: &str) -> Vec<Vec<crate::syntax::HighlightToken>> {
         self.highlighter.highlight(code, Language::JavaScript)
     }
-    
+
     /// Clear all entries
     pub fn clear(&mut self) {
         self.console_entries.clear();
@@ -807,12 +906,13 @@ impl DevConsole {
         let mut lines = Vec::new();
 
         // Panel info — uses all ConsolePanel variants via all()/label()
-        let panels: Vec<&str> = ConsolePanel::all().iter()
-            .map(|p| p.label())
-            .collect();
+        let panels: Vec<&str> = ConsolePanel::all().iter().map(|p| p.label()).collect();
         lines.push(format!(
             "panels=[{}] active={:?} height={} visible={}",
-            panels.join(","), self.active_panel, self.height, self.visible
+            panels.join(","),
+            self.active_panel,
+            self.height,
+            self.visible
         ));
 
         // Filter state
@@ -825,23 +925,33 @@ impl DevConsole {
         // Input state
         lines.push(format!(
             "input: cursor={} history_len={} history_idx={:?} buffer_len={}",
-            self.input_cursor, self.command_history.len(),
-            self.history_index, self.input_buffer.len()
+            self.input_cursor,
+            self.command_history.len(),
+            self.history_index,
+            self.input_buffer.len()
         ));
 
         // Console entries — uses filtered_console_entries() and ConsoleEntry::describe()
         let filtered = self.filtered_console_entries();
-        lines.push(format!("console: {}/{} entries (filtered {})",
-            self.console_entries.len(), self.max_console_entries, filtered.len()));
+        lines.push(format!(
+            "console: {}/{} entries (filtered {})",
+            self.console_entries.len(),
+            self.max_console_entries,
+            filtered.len()
+        ));
         for entry in filtered.iter().take(3) {
             lines.push(format!("  {}", entry.describe()));
         }
 
         // Network entries — uses filtered_network_entries(), NetworkEntry::describe(), selected_network_entry
         let net_filtered = self.filtered_network_entries();
-        lines.push(format!("network: {}/{} entries (filtered {}) selected={:?}",
-            self.network_entries.len(), self.max_network_entries,
-            net_filtered.len(), self.selected_network_entry));
+        lines.push(format!(
+            "network: {}/{} entries (filtered {}) selected={:?}",
+            self.network_entries.len(),
+            self.max_network_entries,
+            net_filtered.len(),
+            self.selected_network_entry
+        ));
         for entry in net_filtered.iter().take(3) {
             lines.push(format!("  {}", entry.describe()));
         }
@@ -902,20 +1012,20 @@ pub fn console_debug(message: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_console_log() {
         let mut console = DevConsole::new();
         console.log(LogLevel::Log, "test".to_string());
         assert_eq!(console.console_entries.len(), 1);
     }
-    
+
     #[test]
     fn test_network_tracking() {
         let mut console = DevConsole::new();
         let id = console.start_request("GET", "https://example.com");
         console.complete_request(id, 200, "OK");
-        
+
         assert_eq!(console.network_entries.len(), 1);
         assert_eq!(console.network_entries[0].status, Some(200));
     }

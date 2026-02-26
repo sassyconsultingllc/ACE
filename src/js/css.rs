@@ -39,7 +39,12 @@ impl Specificity {
             if i < len && (chars[i].is_ascii_alphabetic() || chars[i] == '-') {
                 element_count += 1;
                 // Skip until we hit '#', '.', '[', ':' or end.
-                while i < len && chars[i] != '#' && chars[i] != '.' && chars[i] != '[' && chars[i] != ':' {
+                while i < len
+                    && chars[i] != '#'
+                    && chars[i] != '.'
+                    && chars[i] != '['
+                    && chars[i] != ':'
+                {
                     i += 1;
                 }
             }
@@ -49,14 +54,24 @@ impl Specificity {
                     '#' => {
                         id_count += 1;
                         i += 1;
-                        while i < len && chars[i] != '#' && chars[i] != '.' && chars[i] != '[' && chars[i] != ':' {
+                        while i < len
+                            && chars[i] != '#'
+                            && chars[i] != '.'
+                            && chars[i] != '['
+                            && chars[i] != ':'
+                        {
                             i += 1;
                         }
                     }
                     '.' => {
                         class_count += 1;
                         i += 1;
-                        while i < len && chars[i] != '#' && chars[i] != '.' && chars[i] != '[' && chars[i] != ':' {
+                        while i < len
+                            && chars[i] != '#'
+                            && chars[i] != '.'
+                            && chars[i] != '['
+                            && chars[i] != ':'
+                        {
                             i += 1;
                         }
                     }
@@ -80,7 +95,12 @@ impl Specificity {
                             // pseudo-class  :hover etc.
                             class_count += 1;
                         }
-                        while i < len && chars[i] != '#' && chars[i] != '.' && chars[i] != '[' && chars[i] != ':' {
+                        while i < len
+                            && chars[i] != '#'
+                            && chars[i] != '.'
+                            && chars[i] != '['
+                            && chars[i] != ':'
+                        {
                             i += 1;
                         }
                     }
@@ -278,10 +298,7 @@ impl CssEngine {
                             }
                         };
                         if dominated {
-                            property_origins.insert(
-                                prop.clone(),
-                                (spec, rule_idx, val.clone()),
-                            );
+                            property_origins.insert(prop.clone(), (spec, rule_idx, val.clone()));
                         }
                     }
                 }
@@ -416,9 +433,15 @@ mod tests {
     #[test]
     fn specificity_compound() {
         // div.active  -> 1 element + 1 class
-        assert_eq!(Specificity::calculate("div.active"), Specificity(0, 0, 1, 1));
+        assert_eq!(
+            Specificity::calculate("div.active"),
+            Specificity(0, 0, 1, 1)
+        );
         // div#main.active  -> 1 element + 1 id + 1 class
-        assert_eq!(Specificity::calculate("div#main.active"), Specificity(0, 1, 1, 1));
+        assert_eq!(
+            Specificity::calculate("div#main.active"),
+            Specificity(0, 1, 1, 1)
+        );
     }
 
     #[test]
@@ -426,7 +449,10 @@ mod tests {
         // "div p"  -> 2 elements
         assert_eq!(Specificity::calculate("div p"), Specificity(0, 0, 0, 2));
         // "#nav .item a" -> 1 id + 1 class + 1 element
-        assert_eq!(Specificity::calculate("#nav .item a"), Specificity(0, 1, 1, 1));
+        assert_eq!(
+            Specificity::calculate("#nav .item a"),
+            Specificity(0, 1, 1, 1)
+        );
     }
 
     #[test]
@@ -443,9 +469,9 @@ mod tests {
 
     #[test]
     fn specificity_ordering() {
-        let s1 = Specificity::calculate("div");        // (0,0,0,1)
-        let s2 = Specificity::calculate(".cls");        // (0,0,1,0)
-        let s3 = Specificity::calculate("#id");         // (0,1,0,0)
+        let s1 = Specificity::calculate("div"); // (0,0,0,1)
+        let s2 = Specificity::calculate(".cls"); // (0,0,1,0)
+        let s3 = Specificity::calculate("#id"); // (0,1,0,0)
         assert!(s1 < s2);
         assert!(s2 < s3);
     }
@@ -458,7 +484,10 @@ mod tests {
         engine.add_rule("body", "margin: 0; padding: 0");
         assert_eq!(engine.rules().len(), 1);
         assert_eq!(engine.rules()[0].selectors, vec!["body"]);
-        assert_eq!(engine.rules()[0].declarations.get("margin"), Some(&"0".to_string()));
+        assert_eq!(
+            engine.rules()[0].declarations.get("margin"),
+            Some(&"0".to_string())
+        );
     }
 
     #[test]
@@ -471,9 +500,7 @@ mod tests {
     #[test]
     fn engine_add_stylesheet_with_comments() {
         let mut engine = CssEngine::new();
-        engine.add_stylesheet(
-            "/* reset */ body { margin: 0; } /* heading */ h1 { color: blue; }"
-        );
+        engine.add_stylesheet("/* reset */ body { margin: 0; } /* heading */ h1 { color: blue; }");
         assert_eq!(engine.rules().len(), 2);
     }
 
@@ -507,9 +534,9 @@ mod tests {
     #[test]
     fn engine_compute_style_cascade_specificity() {
         let mut engine = CssEngine::new();
-        engine.add_rule("p", "color: red");        // specificity (0,0,0,1)
+        engine.add_rule("p", "color: red"); // specificity (0,0,0,1)
         engine.add_rule(".highlight", "color: green"); // specificity (0,0,1,0) — does not match "p"
-        engine.add_rule("p", "color: blue");        // specificity (0,0,0,1)
+        engine.add_rule("p", "color: blue"); // specificity (0,0,0,1)
         let style = engine.compute_style("p");
         // Only the two "p" rules match; last one wins.
         assert_eq!(style.get("color"), Some(&"blue".to_string()));
@@ -537,9 +564,9 @@ mod tests {
     fn engine_compute_style_specificity_wins() {
         let mut engine = CssEngine::new();
         // Lower specificity rule added *after* higher specificity rule
-        engine.add_rule("#main", "color: green");   // (0,1,0,0)
-        engine.add_rule("div", "color: red");       // (0,0,0,1)
-        // Query #main — only #main rule matches
+        engine.add_rule("#main", "color: green"); // (0,1,0,0)
+        engine.add_rule("div", "color: red"); // (0,0,0,1)
+                                              // Query #main — only #main rule matches
         let style = engine.compute_style("#main");
         assert_eq!(style.get("color"), Some(&"green".to_string()));
     }
@@ -547,7 +574,8 @@ mod tests {
     #[test]
     fn engine_add_stylesheet_realistic() {
         let mut engine = CssEngine::new();
-        engine.add_stylesheet(r#"
+        engine.add_stylesheet(
+            r#"
             body {
                 margin: 0;
                 padding: 0;
@@ -567,12 +595,16 @@ mod tests {
             h1, h2 {
                 font-weight: bold;
             }
-        "#);
+        "#,
+        );
         assert_eq!(engine.rules().len(), 4);
 
         let body_style = engine.compute_style("body");
         assert_eq!(body_style.get("margin"), Some(&"0".to_string()));
-        assert_eq!(body_style.get("font-family"), Some(&"sans-serif".to_string()));
+        assert_eq!(
+            body_style.get("font-family"),
+            Some(&"sans-serif".to_string())
+        );
     }
 
     #[test]

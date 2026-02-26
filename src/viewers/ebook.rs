@@ -1,6 +1,6 @@
 #![allow(deprecated)]
 //! eBook Viewer - EPUB, MOBI reader with chapter navigation
-//! 
+//!
 //! Features:
 //! - Table of contents navigation
 //! - Chapter reading with HTML rendering
@@ -43,10 +43,16 @@ impl EbookViewer {
             bookmarks: Vec::new(),
         }
     }
-    
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, _zoom: f32, icons: &crate::icons::Icons) {
+
+    pub fn render(
+        &mut self,
+        ui: &mut egui::Ui,
+        file: &OpenFile,
+        _zoom: f32,
+        icons: &crate::icons::Icons,
+    ) {
         let available = ui.available_size();
-        
+
         // Theme colors
         let (bg_color, text_color, accent_color) = match self.theme {
             ReadingTheme::Light => (
@@ -65,7 +71,7 @@ impl EbookViewer {
                 Color32::from_rgb(150, 100, 50),
             ),
         };
-        
+
         ui.horizontal(|ui| {
             // TOC sidebar
             if self.show_toc {
@@ -75,27 +81,37 @@ impl EbookViewer {
                         ui.set_min_width(250.0);
                         ui.set_max_width(250.0);
                         ui.set_min_height(available.y);
-                        
+
                         self.render_sidebar(ui, file, accent_color, icons);
                     });
             }
-            
+
             // Main reading area
             egui::Frame::none()
                 .fill(bg_color)
                 .inner_margin(24.0)
                 .show(ui, |ui| {
-                    ui.set_min_width(if self.show_toc { available.x - 270.0 } else { available.x });
-                    
+                    ui.set_min_width(if self.show_toc {
+                        available.x - 270.0
+                    } else {
+                        available.x
+                    });
+
                     self.render_content(ui, file, text_color, accent_color, icons);
                 });
         });
     }
-    
-    fn render_sidebar(&mut self, ui: &mut egui::Ui, file: &OpenFile, accent: Color32, icons: &crate::icons::Icons) {
+
+    fn render_sidebar(
+        &mut self,
+        ui: &mut egui::Ui,
+        file: &OpenFile,
+        accent: Color32,
+        icons: &crate::icons::Icons,
+    ) {
         ui.vertical(|ui| {
             ui.add_space(12.0);
-            
+
             // Header with toggle
             ui.horizontal(|ui| {
                 ui.heading(RichText::new("Contents").size(16.0));
@@ -105,10 +121,10 @@ impl EbookViewer {
                     }
                 });
             });
-            
+
             ui.add_space(8.0);
             ui.separator();
-            
+
             // Cover image (if available)
             if let Some(ref ebook) = file.ebook {
                 if ebook.cover_image.is_some() {
@@ -126,7 +142,7 @@ impl EbookViewer {
                     });
                     ui.add_space(8.0);
                 }
-                
+
                 // Book title and author
                 if let Some(ref title) = ebook.title {
                     ui.add_space(8.0);
@@ -135,12 +151,12 @@ impl EbookViewer {
                 if let Some(ref author) = ebook.author {
                     ui.label(RichText::new(author).size(12.0).color(Color32::GRAY));
                 }
-                
+
                 ui.add_space(12.0);
                 ui.separator();
                 ui.add_space(8.0);
             }
-            
+
             // Table of Contents
             egui::ScrollArea::vertical()
                 .id_source("toc_scroll")
@@ -152,18 +168,23 @@ impl EbookViewer {
                         } else {
                             0.0
                         };
-                        
+
                         ui.horizontal(|ui| {
                             ui.label(RichText::new("Progress:").size(11.0).color(Color32::GRAY));
-                            ui.add(egui::ProgressBar::new(progress)
-                                .desired_width(120.0)
-                                .fill(accent));
-                            ui.label(RichText::new(format!("{:.0}%", progress * 100.0))
-                                .size(11.0).color(Color32::GRAY));
+                            ui.add(
+                                egui::ProgressBar::new(progress)
+                                    .desired_width(120.0)
+                                    .fill(accent),
+                            );
+                            ui.label(
+                                RichText::new(format!("{:.0}%", progress * 100.0))
+                                    .size(11.0)
+                                    .color(Color32::GRAY),
+                            );
                         });
-                        
+
                         ui.add_space(12.0);
-                        
+
                         // TOC entries
                         for (idx, toc_entry) in ebook.toc.iter().enumerate() {
                             let is_current = idx == self.current_chapter;
@@ -172,26 +193,29 @@ impl EbookViewer {
                             } else {
                                 toc_entry.title.clone()
                             };
-                            
+
                             let response = ui.selectable_label(
                                 is_current,
-                                RichText::new(&label_text)
-                                    .size(13.0)
-                                    .color(if is_current { accent } else { Color32::from_gray(180) })
+                                RichText::new(&label_text).size(13.0).color(if is_current {
+                                    accent
+                                } else {
+                                    Color32::from_gray(180)
+                                }),
                             );
-                            
+
                             if response.clicked() {
-                                self.current_chapter = idx.min(ebook.chapters.len().saturating_sub(1));
+                                self.current_chapter =
+                                    idx.min(ebook.chapters.len().saturating_sub(1));
                                 self.scroll_position = 0.0;
                             }
                         }
-                        
+
                         // If no TOC, show chapter numbers
                         if ebook.toc.is_empty() {
                             for idx in 0..ebook.chapters.len() {
                                 let is_current = idx == self.current_chapter;
                                 let label = format!("Chapter {}", idx + 1);
-                                
+
                                 if ui.selectable_label(is_current, &label).clicked() {
                                     self.current_chapter = idx;
                                     self.scroll_position = 0.0;
@@ -200,27 +224,36 @@ impl EbookViewer {
                         }
                     }
                 });
-            
+
             // Bottom controls
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 ui.add_space(8.0);
-                
+
                 // Theme selector
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Theme:").size(11.0).color(Color32::GRAY));
-                    if ui.selectable_label(self.theme == ReadingTheme::Light, "(sun)").clicked() {
+                    if ui
+                        .selectable_label(self.theme == ReadingTheme::Light, "(sun)")
+                        .clicked()
+                    {
                         self.theme = ReadingTheme::Light;
                     }
-                    if ui.selectable_label(self.theme == ReadingTheme::Sepia, "").clicked() {
+                    if ui
+                        .selectable_label(self.theme == ReadingTheme::Sepia, "")
+                        .clicked()
+                    {
                         self.theme = ReadingTheme::Sepia;
                     }
-                    if ui.selectable_label(self.theme == ReadingTheme::Dark, "").clicked() {
+                    if ui
+                        .selectable_label(self.theme == ReadingTheme::Dark, "")
+                        .clicked()
+                    {
                         self.theme = ReadingTheme::Dark;
                     }
                 });
-                
+
                 ui.add_space(4.0);
-                
+
                 // Font size
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Size:").size(11.0).color(Color32::GRAY));
@@ -232,43 +265,54 @@ impl EbookViewer {
                         self.font_size = (self.font_size + 1.0).min(32.0);
                     }
                 });
-                
+
                 ui.separator();
             });
         });
     }
-    
-    fn render_content(&mut self, ui: &mut egui::Ui, file: &OpenFile, text_color: Color32, accent: Color32, icons: &crate::icons::Icons) {
+
+    fn render_content(
+        &mut self,
+        ui: &mut egui::Ui,
+        file: &OpenFile,
+        text_color: Color32,
+        accent: Color32,
+        icons: &crate::icons::Icons,
+    ) {
         // Show TOC button if hidden
         if !self.show_toc {
             ui.horizontal(|ui| {
-                if icons.text_button(ui, "books", "Contents", "Show table of contents").clicked() {
+                if icons
+                    .text_button(ui, "books", "Contents", "Show table of contents")
+                    .clicked()
+                {
                     self.show_toc = true;
                 }
                 ui.separator();
             });
             ui.add_space(8.0);
         }
-        
+
         // Reading toolbar
         ui.horizontal(|ui| {
             // Navigation
             if let Some(ref ebook) = file.ebook {
                 let can_prev = self.current_chapter > 0;
                 let can_next = self.current_chapter < ebook.chapters.len().saturating_sub(1);
-                
+
                 ui.add_enabled_ui(can_prev, |ui| {
                     if icons.button(ui, "arrow-left", "Previous chapter").clicked() {
                         self.current_chapter -= 1;
                         self.scroll_position = 0.0;
                     }
                 });
-                
-                ui.label(format!("{} / {}", 
+
+                ui.label(format!(
+                    "{} / {}",
                     self.current_chapter + 1,
                     ebook.chapters.len()
                 ));
-                
+
                 ui.add_enabled_ui(can_next, |ui| {
                     if icons.button(ui, "arrow-right", "Next chapter").clicked() {
                         self.current_chapter += 1;
@@ -276,26 +320,31 @@ impl EbookViewer {
                     }
                 });
             }
-            
+
             ui.separator();
-            
+
             // Bookmark
-            if icons.text_button(ui, "plus", "Bookmark", "Add bookmark").clicked() {
+            if icons
+                .text_button(ui, "plus", "Bookmark", "Add bookmark")
+                .clicked()
+            {
                 self.bookmarks.push((self.current_chapter, String::new()));
             }
-            
+
             // Search
             ui.separator();
             icons.inline(ui, "search");
-            let _search_resp = ui.add(egui::TextEdit::singleline(&mut self.search_query)
-                .desired_width(150.0)
-                .hint_text("Search..."));
+            let _search_resp = ui.add(
+                egui::TextEdit::singleline(&mut self.search_query)
+                    .desired_width(150.0)
+                    .hint_text("Search..."),
+            );
         });
-        
+
         ui.add_space(12.0);
         ui.separator();
         ui.add_space(16.0);
-        
+
         // Chapter content
         egui::ScrollArea::vertical()
             .id_source("chapter_content")
@@ -305,41 +354,45 @@ impl EbookViewer {
                     if let Some(chapter) = ebook.chapters.get(self.current_chapter) {
                         // Chapter title
                         if let Some(ref title) = chapter.title {
-                            ui.label(RichText::new(title)
-                                .size(self.font_size + 8.0)
-                                .strong()
-                                .color(text_color));
+                            ui.label(
+                                RichText::new(title)
+                                    .size(self.font_size + 8.0)
+                                    .strong()
+                                    .color(text_color),
+                            );
                             ui.add_space(16.0);
                         }
-                        
+
                         // Render chapter content (simplified HTML to text)
                         let content = self.html_to_text(&chapter.content);
-                        
+
                         // Split into paragraphs and render
                         for paragraph in content.split("\n\n") {
                             let trimmed = paragraph.trim();
                             if !trimmed.is_empty() {
-                                ui.label(RichText::new(trimmed)
-                                    .size(self.font_size)
-                                    .color(text_color));
+                                ui.label(
+                                    RichText::new(trimmed)
+                                        .size(self.font_size)
+                                        .color(text_color),
+                                );
                                 ui.add_space(12.0);
                             }
                         }
-                        
+
                         // End of chapter marker
                         ui.add_space(40.0);
                         ui.centered_and_justified(|ui| {
-                            ui.label(RichText::new("--  *  --")
-                                .size(14.0)
-                                .color(Color32::GRAY));
+                            ui.label(RichText::new("--  *  --").size(14.0).color(Color32::GRAY));
                         });
-                        
+
                         // Next chapter prompt
                         if self.current_chapter < ebook.chapters.len() - 1 {
                             ui.add_space(20.0);
                             ui.centered_and_justified(|ui| {
-                                if ui.button(RichText::new("Continue to next chapter ->")
-                                    .color(accent))
+                                if ui
+                                    .button(
+                                        RichText::new("Continue to next chapter ->").color(accent),
+                                    )
                                     .clicked()
                                 {
                                     self.current_chapter += 1;
@@ -349,9 +402,11 @@ impl EbookViewer {
                         }
                     } else {
                         ui.centered_and_justified(|ui| {
-                            ui.label(RichText::new("No chapter content available")
-                                .italics()
-                                .color(Color32::GRAY));
+                            ui.label(
+                                RichText::new("No chapter content available")
+                                    .italics()
+                                    .color(Color32::GRAY),
+                            );
                         });
                     }
                 } else {
@@ -361,28 +416,26 @@ impl EbookViewer {
                             ui.add_space(60.0);
                             ui.label(RichText::new("").size(64.0));
                             ui.add_space(16.0);
-                            ui.label(RichText::new("eBook")
-                                .size(24.0)
-                                .color(text_color));
+                            ui.label(RichText::new("eBook").size(24.0).color(text_color));
                             ui.add_space(8.0);
-                            ui.label(RichText::new(&file.name)
-                                .monospace()
-                                .color(Color32::GRAY));
+                            ui.label(RichText::new(&file.name).monospace().color(Color32::GRAY));
                             ui.add_space(16.0);
-                            ui.label(RichText::new("Unable to parse ebook content")
-                                .color(Color32::from_rgb(200, 100, 100)));
+                            ui.label(
+                                RichText::new("Unable to parse ebook content")
+                                    .color(Color32::from_rgb(200, 100, 100)),
+                            );
                         });
                     });
                 }
             });
     }
-    
+
     /// Simple HTML to text converter
     fn html_to_text(&self, html: &str) -> String {
         let mut result = String::new();
         let mut in_tag = false;
         let mut current_tag = String::new();
-        
+
         for ch in html.chars() {
             match ch {
                 '<' => {
@@ -392,12 +445,15 @@ impl EbookViewer {
                 '>' => {
                     in_tag = false;
                     let tag_lower = crate::fontcase::ascii_lower(&current_tag);
-                    
+
                     // Handle block-level tags with newlines
-                    if tag_lower.starts_with("p") || tag_lower.starts_with("/p") ||
-                       tag_lower.starts_with("br") ||
-                       tag_lower.starts_with("div") || tag_lower.starts_with("/div") ||
-                       tag_lower.starts_with("h") || tag_lower.starts_with("/h")
+                    if tag_lower.starts_with("p")
+                        || tag_lower.starts_with("/p")
+                        || tag_lower.starts_with("br")
+                        || tag_lower.starts_with("div")
+                        || tag_lower.starts_with("/div")
+                        || tag_lower.starts_with("h")
+                        || tag_lower.starts_with("/h")
                     {
                         result.push_str("\n\n");
                     }
@@ -412,7 +468,7 @@ impl EbookViewer {
                 }
             }
         }
-        
+
         // Decode HTML entities
         result
             .replace("&nbsp;", " ")

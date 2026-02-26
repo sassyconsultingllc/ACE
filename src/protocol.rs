@@ -1,8 +1,8 @@
 // Protocol - HTTP/HTTPS handling
 
-use url::Url;
 use std::collections::HashMap;
 use std::time::Duration;
+use url::Url;
 
 pub struct HttpClient {
     user_agent: String,
@@ -26,7 +26,11 @@ impl HttpClient {
         self.fetch_with_options(&parsed, &FetchOptions::default())
     }
 
-    pub fn fetch_with_options(&mut self, url: &Url, options: &FetchOptions) -> Result<HttpResponse, String> {
+    pub fn fetch_with_options(
+        &mut self,
+        url: &Url,
+        options: &FetchOptions,
+    ) -> Result<HttpResponse, String> {
         let mut current_url = url.clone();
         let mut redirect_count = 0;
 
@@ -62,7 +66,8 @@ impl HttpClient {
                 }
 
                 if let Some(location) = response.headers.get("location") {
-                    current_url = current_url.join(location)
+                    current_url = current_url
+                        .join(location)
                         .map_err(|e| format!("Invalid redirect URL: {}", e))?;
                     redirect_count += 1;
                     continue;
@@ -109,7 +114,8 @@ impl HttpClient {
             };
             if should_send {
                 if let Some(cookies) = self.cookies.get(url.host_str().unwrap_or("")) {
-                    let cookie_header: String = cookies.iter()
+                    let cookie_header: String = cookies
+                        .iter()
                         .map(|(k, v)| format!("{}={}", k, v))
                         .collect::<Vec<_>>()
                         .join("; ");
@@ -124,20 +130,20 @@ impl HttpClient {
         for (key, value) in &options.headers {
             request = request.set(key, value);
         }
-        
+
         // Send request
         let response = if let Some(ref body) = options.body {
             request.send_string(body)
         } else {
             request.call()
         };
-        
+
         match response {
             Ok(resp) => {
                 let status = resp.status();
                 let mut headers = HashMap::new();
                 let mut cookies = Vec::new();
-                
+
                 for name in resp.headers_names() {
                     if let Some(value) = resp.header(&name) {
                         if crate::fontcase::ascii_lower(&name) == "set-cookie" {
@@ -146,11 +152,17 @@ impl HttpClient {
                         headers.insert(crate::fontcase::ascii_lower(&name), value.to_string());
                     }
                 }
-                
-                let body = resp.into_string()
+
+                let body = resp
+                    .into_string()
                     .map_err(|e| format!("Failed to read response: {}", e))?;
-                
-                Ok(HttpResponse { status, headers, body, cookies })
+
+                Ok(HttpResponse {
+                    status,
+                    headers,
+                    body,
+                    cookies,
+                })
             }
             Err(ureq::Error::Status(code, resp)) => {
                 let mut headers = HashMap::new();
@@ -160,7 +172,12 @@ impl HttpClient {
                     }
                 }
                 let body = resp.into_string().unwrap_or_default();
-                Ok(HttpResponse { status: code, headers, body, cookies: Vec::new() })
+                Ok(HttpResponse {
+                    status: code,
+                    headers,
+                    body,
+                    cookies: Vec::new(),
+                })
             }
             Err(e) => Err(format!("Request failed: {}", e)),
         }
@@ -169,7 +186,7 @@ impl HttpClient {
     fn store_cookie(&mut self, url: &Url, cookie_str: &str) {
         let host = url.host_str().unwrap_or("").to_string();
         let cookies = self.cookies.entry(host).or_default();
-        
+
         // Parse cookie (simplified)
         if let Some((name_value, _)) = cookie_str.split_once(';') {
             if let Some((name, value)) = name_value.split_once('=') {
@@ -207,7 +224,9 @@ impl HttpClient {
 }
 
 impl Default for HttpClient {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub struct HttpResponse {
@@ -241,25 +260,38 @@ impl Default for FetchOptions {
 }
 
 impl FetchOptions {
-    pub fn get() -> Self { FetchOptions::default() }
-    
-    pub fn post(body: &str) -> Self {
-        FetchOptions { method: "POST".to_string(), body: Some(body.to_string()), ..Default::default() }
+    pub fn get() -> Self {
+        FetchOptions::default()
     }
-    
+
+    pub fn post(body: &str) -> Self {
+        FetchOptions {
+            method: "POST".to_string(),
+            body: Some(body.to_string()),
+            ..Default::default()
+        }
+    }
+
     pub fn with_header(mut self, key: &str, value: &str) -> Self {
         self.headers.insert(key.to_string(), value.to_string());
         self
     }
-    
+
     pub fn with_json_body(mut self, body: &str) -> Self {
         self.body = Some(body.to_string());
-        self.headers.insert("Content-Type".to_string(), "application/json".to_string());
+        self.headers
+            .insert("Content-Type".to_string(), "application/json".to_string());
         self
     }
 
     /// Build FetchOptions from JavaScript fetch() API parameters
-    pub fn from_js_options(method: &str, body: Option<String>, credentials: &str, cache: &str, redirect: &str) -> Self {
+    pub fn from_js_options(
+        method: &str,
+        body: Option<String>,
+        credentials: &str,
+        cache: &str,
+        redirect: &str,
+    ) -> Self {
         FetchOptions {
             method: method.to_uppercase(),
             headers: HashMap::new(),
@@ -388,41 +420,45 @@ impl RedirectMode {
 
 // Data URLs
 pub fn parse_data_url(url: &str) -> Option<(String, Vec<u8>)> {
-    if !url.starts_with("data:") { return None; }
-    
+    if !url.starts_with("data:") {
+        return None;
+    }
+
     let content = &url[5..];
     let (media_type, data) = if let Some(comma_pos) = content.find(',') {
         (&content[..comma_pos], &content[comma_pos + 1..])
     } else {
         return None;
     };
-    
+
     let is_base64 = media_type.ends_with(";base64");
     let mime = if is_base64 {
         &media_type[..media_type.len() - 7]
     } else {
         media_type
     };
-    
+
     let decoded = if is_base64 {
         base64_decode(data)?
     } else {
         url_decode(data).into_bytes()
     };
-    
+
     Some((mime.to_string(), decoded))
 }
 
 fn base64_decode(input: &str) -> Option<Vec<u8>> {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    
+
     let input: String = input.chars().filter(|c| !c.is_whitespace()).collect();
     let mut output = Vec::new();
     let mut buffer = 0u32;
     let mut bits = 0u8;
-    
+
     for c in input.chars() {
-        if c == '=' { break; }
+        if c == '=' {
+            break;
+        }
         let val = ALPHABET.iter().position(|&x| x == c as u8)? as u32;
         buffer = (buffer << 6) | val;
         bits += 6;
@@ -432,14 +468,14 @@ fn base64_decode(input: &str) -> Option<Vec<u8>> {
             buffer &= (1 << bits) - 1;
         }
     }
-    
+
     Some(output)
 }
 
 fn url_decode(input: &str) -> String {
     let mut result = String::new();
     let mut chars = input.chars().peekable();
-    
+
     while let Some(c) = chars.next() {
         if c == '%' {
             let hex: String = chars.by_ref().take(2).collect();
@@ -452,7 +488,7 @@ fn url_decode(input: &str) -> String {
             result.push(c);
         }
     }
-    
+
     result
 }
 
@@ -495,11 +531,17 @@ struct MultipartPart {
 
 impl MultipartFormData {
     pub fn new() -> Self {
-        let boundary = format!("----SassyBrowser{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos());
-        MultipartFormData { boundary, parts: Vec::new() }
+        let boundary = format!(
+            "----SassyBrowser{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        );
+        MultipartFormData {
+            boundary,
+            parts: Vec::new(),
+        }
     }
 
     pub fn add_field(&mut self, name: &str, value: &str) {
@@ -526,32 +568,39 @@ impl MultipartFormData {
 
     pub fn encode(&self) -> Vec<u8> {
         let mut result = Vec::new();
-        
+
         for part in &self.parts {
             result.extend_from_slice(format!("--{}`r`n", self.boundary).as_bytes());
-            
+
             if let Some(ref filename) = part.filename {
-                result.extend_from_slice(format!(
-                    "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"`r`n",
-                    part.name, filename
-                ).as_bytes());
+                result.extend_from_slice(
+                    format!(
+                        "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"`r`n",
+                        part.name, filename
+                    )
+                    .as_bytes(),
+                );
             } else {
-                result.extend_from_slice(format!(
-                    "Content-Disposition: form-data; name=\"{}\"`r`n",
-                    part.name
-                ).as_bytes());
+                result.extend_from_slice(
+                    format!("Content-Disposition: form-data; name=\"{}\"`r`n", part.name)
+                        .as_bytes(),
+                );
             }
-            
-            result.extend_from_slice(format!("Content-Type: {}`r`n`r`n", part.content_type).as_bytes());
+
+            result.extend_from_slice(
+                format!("Content-Type: {}`r`n`r`n", part.content_type).as_bytes(),
+            );
             result.extend_from_slice(&part.data);
             result.extend_from_slice(b"`r`n");
         }
-        
+
         result.extend_from_slice(format!("--{}--`r`n", self.boundary).as_bytes());
         result
     }
 }
 
 impl Default for MultipartFormData {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

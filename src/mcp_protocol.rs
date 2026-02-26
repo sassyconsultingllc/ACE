@@ -39,10 +39,7 @@ pub enum McpCommand {
     },
 
     /// Navigate to a URL
-    Navigate {
-        url: String,
-        wait_for_load: bool,
-    },
+    Navigate { url: String, wait_for_load: bool },
 
     /// Go back in history
     GoBack,
@@ -57,15 +54,10 @@ pub enum McpCommand {
     ReadPage,
 
     /// Take a screenshot (returns PNG bytes)
-    Screenshot {
-        full_page: bool,
-    },
+    Screenshot { full_page: bool },
 
     /// Click at coordinates
-    Click {
-        x: f32,
-        y: f32,
-    },
+    Click { x: f32, y: f32 },
 
     /// Type text into the focused element
     TypeText {
@@ -74,9 +66,7 @@ pub enum McpCommand {
     },
 
     /// Execute SassyScript (our JS engine) on the page
-    ExecuteScript {
-        code: String,
-    },
+    ExecuteScript { code: String },
 
     /// Get the current page's security/trust status
     GetSecurityStatus,
@@ -91,42 +81,28 @@ pub enum McpCommand {
     GetHoneypotStatus,
 
     /// Open a local file in the viewer
-    OpenFile {
-        path: String,
-    },
+    OpenFile { path: String },
 
     /// Get list of open tabs
     ListTabs,
 
     /// Switch to a specific tab
-    SwitchTab {
-        tab_index: usize,
-    },
+    SwitchTab { tab_index: usize },
 
     /// Create a new tab
-    NewTab {
-        url: Option<String>,
-    },
+    NewTab { url: Option<String> },
 
     /// Close a tab
-    CloseTab {
-        tab_index: usize,
-    },
+    CloseTab { tab_index: usize },
 
     /// Get browser info (version, features, etc.)
     GetBrowserInfo,
 
     /// Scroll the page
-    Scroll {
-        delta_x: f32,
-        delta_y: f32,
-    },
+    Scroll { delta_x: f32, delta_y: f32 },
 
     /// Find text on the page
-    FindText {
-        query: String,
-        case_sensitive: bool,
-    },
+    FindText { query: String, case_sensitive: bool },
 
     /// Get/set a cookie
     Cookie {
@@ -137,20 +113,13 @@ pub enum McpCommand {
     },
 
     /// Query the password vault (requires trust)
-    VaultQuery {
-        domain: String,
-    },
+    VaultQuery { domain: String },
 
     /// Custom extension command
-    Extension {
-        name: String,
-        payload: Vec<u8>,
-    },
+    Extension { name: String, payload: Vec<u8> },
 
     /// Ping — keepalive
-    Ping {
-        seq: u64,
-    },
+    Ping { seq: u64 },
 
     /// Graceful disconnect
     Goodbye,
@@ -210,9 +179,7 @@ pub enum McpResponse {
     },
 
     /// Result of text typing
-    TypeResult {
-        success: bool,
-    },
+    TypeResult { success: bool },
 
     /// Script execution result
     ScriptResult {
@@ -260,15 +227,10 @@ pub enum McpResponse {
     },
 
     /// Find results
-    FindResults {
-        query: String,
-        match_count: usize,
-    },
+    FindResults { query: String, match_count: usize },
 
     /// Cookie result
-    CookieResult {
-        cookies: Vec<CookieWire>,
-    },
+    CookieResult { cookies: Vec<CookieWire> },
 
     /// Vault credentials (sanitized — never sends passwords over wire)
     VaultResult {
@@ -279,20 +241,13 @@ pub enum McpResponse {
     },
 
     /// Generic success
-    Ok {
-        message: String,
-    },
+    Ok { message: String },
 
     /// Error response
-    Error {
-        code: ErrorCode,
-        message: String,
-    },
+    Error { code: ErrorCode, message: String },
 
     /// Pong — keepalive response
-    Pong {
-        seq: u64,
-    },
+    Pong { seq: u64 },
 
     /// Server-initiated notification (detection alert, page event, etc.)
     Notification {
@@ -349,13 +304,13 @@ pub enum NotificationType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DetectionAlertWire {
     pub rule_name: String,
-    pub level: u8,         // SuspicionLevel as u8
+    pub level: u8, // SuspicionLevel as u8
     pub description: String,
     pub url: String,
     pub domain: String,
     pub score: f32,
     pub honeypot_triggered: bool,
-    pub action: u8,        // DetectionAction as u8
+    pub action: u8, // DetectionAction as u8
 }
 
 /// Tab info for wire transport
@@ -495,7 +450,11 @@ mod tests {
         let frame = encode_response(&resp).unwrap();
         let decoded = decode_response(&frame[4..]).unwrap();
         match decoded {
-            McpResponse::SecurityStatus { trust_level, honeypots_active, .. } => {
+            McpResponse::SecurityStatus {
+                trust_level,
+                honeypots_active,
+                ..
+            } => {
                 assert_eq!(trust_level, 0);
                 assert!(honeypots_active);
             }
@@ -506,7 +465,10 @@ mod tests {
     #[test]
     fn test_bad_magic_rejected() {
         let bad_frame = vec![0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01];
-        assert!(matches!(decode_command(&bad_frame), Err(ProtocolError::BadMagic)));
+        assert!(matches!(
+            decode_command(&bad_frame),
+            Err(ProtocolError::BadMagic)
+        ));
     }
 
     #[test]
@@ -531,7 +493,11 @@ mod tests {
         let frame = encode_response(&resp).unwrap();
         let decoded = decode_response(&frame[4..]).unwrap();
         match decoded {
-            McpResponse::ScreenshotData { png_bytes, width, height } => {
+            McpResponse::ScreenshotData {
+                png_bytes,
+                width,
+                height,
+            } => {
                 assert_eq!(png_bytes, fake_png);
                 assert_eq!(width, 1920);
                 assert_eq!(height, 1080);

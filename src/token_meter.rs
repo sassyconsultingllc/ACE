@@ -8,11 +8,11 @@
 //! - Session totals and per-request averages
 //! - Rate limiting and budget alerts
 
-use std::collections::HashMap;
-use std::time::Instant;
-use chrono::{DateTime, Utc};
 use crate::mcp::{AgentRole, TokenUsage};
 use crate::style::Color;
+use chrono::{DateTime, Utc};
+use std::collections::HashMap;
+use std::time::Instant;
 
 // ---------------------------------------------------------------------------
 // Provider pricing (per 1M tokens, as of Feb 2026)
@@ -199,27 +199,34 @@ impl AgentStats {
         if self.request_count == 1 {
             self.avg_latency_ms = latency_ms;
         } else {
-            self.avg_latency_ms = (self.avg_latency_ms * (self.request_count as u64 - 1) + latency_ms)
+            self.avg_latency_ms = (self.avg_latency_ms * (self.request_count as u64 - 1)
+                + latency_ms)
                 / self.request_count as u64;
         }
     }
 
     /// Tokens per request average
     pub fn avg_tokens_per_request(&self) -> u32 {
-        if self.request_count == 0 { return 0; }
+        if self.request_count == 0 {
+            return 0;
+        }
         (self.total_tokens / self.request_count as u64) as u32
     }
 
     /// Context window fill percentage (based on cumulative conversation tokens)
     pub fn context_fill_pct(&self) -> f32 {
-        if self.context_window == 0 { return 0.0; }
+        if self.context_window == 0 {
+            return 0.0;
+        }
         // Use peak single request as approximation of current context usage
         (self.peak_single_request as f32 / self.context_window as f32 * 100.0).min(100.0)
     }
 
     /// Cost per request average
     pub fn avg_cost_per_request(&self) -> f64 {
-        if self.request_count == 0 { return 0.0; }
+        if self.request_count == 0 {
+            return 0.0;
+        }
         self.total_cost / self.request_count as f64
     }
 }
@@ -244,10 +251,10 @@ pub enum BudgetStatus {
 impl BudgetStatus {
     pub fn color(&self) -> Color {
         match self {
-            BudgetStatus::Normal => Color::new(100, 220, 140, 255),   // Green
-            BudgetStatus::Warning => Color::new(255, 200, 80, 255),   // Yellow
-            BudgetStatus::Critical => Color::new(255, 140, 60, 255),  // Orange
-            BudgetStatus::Exceeded => Color::new(255, 80, 80, 255),   // Red
+            BudgetStatus::Normal => Color::new(100, 220, 140, 255), // Green
+            BudgetStatus::Warning => Color::new(255, 200, 80, 255), // Yellow
+            BudgetStatus::Critical => Color::new(255, 140, 60, 255), // Orange
+            BudgetStatus::Exceeded => Color::new(255, 80, 80, 255), // Red
         }
     }
 
@@ -277,12 +284,12 @@ pub struct TokenMeter {
     pub total_requests: u32,
 
     /// Budget controls
-    pub session_budget: f64,        // Max $ for this session (0 = unlimited)
-    pub monthly_budget: f64,        // Max $ per month (0 = unlimited)
-    pub monthly_spent: f64,         // Accumulated monthly spend
+    pub session_budget: f64, // Max $ for this session (0 = unlimited)
+    pub monthly_budget: f64, // Max $ per month (0 = unlimited)
+    pub monthly_spent: f64,  // Accumulated monthly spend
 
     /// Rate limiting
-    pub requests_per_minute_limit: u32,  // 0 = unlimited
+    pub requests_per_minute_limit: u32, // 0 = unlimited
     recent_request_times: Vec<Instant>,
 
     /// Display preferences
@@ -326,7 +333,8 @@ impl TokenMeter {
         let cost = pricing.cost(&usage);
 
         // Update agent stats
-        let stats = self.agent_stats
+        let stats = self
+            .agent_stats
             .entry(agent)
             .or_insert_with(|| AgentStats::new(agent, model));
         stats.record(&usage, cost, latency_ms);
@@ -359,7 +367,9 @@ impl TokenMeter {
 
     /// Check if we're within rate limits
     pub fn is_rate_limited(&mut self) -> bool {
-        if self.requests_per_minute_limit == 0 { return false; }
+        if self.requests_per_minute_limit == 0 {
+            return false;
+        }
         self.prune_rate_window();
         self.recent_request_times.len() as u32 >= self.requests_per_minute_limit
     }
@@ -449,13 +459,17 @@ impl TokenMeter {
 
     /// Get the most expensive agent
     pub fn most_expensive_agent(&self) -> Option<(&AgentRole, &AgentStats)> {
-        self.agent_stats.iter()
-            .max_by(|a, b| a.1.total_cost.partial_cmp(&b.1.total_cost).unwrap_or(std::cmp::Ordering::Equal))
+        self.agent_stats.iter().max_by(|a, b| {
+            a.1.total_cost
+                .partial_cmp(&b.1.total_cost)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 
     /// Get the most token-hungry agent
     pub fn most_tokens_agent(&self) -> Option<(&AgentRole, &AgentStats)> {
-        self.agent_stats.iter()
+        self.agent_stats
+            .iter()
             .max_by_key(|(_role, stats)| stats.total_tokens)
     }
 
@@ -503,7 +517,9 @@ impl TokenMeter {
                 });
             }
         }
-        sections.push(MeterSection::AgentBreakdown { agents: agent_meters });
+        sections.push(MeterSection::AgentBreakdown {
+            agents: agent_meters,
+        });
 
         // --- Budget Gauge ---
         if self.session_budget > 0.0 || self.monthly_budget > 0.0 {
@@ -535,15 +551,19 @@ impl TokenMeter {
         }
 
         // --- Recent Requests ---
-        let recent: Vec<RecentRequest> = self.history.iter().rev().take(10).map(|r| {
-            RecentRequest {
+        let recent: Vec<RecentRequest> = self
+            .history
+            .iter()
+            .rev()
+            .take(10)
+            .map(|r| RecentRequest {
                 timestamp: r.timestamp.format("%H:%M:%S").to_string(),
                 agent: role_display_name(r.agent).to_string(),
                 tokens: Self::format_tokens(r.usage.total_tokens as u64),
                 cost: Self::format_cost(r.cost),
                 latency_ms: r.latency_ms,
-            }
-        }).collect();
+            })
+            .collect();
 
         if !recent.is_empty() {
             sections.push(MeterSection::RecentRequests { requests: recent });
@@ -666,7 +686,8 @@ fn role_display_name(role: AgentRole) -> &'static str {
 pub fn context_bar(fill_pct: f32, width: usize) -> String {
     let filled = ((fill_pct / 100.0) * width as f32).round() as usize;
     let empty = width.saturating_sub(filled);
-    let bar: String = std::iter::repeat('█').take(filled)
+    let bar: String = std::iter::repeat('█')
+        .take(filled)
         .chain(std::iter::repeat('░').take(empty))
         .collect();
     format!("[{}] {:.0}%", bar, fill_pct)
@@ -675,13 +696,13 @@ pub fn context_bar(fill_pct: f32, width: usize) -> String {
 /// Color for context fill percentage
 pub fn context_fill_color(pct: f32) -> Color {
     if pct >= 90.0 {
-        Color::new(255, 80, 80, 255)    // Red — almost full
+        Color::new(255, 80, 80, 255) // Red — almost full
     } else if pct >= 70.0 {
-        Color::new(255, 180, 60, 255)   // Orange — getting full
+        Color::new(255, 180, 60, 255) // Orange — getting full
     } else if pct >= 50.0 {
-        Color::new(255, 220, 80, 255)   // Yellow — halfway
+        Color::new(255, 220, 80, 255) // Yellow — halfway
     } else {
-        Color::new(100, 220, 140, 255)  // Green — plenty of room
+        Color::new(100, 220, 140, 255) // Green — plenty of room
     }
 }
 
@@ -729,8 +750,18 @@ mod tests {
         let mut meter = TokenMeter::new();
 
         meter.record_usage(AgentRole::Voice, "grok-2", make_usage(500, 200), 100);
-        meter.record_usage(AgentRole::Coder, "claude-sonnet-4", make_usage(2000, 800), 300);
-        meter.record_usage(AgentRole::Auditor, "gemini-2.5-pro", make_usage(3000, 1000), 500);
+        meter.record_usage(
+            AgentRole::Coder,
+            "claude-sonnet-4",
+            make_usage(2000, 800),
+            300,
+        );
+        meter.record_usage(
+            AgentRole::Auditor,
+            "gemini-2.5-pro",
+            make_usage(3000, 1000),
+            500,
+        );
 
         assert_eq!(meter.total_requests, 3);
         assert_eq!(meter.total_tokens, 500 + 200 + 2000 + 800 + 3000 + 1000);
@@ -857,7 +888,12 @@ mod tests {
     #[test]
     fn test_compact_render() {
         let mut meter = TokenMeter::new();
-        meter.record_usage(AgentRole::Coder, "claude-sonnet-4", make_usage(5000, 2000), 300);
+        meter.record_usage(
+            AgentRole::Coder,
+            "claude-sonnet-4",
+            make_usage(5000, 2000),
+            300,
+        );
 
         let compact = meter.render_compact();
         assert!(compact.contains("1 req"));
@@ -868,15 +904,26 @@ mod tests {
     #[test]
     fn test_full_render() {
         let mut meter = TokenMeter::new();
-        meter.record_usage(AgentRole::Coder, "claude-sonnet-4", make_usage(5000, 2000), 300);
+        meter.record_usage(
+            AgentRole::Coder,
+            "claude-sonnet-4",
+            make_usage(5000, 2000),
+            300,
+        );
         meter.record_usage(AgentRole::Voice, "grok-2", make_usage(1000, 500), 100);
 
         let render = meter.render();
         assert!(!render.sections.is_empty());
 
         // Should have at least SessionOverview and AgentBreakdown
-        let has_overview = render.sections.iter().any(|s| matches!(s, MeterSection::SessionOverview { .. }));
-        let has_agents = render.sections.iter().any(|s| matches!(s, MeterSection::AgentBreakdown { .. }));
+        let has_overview = render
+            .sections
+            .iter()
+            .any(|s| matches!(s, MeterSection::SessionOverview { .. }));
+        let has_agents = render
+            .sections
+            .iter()
+            .any(|s| matches!(s, MeterSection::AgentBreakdown { .. }));
         assert!(has_overview);
         assert!(has_agents);
     }

@@ -1,5 +1,5 @@
 //! Viewers module - All file type viewers for Sassy Browser
-//! 
+//!
 //! This module contains specialized viewers for every supported file type:
 //! - Images (raster, vector, RAW, PSD)
 //! - Documents (DOCX, ODT, RTF)

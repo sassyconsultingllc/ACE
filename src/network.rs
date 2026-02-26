@@ -7,15 +7,14 @@
 //! - Idle: No network activity
 //! - Connecting: Establishing connection
 
- 
 //! - Downloading: Receiving data
 //! - Uploading: Sending data (form submit, etc)
 //! - Stalled: Connection open but no data
 //! - Error: Connection failed
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use std::collections::HashMap;
 
 /// Network activity state
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -39,18 +38,18 @@ impl NetworkState {
             NetworkState::Error => "x",       // Error
         }
     }
-    
+
     pub fn color(&self) -> u32 {
         match self {
-            NetworkState::Idle => 0x6b7280,       // Gray
-            NetworkState::Connecting => 0x3b82f6, // Blue
-            NetworkState::Downloading => 0x22c55e,// Green
-            NetworkState::Uploading => 0x8b5cf6,  // Purple
-            NetworkState::Stalled => 0xf59e0b,    // Orange
-            NetworkState::Error => 0xef4444,      // Red
+            NetworkState::Idle => 0x6b7280,        // Gray
+            NetworkState::Connecting => 0x3b82f6,  // Blue
+            NetworkState::Downloading => 0x22c55e, // Green
+            NetworkState::Uploading => 0x8b5cf6,   // Purple
+            NetworkState::Stalled => 0xf59e0b,     // Orange
+            NetworkState::Error => 0xef4444,       // Red
         }
     }
-    
+
     pub fn is_active(&self) -> bool {
         !matches!(self, NetworkState::Idle)
     }
@@ -85,25 +84,28 @@ impl NetworkRequest {
             last_activity: now,
         }
     }
-    
+
     /// Progress as percentage (0-100)
     pub fn progress(&self) -> Option<u8> {
         self.total_size.map(|total| {
-            if total == 0 { 100 } 
-            else { ((self.bytes_downloaded * 100) / total).min(100) as u8 }
+            if total == 0 {
+                100
+            } else {
+                ((self.bytes_downloaded * 100) / total).min(100) as u8
+            }
         })
     }
-    
+
     /// Duration since start
     pub fn duration(&self) -> Duration {
         self.started_at.elapsed()
     }
-    
+
     /// Check if stalled (no activity for 5 seconds)
     pub fn is_stalled(&self) -> bool {
-        self.state != NetworkState::Idle &&
-        self.state != NetworkState::Error &&
-        self.last_activity.elapsed() > Duration::from_secs(5)
+        self.state != NetworkState::Idle
+            && self.state != NetworkState::Error
+            && self.last_activity.elapsed() > Duration::from_secs(5)
     }
 
     /// Summary for diagnostics
@@ -147,16 +149,17 @@ impl NetworkMonitor {
             session_start: Instant::now(),
         }
     }
-    
+
     /// Start tracking a new request
     pub fn start_request(&mut self, url: String, method: String) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
-        
-        self.requests.insert(id, NetworkRequest::new(id, url, method));
+
+        self.requests
+            .insert(id, NetworkRequest::new(id, url, method));
         id
     }
-    
+
     /// Update download progress
     pub fn update_download(&mut self, id: u64, bytes: u64, total: Option<u64>) {
         if let Some(req) = self.requests.get_mut(&id) {
@@ -166,7 +169,7 @@ impl NetworkMonitor {
             req.last_activity = Instant::now();
         }
     }
-    
+
     /// Update upload progress
     pub fn update_upload(&mut self, id: u64, bytes: u64) {
         if let Some(req) = self.requests.get_mut(&id) {
@@ -175,14 +178,14 @@ impl NetworkMonitor {
             req.last_activity = Instant::now();
         }
     }
-    
+
     /// Mark request complete
     pub fn complete(&mut self, id: u64) {
         if let Some(mut req) = self.requests.remove(&id) {
             req.state = NetworkState::Idle;
             self.total_downloaded += req.bytes_downloaded;
             self.total_uploaded += req.bytes_uploaded;
-            
+
             // Add to history
             self.history.push(req);
             if self.history.len() > self.max_history {
@@ -190,7 +193,7 @@ impl NetworkMonitor {
             }
         }
     }
-    
+
     /// Mark request failed
     pub fn error(&mut self, id: u64, _error: &str) {
         if let Some(mut req) = self.requests.remove(&id) {
@@ -201,55 +204,70 @@ impl NetworkMonitor {
             }
         }
     }
-    
+
     /// Get overall network state
     pub fn state(&self) -> NetworkState {
         if self.requests.is_empty() {
             return NetworkState::Idle;
         }
-        
+
         // Check for errors first
-        if self.requests.values().any(|r| r.state == NetworkState::Error) {
+        if self
+            .requests
+            .values()
+            .any(|r| r.state == NetworkState::Error)
+        {
             return NetworkState::Error;
         }
-        
+
         // Check for stalled
         if self.requests.values().any(|r| r.is_stalled()) {
             return NetworkState::Stalled;
         }
-        
+
         // Check for uploads
-        if self.requests.values().any(|r| r.state == NetworkState::Uploading) {
+        if self
+            .requests
+            .values()
+            .any(|r| r.state == NetworkState::Uploading)
+        {
             return NetworkState::Uploading;
         }
-        
+
         // Check for downloads
-        if self.requests.values().any(|r| r.state == NetworkState::Downloading) {
+        if self
+            .requests
+            .values()
+            .any(|r| r.state == NetworkState::Downloading)
+        {
             return NetworkState::Downloading;
         }
-        
+
         // Must be connecting
         NetworkState::Connecting
     }
-    
+
     /// Get active request count
     pub fn active_count(&self) -> usize {
         self.requests.len()
     }
-    
+
     /// Get total bytes for session
     pub fn session_stats(&self) -> (u64, u64) {
         let active_down: u64 = self.requests.values().map(|r| r.bytes_downloaded).sum();
         let active_up: u64 = self.requests.values().map(|r| r.bytes_uploaded).sum();
-        
-        (self.total_downloaded + active_down, self.total_uploaded + active_up)
+
+        (
+            self.total_downloaded + active_down,
+            self.total_uploaded + active_up,
+        )
     }
-    
+
     /// Get active requests for display
     pub fn active_requests(&self) -> Vec<&NetworkRequest> {
         self.requests.values().collect()
     }
-    
+
     /// Check for stalled requests and update state
     pub fn tick(&mut self) {
         for req in self.requests.values_mut() {
@@ -258,7 +276,7 @@ impl NetworkMonitor {
             }
         }
     }
-    
+
     /// Format bytes for display
     pub fn format_bytes(bytes: u64) -> String {
         if bytes < 1024 {
@@ -271,7 +289,7 @@ impl NetworkMonitor {
             format!("{:.2} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
         }
     }
-    
+
     /// Summary for diagnostics - wires up session_stats, active_requests, format_speed
     pub fn describe(&mut self) -> String {
         self.tick();
@@ -280,7 +298,11 @@ impl NetworkMonitor {
         let active_descs: Vec<String> = active.iter().map(|r| r.describe()).collect();
         let history_count = self.history.len();
         let session_secs = self.session_start.elapsed().as_secs();
-        let speed_down = Self::format_speed(if session_secs > 0 { down / session_secs } else { 0 });
+        let speed_down = Self::format_speed(if session_secs > 0 {
+            down / session_secs
+        } else {
+            0
+        });
         format!(
             "NetworkMonitor[active={}, history={}/{}, down={}, up={}, speed={}, session={}s, requests=[{}]]",
             self.active_count(), history_count, self.max_history,
@@ -325,23 +347,23 @@ pub fn shared_monitor_describe() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_request_lifecycle() {
         let mut monitor = NetworkMonitor::new();
-        
+
         let id = monitor.start_request("https://example.com".into(), "GET".into());
         assert_eq!(monitor.state(), NetworkState::Connecting);
         assert_eq!(monitor.active_count(), 1);
-        
+
         monitor.update_download(id, 1000, Some(5000));
         assert_eq!(monitor.state(), NetworkState::Downloading);
-        
+
         monitor.complete(id);
         assert_eq!(monitor.state(), NetworkState::Idle);
         assert_eq!(monitor.active_count(), 0);
     }
-    
+
     #[test]
     fn test_format_bytes() {
         assert_eq!(NetworkMonitor::format_bytes(500), "500 B");

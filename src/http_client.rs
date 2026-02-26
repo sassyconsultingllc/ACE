@@ -2,11 +2,10 @@ use std::env;
 use std::sync::OnceLock;
 
 use crate::tls_spoof::{
-    build_ureq_agent_with_chrome_tls, build_chrome132_tls_config,
-    SpoofedTlsConnector, ChromeTlsConfig, CHROME_132_USER_AGENT,
-    chrome132_cipher_suites, chrome132_signature_schemes,
-    generate_grease_value, generate_grease_pair, GREASE_VALUES,
-    chrome132_ja3_target, chrome132_ja3_rustls_partial,
+    build_chrome132_tls_config, build_ureq_agent_with_chrome_tls, chrome132_cipher_suites,
+    chrome132_ja3_rustls_partial, chrome132_ja3_target, chrome132_signature_schemes,
+    generate_grease_pair, generate_grease_value, ChromeTlsConfig, SpoofedTlsConnector,
+    CHROME_132_USER_AGENT, GREASE_VALUES,
 };
 
 /// Lazily initialized Chrome-fingerprinted ureq agent.
@@ -24,13 +23,17 @@ pub fn chrome_agent() -> &'static ureq::Agent {
         let (g1, g2) = generate_grease_pair();
         tracing::debug!(
             "TLS spoof: {} cipher suites, {} sig schemes, GREASE: {:#06x}/{:#06x}",
-            cipher_count, sig_count, g1, g2
+            cipher_count,
+            sig_count,
+            g1,
+            g2
         );
         tracing::debug!("TLS spoof target JA3: {}", chrome132_ja3_target());
         tracing::debug!("TLS spoof partial JA3: {}", chrome132_ja3_rustls_partial());
         tracing::debug!(
             "GREASE pool: {} values, sample: {:#06x}",
-            GREASE_VALUES.len(), generate_grease_value()
+            GREASE_VALUES.len(),
+            generate_grease_value()
         );
 
         build_ureq_agent_with_chrome_tls()
@@ -133,7 +136,9 @@ pub fn get(url: &str) -> Result<ureq::Response, Box<ureq::Error>> {
 /// Uses the Chrome-fingerprinted TLS agent for stealth.
 pub fn fetch_text(url: &str) -> Result<String, String> {
     match get_spoofed(url) {
-        Ok(resp) => resp.into_string().map_err(|e| format!("Failed to read response: {}", e)),
+        Ok(resp) => resp
+            .into_string()
+            .map_err(|e| format!("Failed to read response: {}", e)),
         Err(e) => Err(format!("Request failed: {}", e)),
     }
 }

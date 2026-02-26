@@ -2,7 +2,6 @@
 //! Sidebars can be placed on any edge: top, right, bottom, left
 //! Each can be hidden, collapsed, or expanded
 
-
 use super::theme::{SidebarState, Theme};
 use std::collections::HashMap;
 
@@ -18,11 +17,11 @@ impl Edge {
     pub fn all() -> [Edge; 4] {
         [Edge::Top, Edge::Right, Edge::Bottom, Edge::Left]
     }
-    
+
     pub fn is_horizontal(&self) -> bool {
         matches!(self, Edge::Top | Edge::Bottom)
     }
-    
+
     pub fn is_vertical(&self) -> bool {
         matches!(self, Edge::Left | Edge::Right)
     }
@@ -76,7 +75,13 @@ impl SidebarContent {
     /// Describe this content entry for accessibility / debugging
     pub fn describe(&self) -> String {
         let icon_str = self.icon.as_deref().unwrap_or("none");
-        format!("[{}] {} (icon={}, widget={})", self.id, self.title, icon_str, self.widget.label())
+        format!(
+            "[{}] {} (icon={}, widget={})",
+            self.id,
+            self.title,
+            icon_str,
+            self.widget.label()
+        )
     }
 }
 
@@ -84,7 +89,7 @@ impl SidebarContent {
 pub struct Sidebar {
     pub edge: Edge,
     pub state: SidebarState,
-    pub size: u32,           // width for left/right, height for top/bottom
+    pub size: u32, // width for left/right, height for top/bottom
     pub collapsed_size: u32,
     pub contents: Vec<SidebarContent>,
     pub resizable: bool,
@@ -102,7 +107,7 @@ impl Sidebar {
             Edge::Left => (280, 180, 500),
             Edge::Right => (320, 200, 600),
         };
-        
+
         Self {
             edge,
             state: SidebarState::Expanded,
@@ -116,25 +121,25 @@ impl Sidebar {
             max_size: max,
         }
     }
-    
+
     pub fn with_state(mut self, state: SidebarState) -> Self {
         self.state = state;
         self
     }
-    
+
     pub fn with_size(mut self, size: u32) -> Self {
         self.size = size.clamp(self.min_size, self.max_size);
         self
     }
-    
+
     pub fn add_content(&mut self, content: SidebarContent) {
         self.contents.push(content);
     }
-    
+
     pub fn remove_content(&mut self, id: &str) {
         self.contents.retain(|c| c.id != id);
     }
-    
+
     pub fn toggle(&mut self) {
         self.state = match self.state {
             SidebarState::Hidden => SidebarState::Collapsed,
@@ -142,33 +147,33 @@ impl Sidebar {
             SidebarState::Expanded => SidebarState::Collapsed,
         };
     }
-    
+
     pub fn show(&mut self) {
         if self.state == SidebarState::Hidden {
             self.state = SidebarState::Collapsed;
         }
     }
-    
+
     pub fn hide(&mut self) {
         self.state = SidebarState::Hidden;
     }
-    
+
     pub fn expand(&mut self) {
         self.state = SidebarState::Expanded;
     }
-    
+
     pub fn collapse(&mut self) {
         self.state = SidebarState::Collapsed;
     }
-    
+
     pub fn is_visible(&self) -> bool {
         self.state != SidebarState::Hidden
     }
-    
+
     pub fn is_expanded(&self) -> bool {
         self.state == SidebarState::Expanded
     }
-    
+
     pub fn current_size(&self) -> u32 {
         match self.state {
             SidebarState::Hidden => 0,
@@ -176,55 +181,66 @@ impl Sidebar {
             SidebarState::Expanded => self.size,
         }
     }
-    
+
     /// Get the rectangle bounds for this sidebar given viewport dimensions
-    pub fn bounds(&self, viewport_width: u32, viewport_height: u32, other_sidebars: &SidebarLayout) -> Rect {
+    pub fn bounds(
+        &self,
+        viewport_width: u32,
+        viewport_height: u32,
+        other_sidebars: &SidebarLayout,
+    ) -> Rect {
         let size = self.current_size();
-        
+
         match self.edge {
             Edge::Top => Rect {
                 x: other_sidebars.left_size(),
                 y: 0,
-                width: viewport_width.saturating_sub(other_sidebars.left_size() + other_sidebars.right_size()),
+                width: viewport_width
+                    .saturating_sub(other_sidebars.left_size() + other_sidebars.right_size()),
                 height: size,
             },
             Edge::Bottom => Rect {
                 x: other_sidebars.left_size(),
                 y: viewport_height.saturating_sub(size),
-                width: viewport_width.saturating_sub(other_sidebars.left_size() + other_sidebars.right_size()),
+                width: viewport_width
+                    .saturating_sub(other_sidebars.left_size() + other_sidebars.right_size()),
                 height: size,
             },
             Edge::Left => Rect {
                 x: 0,
                 y: other_sidebars.top_size(),
                 width: size,
-                height: viewport_height.saturating_sub(other_sidebars.top_size() + other_sidebars.bottom_size()),
+                height: viewport_height
+                    .saturating_sub(other_sidebars.top_size() + other_sidebars.bottom_size()),
             },
             Edge::Right => Rect {
                 x: viewport_width.saturating_sub(size),
                 y: other_sidebars.top_size(),
                 width: size,
-                height: viewport_height.saturating_sub(other_sidebars.top_size() + other_sidebars.bottom_size()),
+                height: viewport_height
+                    .saturating_sub(other_sidebars.top_size() + other_sidebars.bottom_size()),
             },
         }
     }
-    
+
     /// Check if a point is on the resize handle
     pub fn hit_test_resize(&self, x: u32, y: u32, bounds: &Rect) -> bool {
         if !self.resizable || self.state != SidebarState::Expanded {
             return false;
         }
-        
+
         let handle_size = 6;
-        
+
         match self.edge {
-            Edge::Top => y >= bounds.y + bounds.height - handle_size && y < bounds.y + bounds.height,
+            Edge::Top => {
+                y >= bounds.y + bounds.height - handle_size && y < bounds.y + bounds.height
+            }
             Edge::Bottom => y >= bounds.y && y < bounds.y + handle_size,
             Edge::Left => x >= bounds.x + bounds.width - handle_size && x < bounds.x + bounds.width,
             Edge::Right => x >= bounds.x && x < bounds.x + handle_size,
         }
     }
-    
+
     /// Handle resize drag
     pub fn handle_resize(&mut self, delta: i32) {
         let new_size = match self.edge {
@@ -247,11 +263,11 @@ impl Rect {
     pub fn contains(&self, x: u32, y: u32) -> bool {
         x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
-    
+
     pub fn right(&self) -> u32 {
         self.x + self.width
     }
-    
+
     pub fn bottom(&self) -> u32 {
         self.y + self.height
     }
@@ -265,7 +281,7 @@ pub struct SidebarLayout {
 impl SidebarLayout {
     pub fn new() -> Self {
         let mut sidebars = HashMap::new();
-        
+
         // Create default sidebars
         let mut top = Sidebar::new(Edge::Top);
         top.add_content(SidebarContent {
@@ -280,7 +296,7 @@ impl SidebarLayout {
             icon: None,
             widget: SidebarWidget::AddressBar,
         });
-        
+
         let mut left = Sidebar::new(Edge::Left);
         left.add_content(SidebarContent {
             id: "tabs".into(),
@@ -291,10 +307,10 @@ impl SidebarLayout {
         left.add_content(SidebarContent {
             id: "bookmarks".into(),
             title: "Bookmarks".into(),
-                icon: Some("".into()),
+            icon: Some("".into()),
             widget: SidebarWidget::Bookmarks,
         });
-        
+
         let mut right = Sidebar::new(Edge::Right).with_state(SidebarState::Collapsed);
         right.add_content(SidebarContent {
             id: "devtools".into(),
@@ -302,7 +318,7 @@ impl SidebarLayout {
             icon: Some("".into()),
             widget: SidebarWidget::DevTools,
         });
-        
+
         let mut bottom = Sidebar::new(Edge::Bottom).with_state(SidebarState::Hidden);
         bottom.add_content(SidebarContent {
             id: "status".into(),
@@ -310,18 +326,18 @@ impl SidebarLayout {
             icon: None,
             widget: SidebarWidget::StatusBar,
         });
-        
+
         sidebars.insert(Edge::Top, top);
         sidebars.insert(Edge::Right, right);
         sidebars.insert(Edge::Bottom, bottom);
         sidebars.insert(Edge::Left, left);
-        
+
         Self { sidebars }
     }
-    
+
     pub fn from_theme(theme: &Theme) -> Self {
         let mut layout = Self::new();
-        
+
         // Apply theme layout settings
         if let Some(top) = layout.sidebars.get_mut(&Edge::Top) {
             top.state = theme.layout.sidebar_top.clone();
@@ -343,34 +359,46 @@ impl SidebarLayout {
             left.size = theme.layout.sidebar_left_width;
             left.collapsed_size = theme.layout.sidebar_collapsed_size;
         }
-        
+
         layout
     }
-    
+
     pub fn get(&self, edge: Edge) -> Option<&Sidebar> {
         self.sidebars.get(&edge)
     }
-    
+
     pub fn get_mut(&mut self, edge: Edge) -> Option<&mut Sidebar> {
         self.sidebars.get_mut(&edge)
     }
-    
+
     pub fn top_size(&self) -> u32 {
-        self.sidebars.get(&Edge::Top).map(|s| s.current_size()).unwrap_or(0)
+        self.sidebars
+            .get(&Edge::Top)
+            .map(|s| s.current_size())
+            .unwrap_or(0)
     }
-    
+
     pub fn bottom_size(&self) -> u32 {
-        self.sidebars.get(&Edge::Bottom).map(|s| s.current_size()).unwrap_or(0)
+        self.sidebars
+            .get(&Edge::Bottom)
+            .map(|s| s.current_size())
+            .unwrap_or(0)
     }
-    
+
     pub fn left_size(&self) -> u32 {
-        self.sidebars.get(&Edge::Left).map(|s| s.current_size()).unwrap_or(0)
+        self.sidebars
+            .get(&Edge::Left)
+            .map(|s| s.current_size())
+            .unwrap_or(0)
     }
-    
+
     pub fn right_size(&self) -> u32 {
-        self.sidebars.get(&Edge::Right).map(|s| s.current_size()).unwrap_or(0)
+        self.sidebars
+            .get(&Edge::Right)
+            .map(|s| s.current_size())
+            .unwrap_or(0)
     }
-    
+
     /// Get the content area (viewport minus sidebars)
     pub fn content_rect(&self, viewport_width: u32, viewport_height: u32) -> Rect {
         Rect {
@@ -380,9 +408,15 @@ impl SidebarLayout {
             height: viewport_height.saturating_sub(self.top_size() + self.bottom_size()),
         }
     }
-    
+
     /// Find which sidebar (if any) contains a point
-    pub fn hit_test(&self, x: u32, y: u32, viewport_width: u32, viewport_height: u32) -> Option<Edge> {
+    pub fn hit_test(
+        &self,
+        x: u32,
+        y: u32,
+        viewport_width: u32,
+        viewport_height: u32,
+    ) -> Option<Edge> {
         for edge in Edge::all() {
             if let Some(sidebar) = self.sidebars.get(&edge) {
                 if sidebar.is_visible() {
@@ -395,22 +429,21 @@ impl SidebarLayout {
         }
         None
     }
-    
+
     /// Toggle a specific sidebar
     pub fn toggle(&mut self, edge: Edge) {
         if let Some(sidebar) = self.sidebars.get_mut(&edge) {
             sidebar.toggle();
         }
     }
-    
+
     /// Move content between sidebars
     pub fn move_content(&mut self, content_id: &str, from: Edge, to: Edge) {
-        let content = self.sidebars.get_mut(&from)
-            .and_then(|s| {
-                let idx = s.contents.iter().position(|c| c.id == content_id)?;
-                Some(s.contents.remove(idx))
-            });
-        
+        let content = self.sidebars.get_mut(&from).and_then(|s| {
+            let idx = s.contents.iter().position(|c| c.id == content_id)?;
+            Some(s.contents.remove(idx))
+        });
+
         if let Some(content) = content {
             if let Some(sidebar) = self.sidebars.get_mut(&to) {
                 sidebar.contents.push(content);

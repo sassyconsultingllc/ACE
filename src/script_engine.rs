@@ -1,11 +1,11 @@
 // Script Engine - JavaScript-DOM bridge
 
-use crate::js::{JsInterpreter, Value, Lexer, Parser, Expr, Stmt};
 use crate::dom::{Document, Node, NodeRef};
 use crate::engine::Timer;
-use std::rc::Rc;
+use crate::js::{Expr, JsInterpreter, Lexer, Parser, Stmt, Value};
 use std::cell::RefCell;
 use std::cell::RefCell as CellAlias;
+use std::rc::Rc;
 
 pub struct ScriptEngine {
     interpreter: JsInterpreter,
@@ -28,7 +28,7 @@ thread_local! {
     static PENDING_POPUPS: CellAlias<Vec<String>> = const { CellAlias::new(Vec::new()) };
     static CURRENT_DOC: CellAlias<Option<*const Document>> = const { CellAlias::new(None) };
     // Event listeners: element_id -> event_type -> Vec<callback>
-    static EVENT_REGISTRY: CellAlias<std::collections::HashMap<String, std::collections::HashMap<String, Vec<Value>>>> = 
+    static EVENT_REGISTRY: CellAlias<std::collections::HashMap<String, std::collections::HashMap<String, Vec<Value>>>> =
         CellAlias::new(std::collections::HashMap::new());
     // Timer storage: timer_id -> StoredTimer (callback + delay + repeat)
     static TIMER_STORAGE: CellAlias<std::collections::HashMap<u32, StoredTimer>> = CellAlias::new(std::collections::HashMap::new());
@@ -56,7 +56,7 @@ impl ScriptEngine {
             next_timer_id: 1,
         }
     }
-    
+
     /// Validate JavaScript syntax without executing
     /// Returns Ok(token_count) on success, Err(error_message) on failure
     pub fn validate_syntax(source: &str) -> Result<usize, String> {
@@ -64,21 +64,20 @@ impl ScriptEngine {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize();
         let token_count = tokens.len();
-        
+
         // Parse to check for syntax errors
         let mut parser = Parser::new(source);
-        let _statements: Vec<Stmt> = parser.parse()
-            .map_err(|e| format!("Parse error: {}", e))?;
-        
+        let _statements: Vec<Stmt> = parser.parse().map_err(|e| format!("Parse error: {}", e))?;
+
         Ok(token_count)
     }
-    
+
     /// Parse JavaScript and return AST for inspection
     pub fn parse_to_ast(source: &str) -> Result<Vec<Stmt>, String> {
         let mut parser = Parser::new(source);
         parser.parse().map_err(|e| format!("Parse error: {}", e))
     }
-    
+
     /// Get expression info for debugging
     pub fn describe_expression(expr: &Expr) -> String {
         match expr {
@@ -115,14 +114,38 @@ impl ScriptEngine {
             let mut o = obj.borrow_mut();
             o.insert("title".to_string(), Value::String("".to_string()));
             o.insert("URL".to_string(), Value::String("".to_string()));
-            o.insert("readyState".to_string(), Value::String("complete".to_string()));
-            o.insert("getElementById".to_string(), Value::NativeFunction(native_get_element_by_id));
-            o.insert("getElementsByTagName".to_string(), Value::NativeFunction(native_get_elements_by_tag));
-            o.insert("getElementsByClassName".to_string(), Value::NativeFunction(native_get_elements_by_class));
-            o.insert("querySelector".to_string(), Value::NativeFunction(native_query_selector));
-            o.insert("querySelectorAll".to_string(), Value::NativeFunction(native_query_selector_all));
-            o.insert("createElement".to_string(), Value::NativeFunction(native_create_element));
-            o.insert("createTextNode".to_string(), Value::NativeFunction(native_create_text_node));
+            o.insert(
+                "readyState".to_string(),
+                Value::String("complete".to_string()),
+            );
+            o.insert(
+                "getElementById".to_string(),
+                Value::NativeFunction(native_get_element_by_id),
+            );
+            o.insert(
+                "getElementsByTagName".to_string(),
+                Value::NativeFunction(native_get_elements_by_tag),
+            );
+            o.insert(
+                "getElementsByClassName".to_string(),
+                Value::NativeFunction(native_get_elements_by_class),
+            );
+            o.insert(
+                "querySelector".to_string(),
+                Value::NativeFunction(native_query_selector),
+            );
+            o.insert(
+                "querySelectorAll".to_string(),
+                Value::NativeFunction(native_query_selector_all),
+            );
+            o.insert(
+                "createElement".to_string(),
+                Value::NativeFunction(native_create_element),
+            );
+            o.insert(
+                "createTextNode".to_string(),
+                Value::NativeFunction(native_create_text_node),
+            );
             o.insert("body".to_string(), Value::Null);
             o.insert("head".to_string(), Value::Null);
             o.insert("documentElement".to_string(), Value::Null);
@@ -135,54 +158,125 @@ impl ScriptEngine {
             let mut o = obj.borrow_mut();
             o.insert("innerWidth".to_string(), Value::Number(1024.0));
             o.insert("innerHeight".to_string(), Value::Number(768.0));
-            o.insert("location".to_string(), Value::Object(Rc::new(RefCell::new({
-                let mut loc = std::collections::HashMap::new();
-                loc.insert("href".to_string(), Value::String("".to_string()));
-                loc.insert("hostname".to_string(), Value::String("".to_string()));
-                loc.insert("pathname".to_string(), Value::String("".to_string()));
-                loc.insert("protocol".to_string(), Value::String("https:".to_string()));
-                loc
-            }))));
-            o.insert("navigator".to_string(), Value::Object(Rc::new(RefCell::new({
-                let mut nav = std::collections::HashMap::new();
-                nav.insert("userAgent".to_string(), Value::String("SassyBrowser/0.3.0".to_string()));
-                nav.insert("language".to_string(), Value::String("en-US".to_string()));
-                nav.insert("platform".to_string(), Value::String(std::env::consts::OS.to_string()));
-                nav
-            }))));
-            o.insert("setTimeout".to_string(), Value::NativeFunction(native_set_timeout));
-            o.insert("setInterval".to_string(), Value::NativeFunction(native_set_interval));
-            o.insert("clearTimeout".to_string(), Value::NativeFunction(native_clear_timeout));
-            o.insert("clearInterval".to_string(), Value::NativeFunction(native_clear_timeout));
+            o.insert(
+                "location".to_string(),
+                Value::Object(Rc::new(RefCell::new({
+                    let mut loc = std::collections::HashMap::new();
+                    loc.insert("href".to_string(), Value::String("".to_string()));
+                    loc.insert("hostname".to_string(), Value::String("".to_string()));
+                    loc.insert("pathname".to_string(), Value::String("".to_string()));
+                    loc.insert("protocol".to_string(), Value::String("https:".to_string()));
+                    loc
+                }))),
+            );
+            o.insert(
+                "navigator".to_string(),
+                Value::Object(Rc::new(RefCell::new({
+                    let mut nav = std::collections::HashMap::new();
+                    nav.insert(
+                        "userAgent".to_string(),
+                        Value::String("SassyBrowser/0.3.0".to_string()),
+                    );
+                    nav.insert("language".to_string(), Value::String("en-US".to_string()));
+                    nav.insert(
+                        "platform".to_string(),
+                        Value::String(std::env::consts::OS.to_string()),
+                    );
+                    nav
+                }))),
+            );
+            o.insert(
+                "setTimeout".to_string(),
+                Value::NativeFunction(native_set_timeout),
+            );
+            o.insert(
+                "setInterval".to_string(),
+                Value::NativeFunction(native_set_interval),
+            );
+            o.insert(
+                "clearTimeout".to_string(),
+                Value::NativeFunction(native_clear_timeout),
+            );
+            o.insert(
+                "clearInterval".to_string(),
+                Value::NativeFunction(native_clear_timeout),
+            );
             o.insert("alert".to_string(), Value::NativeFunction(native_alert));
             o.insert("confirm".to_string(), Value::NativeFunction(native_confirm));
             o.insert("prompt".to_string(), Value::NativeFunction(native_prompt));
-            o.insert("addEventListener".to_string(), Value::NativeFunction(native_add_event_listener));
-            o.insert("removeEventListener".to_string(), Value::NativeFunction(native_remove_event_listener));
-            o.insert("open".to_string(), Value::NativeFunction(native_window_open));
+            o.insert(
+                "addEventListener".to_string(),
+                Value::NativeFunction(native_add_event_listener),
+            );
+            o.insert(
+                "removeEventListener".to_string(),
+                Value::NativeFunction(native_remove_event_listener),
+            );
+            o.insert(
+                "open".to_string(),
+                Value::NativeFunction(native_window_open),
+            );
         }
         self.interpreter.define("window".to_string(), window_obj);
-        self.interpreter.define("open".to_string(), Value::NativeFunction(native_window_open));
-        
+        self.interpreter.define(
+            "open".to_string(),
+            Value::NativeFunction(native_window_open),
+        );
+
         // Global timer functions
-        self.interpreter.define("setTimeout".to_string(), Value::NativeFunction(native_set_timeout));
-        self.interpreter.define("setInterval".to_string(), Value::NativeFunction(native_set_interval));
-        self.interpreter.define("clearTimeout".to_string(), Value::NativeFunction(native_clear_timeout));
-        self.interpreter.define("clearInterval".to_string(), Value::NativeFunction(native_clear_timeout));
-        self.interpreter.define("alert".to_string(), Value::NativeFunction(native_alert));
-        self.interpreter.define("confirm".to_string(), Value::NativeFunction(native_confirm));
-        self.interpreter.define("prompt".to_string(), Value::NativeFunction(native_prompt));
-        
+        self.interpreter.define(
+            "setTimeout".to_string(),
+            Value::NativeFunction(native_set_timeout),
+        );
+        self.interpreter.define(
+            "setInterval".to_string(),
+            Value::NativeFunction(native_set_interval),
+        );
+        self.interpreter.define(
+            "clearTimeout".to_string(),
+            Value::NativeFunction(native_clear_timeout),
+        );
+        self.interpreter.define(
+            "clearInterval".to_string(),
+            Value::NativeFunction(native_clear_timeout),
+        );
+        self.interpreter
+            .define("alert".to_string(), Value::NativeFunction(native_alert));
+        self.interpreter
+            .define("confirm".to_string(), Value::NativeFunction(native_confirm));
+        self.interpreter
+            .define("prompt".to_string(), Value::NativeFunction(native_prompt));
+
         // Storage APIs - essential for web apps
         let local_storage = Rc::new(RefCell::new(std::collections::HashMap::new()));
-        local_storage.borrow_mut().insert("getItem".to_string(), Value::NativeFunction(native_storage_get));
-        local_storage.borrow_mut().insert("setItem".to_string(), Value::NativeFunction(native_storage_set));
-        local_storage.borrow_mut().insert("removeItem".to_string(), Value::NativeFunction(native_storage_remove));
-        local_storage.borrow_mut().insert("clear".to_string(), Value::NativeFunction(native_storage_clear));
-        local_storage.borrow_mut().insert("key".to_string(), Value::NativeFunction(native_storage_key));
-        local_storage.borrow_mut().insert("length".to_string(), Value::Number(0.0));
-        self.interpreter.define("localStorage".to_string(), Value::Object(local_storage.clone()));
-        self.interpreter.define("sessionStorage".to_string(), Value::Object(local_storage));
+        local_storage.borrow_mut().insert(
+            "getItem".to_string(),
+            Value::NativeFunction(native_storage_get),
+        );
+        local_storage.borrow_mut().insert(
+            "setItem".to_string(),
+            Value::NativeFunction(native_storage_set),
+        );
+        local_storage.borrow_mut().insert(
+            "removeItem".to_string(),
+            Value::NativeFunction(native_storage_remove),
+        );
+        local_storage.borrow_mut().insert(
+            "clear".to_string(),
+            Value::NativeFunction(native_storage_clear),
+        );
+        local_storage
+            .borrow_mut()
+            .insert("key".to_string(), Value::NativeFunction(native_storage_key));
+        local_storage
+            .borrow_mut()
+            .insert("length".to_string(), Value::Number(0.0));
+        self.interpreter.define(
+            "localStorage".to_string(),
+            Value::Object(local_storage.clone()),
+        );
+        self.interpreter
+            .define("sessionStorage".to_string(), Value::Object(local_storage));
     }
 
     pub fn execute(&mut self, script: &str) -> Result<Value, String> {
@@ -225,15 +319,14 @@ impl ScriptEngine {
     pub fn add_timer(&mut self, callback: String, delay_ms: u64, repeat: bool) -> u32 {
         let id = self.next_timer_id;
         self.next_timer_id += 1;
-        self.pending_timers.push(Timer::new(id, callback, delay_ms, repeat));
+        self.pending_timers
+            .push(Timer::new(id, callback, delay_ms, repeat));
         id
     }
 
     /// Get a timer's callback by ID (for execution)
     pub fn get_timer_callback(&self, id: u32) -> Option<Value> {
-        TIMER_STORAGE.with(|timers| {
-            timers.borrow().get(&id).map(|t| t.callback.clone())
-        })
+        TIMER_STORAGE.with(|timers| timers.borrow().get(&id).map(|t| t.callback.clone()))
     }
 
     /// Remove a timer by ID (after setTimeout fires, or clearTimeout)
@@ -273,7 +366,11 @@ impl ScriptEngine {
     }
 
     /// Fire an event on the window
-    pub fn fire_window_event(&mut self, event_type: &str, event: Value) -> Vec<Result<Value, String>> {
+    pub fn fire_window_event(
+        &mut self,
+        event_type: &str,
+        event: Value,
+    ) -> Vec<Result<Value, String>> {
         let callbacks: Vec<Value> = EVENT_REGISTRY.with(|reg| {
             let registry = reg.borrow();
             if let Some(window_listeners) = registry.get("__window__") {
@@ -283,10 +380,13 @@ impl ScriptEngine {
             }
             Vec::new()
         });
-        
+
         let mut results = Vec::new();
         for callback in callbacks {
-            results.push(self.interpreter.call_value(&callback, std::slice::from_ref(&event)));
+            results.push(
+                self.interpreter
+                    .call_value(&callback, std::slice::from_ref(&event)),
+            );
         }
         results
     }
@@ -302,12 +402,16 @@ impl ScriptEngine {
 }
 
 impl Default for ScriptEngine {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // Native DOM functions
 fn native_get_element_by_id(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Null; }
+    if args.is_empty() {
+        return Value::Null;
+    }
     let id = match &args[0] {
         Value::String(s) => s.clone(),
         _ => return Value::Null,
@@ -318,7 +422,9 @@ fn native_get_element_by_id(args: Vec<Value>) -> Value {
 }
 
 fn native_get_elements_by_tag(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Array(Rc::new(RefCell::new(Vec::new()))); }
+    if args.is_empty() {
+        return Value::Array(Rc::new(RefCell::new(Vec::new())));
+    }
     let tag = match &args[0] {
         Value::String(s) => s.clone(),
         _ => return Value::Array(Rc::new(RefCell::new(Vec::new()))),
@@ -329,7 +435,9 @@ fn native_get_elements_by_tag(args: Vec<Value>) -> Value {
 }
 
 fn native_get_elements_by_class(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Array(Rc::new(RefCell::new(Vec::new()))); }
+    if args.is_empty() {
+        return Value::Array(Rc::new(RefCell::new(Vec::new())));
+    }
     let class = match &args[0] {
         Value::String(s) => s.clone(),
         _ => return Value::Array(Rc::new(RefCell::new(Vec::new()))),
@@ -340,7 +448,9 @@ fn native_get_elements_by_class(args: Vec<Value>) -> Value {
 }
 
 fn native_query_selector(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Null; }
+    if args.is_empty() {
+        return Value::Null;
+    }
     let sel = match &args[0] {
         Value::String(s) => s.clone(),
         _ => return Value::Null,
@@ -351,7 +461,9 @@ fn native_query_selector(args: Vec<Value>) -> Value {
 }
 
 fn native_query_selector_all(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Array(Rc::new(RefCell::new(Vec::new()))); }
+    if args.is_empty() {
+        return Value::Array(Rc::new(RefCell::new(Vec::new())));
+    }
     let sel = match &args[0] {
         Value::String(s) => s.clone(),
         _ => return Value::Array(Rc::new(RefCell::new(Vec::new()))),
@@ -362,30 +474,35 @@ fn native_query_selector_all(args: Vec<Value>) -> Value {
 }
 
 fn native_create_element(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Null; }
+    if args.is_empty() {
+        return Value::Null;
+    }
     let tag = match &args[0] {
         Value::String(s) => s.clone(),
         _ => return Value::Null,
     };
-    
+
     // Create a real DOM node
     let node_ref = Node::new_element(&tag);
-    
+
     // Create JS wrapper and register it
     let obj = node_to_value_from_parts(&tag, "", "");
     if let Value::Object(ref o) = obj {
         let node_id = Rc::as_ptr(o) as usize;
-        o.borrow_mut().insert("__nodeId__".to_string(), Value::Number(node_id as f64));
+        o.borrow_mut()
+            .insert("__nodeId__".to_string(), Value::Number(node_id as f64));
         NODE_REGISTRY.with(|reg| {
             reg.borrow_mut().insert(node_id, node_ref);
         });
     }
-    
+
     obj
 }
 
 fn native_create_text_node(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Null; }
+    if args.is_empty() {
+        return Value::Null;
+    }
     let text = match &args[0] {
         Value::String(s) => s.clone(),
         v => v.to_string_value(),
@@ -408,11 +525,23 @@ fn create_class_list() -> Value {
     if let Value::Object(ref o) = obj {
         let mut m = o.borrow_mut();
         // Store the actual class list as an array
-        m.insert("_classes".to_string(), Value::Array(Rc::new(RefCell::new(Vec::new()))));
+        m.insert(
+            "_classes".to_string(),
+            Value::Array(Rc::new(RefCell::new(Vec::new()))),
+        );
         m.insert("add".to_string(), Value::NativeFunction(classlist_add));
-        m.insert("remove".to_string(), Value::NativeFunction(classlist_remove));
-        m.insert("toggle".to_string(), Value::NativeFunction(classlist_toggle));
-        m.insert("contains".to_string(), Value::NativeFunction(classlist_contains));
+        m.insert(
+            "remove".to_string(),
+            Value::NativeFunction(classlist_remove),
+        );
+        m.insert(
+            "toggle".to_string(),
+            Value::NativeFunction(classlist_toggle),
+        );
+        m.insert(
+            "contains".to_string(),
+            Value::NativeFunction(classlist_contains),
+        );
         m.insert("item".to_string(), Value::NativeFunction(classlist_item));
         m.insert("length".to_string(), Value::Number(0.0));
     }
@@ -426,17 +555,18 @@ fn node_to_value(node: &NodeRef) -> Value {
         &n.get_inner_text(),
         &n.get_inner_html(),
     );
-    
+
     // Register this node so we can find it later for DOM mutations
     if let Value::Object(ref o) = obj {
         let node_id = Rc::as_ptr(o) as usize;
         // Store a unique ID in the object for lookup
-        o.borrow_mut().insert("__nodeId__".to_string(), Value::Number(node_id as f64));
+        o.borrow_mut()
+            .insert("__nodeId__".to_string(), Value::Number(node_id as f64));
         NODE_REGISTRY.with(|reg| {
             reg.borrow_mut().insert(node_id, Rc::clone(node));
         });
     }
-    
+
     obj
 }
 
@@ -452,34 +582,85 @@ fn node_to_value_from_parts(tag: &str, text: &str, html: &str) -> Value {
         m.insert("innerHTML".to_string(), Value::String(html.to_string()));
         m.insert("innerText".to_string(), Value::String(text.to_string()));
         m.insert("textContent".to_string(), Value::String(text.to_string()));
-        m.insert("style".to_string(), Value::Object(Rc::new(RefCell::new(std::collections::HashMap::new()))));
+        m.insert(
+            "style".to_string(),
+            Value::Object(Rc::new(RefCell::new(std::collections::HashMap::new()))),
+        );
         m.insert("classList".to_string(), create_class_list());
-        m.insert("children".to_string(), Value::Array(Rc::new(RefCell::new(Vec::new()))));
-        m.insert("childNodes".to_string(), Value::Array(Rc::new(RefCell::new(Vec::new()))));
+        m.insert(
+            "children".to_string(),
+            Value::Array(Rc::new(RefCell::new(Vec::new()))),
+        );
+        m.insert(
+            "childNodes".to_string(),
+            Value::Array(Rc::new(RefCell::new(Vec::new()))),
+        );
         m.insert("parentNode".to_string(), Value::Null);
         m.insert("firstChild".to_string(), Value::Null);
         m.insert("lastChild".to_string(), Value::Null);
         m.insert("nextSibling".to_string(), Value::Null);
         m.insert("previousSibling".to_string(), Value::Null);
-        
+
         // Element methods
-        m.insert("getAttribute".to_string(), Value::NativeFunction(element_get_attribute));
-        m.insert("setAttribute".to_string(), Value::NativeFunction(element_set_attribute));
-        m.insert("removeAttribute".to_string(), Value::NativeFunction(element_remove_attribute));
-        m.insert("hasAttribute".to_string(), Value::NativeFunction(element_has_attribute));
-        m.insert("appendChild".to_string(), Value::NativeFunction(element_append_child));
-        m.insert("removeChild".to_string(), Value::NativeFunction(element_remove_child));
-        m.insert("insertBefore".to_string(), Value::NativeFunction(element_insert_before));
-        m.insert("replaceChild".to_string(), Value::NativeFunction(element_replace_child));
-        m.insert("cloneNode".to_string(), Value::NativeFunction(element_clone_node));
-        m.insert("contains".to_string(), Value::NativeFunction(element_contains));
-        m.insert("addEventListener".to_string(), Value::NativeFunction(element_add_event_listener));
-        m.insert("removeEventListener".to_string(), Value::NativeFunction(element_remove_event_listener));
-        m.insert("dispatchEvent".to_string(), Value::NativeFunction(element_dispatch_event));
+        m.insert(
+            "getAttribute".to_string(),
+            Value::NativeFunction(element_get_attribute),
+        );
+        m.insert(
+            "setAttribute".to_string(),
+            Value::NativeFunction(element_set_attribute),
+        );
+        m.insert(
+            "removeAttribute".to_string(),
+            Value::NativeFunction(element_remove_attribute),
+        );
+        m.insert(
+            "hasAttribute".to_string(),
+            Value::NativeFunction(element_has_attribute),
+        );
+        m.insert(
+            "appendChild".to_string(),
+            Value::NativeFunction(element_append_child),
+        );
+        m.insert(
+            "removeChild".to_string(),
+            Value::NativeFunction(element_remove_child),
+        );
+        m.insert(
+            "insertBefore".to_string(),
+            Value::NativeFunction(element_insert_before),
+        );
+        m.insert(
+            "replaceChild".to_string(),
+            Value::NativeFunction(element_replace_child),
+        );
+        m.insert(
+            "cloneNode".to_string(),
+            Value::NativeFunction(element_clone_node),
+        );
+        m.insert(
+            "contains".to_string(),
+            Value::NativeFunction(element_contains),
+        );
+        m.insert(
+            "addEventListener".to_string(),
+            Value::NativeFunction(element_add_event_listener),
+        );
+        m.insert(
+            "removeEventListener".to_string(),
+            Value::NativeFunction(element_remove_event_listener),
+        );
+        m.insert(
+            "dispatchEvent".to_string(),
+            Value::NativeFunction(element_dispatch_event),
+        );
         m.insert("focus".to_string(), Value::NativeFunction(element_focus));
         m.insert("blur".to_string(), Value::NativeFunction(element_blur));
         m.insert("click".to_string(), Value::NativeFunction(element_click));
-        m.insert("getBoundingClientRect".to_string(), Value::NativeFunction(element_get_bounding_rect));
+        m.insert(
+            "getBoundingClientRect".to_string(),
+            Value::NativeFunction(element_get_bounding_rect),
+        );
     }
     obj
 }
@@ -499,13 +680,11 @@ fn get_node_from_value(val: &Value) -> Option<NodeRef> {
             let borrowed = obj.borrow();
             if let Some(Value::Number(id)) = borrowed.get("__nodeId__") {
                 let node_id = *id as usize;
-                return NODE_REGISTRY.with(|reg| {
-                    reg.borrow().get(&node_id).cloned()
-                });
+                return NODE_REGISTRY.with(|reg| reg.borrow().get(&node_id).cloned());
             }
             None
         }
-        _ => None
+        _ => None,
     }
 }
 
@@ -526,7 +705,9 @@ where
 
 // Element methods
 fn element_get_attribute(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Null; }
+    if args.is_empty() {
+        return Value::Null;
+    }
     // Get attribute name from args
     let attr_name = args[0].to_string_value();
     // In a full implementation, we'd look up the element's attribute
@@ -537,7 +718,9 @@ fn element_get_attribute(args: Vec<Value>) -> Value {
 
 fn element_set_attribute(args: Vec<Value>) -> Value {
     // setAttribute(name, value)
-    if args.len() < 2 { return Value::Undefined; }
+    if args.len() < 2 {
+        return Value::Undefined;
+    }
     let _attr_name = args[0].to_string_value();
     let _attr_value = args[1].to_string_value();
     // Signal DOM mutation for re-layout
@@ -546,7 +729,9 @@ fn element_set_attribute(args: Vec<Value>) -> Value {
 }
 
 fn element_remove_attribute(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Undefined; }
+    if args.is_empty() {
+        return Value::Undefined;
+    }
     let attr_name = args[0].to_string_value();
     // If we have the element's node ref, remove the attribute on the real DOM node
     if args.len() > 1 {
@@ -560,7 +745,9 @@ fn element_remove_attribute(args: Vec<Value>) -> Value {
 }
 
 fn element_has_attribute(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Boolean(false); }
+    if args.is_empty() {
+        return Value::Boolean(false);
+    }
     let attr_name = args[0].to_string_value();
     // If we have the element's node ref, check on the real DOM node
     if args.len() > 1 {
@@ -572,7 +759,9 @@ fn element_has_attribute(args: Vec<Value>) -> Value {
 }
 
 fn element_append_child(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Null; }
+    if args.is_empty() {
+        return Value::Null;
+    }
     // Signal DOM mutation
     DOM_MUTATED.with(|d| *d.borrow_mut() = true);
     // Return the child (standard behavior)
@@ -580,29 +769,33 @@ fn element_append_child(args: Vec<Value>) -> Value {
 }
 
 fn element_remove_child(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Null; }
+    if args.is_empty() {
+        return Value::Null;
+    }
     DOM_MUTATED.with(|d| *d.borrow_mut() = true);
     args[0].clone()
 }
 
 fn element_insert_before(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Null; }
+    if args.is_empty() {
+        return Value::Null;
+    }
     DOM_MUTATED.with(|d| *d.borrow_mut() = true);
     args[0].clone()
 }
 
 fn element_replace_child(args: Vec<Value>) -> Value {
-    if args.len() < 2 { return Value::Null; }
+    if args.len() < 2 {
+        return Value::Null;
+    }
     DOM_MUTATED.with(|d| *d.borrow_mut() = true);
     args[1].clone()
 }
 
 fn element_clone_node(args: Vec<Value>) -> Value {
     // cloneNode(deep) - returns a copy of the node
-    let deep = args.first()
-        .map(|v| v.is_truthy())
-        .unwrap_or(false);
-    
+    let deep = args.first().map(|v| v.is_truthy()).unwrap_or(false);
+
     // Create a new element wrapper (shallow clone)
     // In full impl, if deep=true, we'd also clone children
     let _is_deep = deep;
@@ -611,7 +804,9 @@ fn element_clone_node(args: Vec<Value>) -> Value {
 
 fn element_contains(args: Vec<Value>) -> Value {
     // Check if this element contains the given node
-    if args.is_empty() { return Value::Boolean(false); }
+    if args.is_empty() {
+        return Value::Boolean(false);
+    }
     let _other_node = &args[0];
     // Without DOM tree access, we can't check containment
     // Return false as default
@@ -620,29 +815,42 @@ fn element_contains(args: Vec<Value>) -> Value {
 fn element_add_event_listener(args: Vec<Value>) -> Value {
     // element.addEventListener(type, callback)
     // Args: [event_type, callback, ...optional_element]
-    if args.len() < 2 { return Value::Undefined; }
+    if args.len() < 2 {
+        return Value::Undefined;
+    }
     let event_type = match &args[0] {
         Value::String(s) => s.clone(),
         _ => return Value::Undefined,
     };
-    let callback = if args.len() > 1 { args[1].clone() } else { return Value::Undefined; };
+    let callback = if args.len() > 1 {
+        args[1].clone()
+    } else {
+        return Value::Undefined;
+    };
 
     // Use a generic element ID since we don't have element identity
-    let element_id = format!("elem_{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0));
+    let element_id = format!(
+        "elem_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    );
 
     // If we have the element's node ref, also register on the DOM node
     if args.len() > 2 {
         if let Some(node_ref) = get_node_from_value(&args[2]) {
-            node_ref.borrow_mut().add_event_listener(&event_type, element_id.clone());
+            node_ref
+                .borrow_mut()
+                .add_event_listener(&event_type, element_id.clone());
         }
     }
 
     EVENT_REGISTRY.with(|reg| {
         let mut registry = reg.borrow_mut();
-        let elem_listeners = registry.entry(element_id).or_insert_with(std::collections::HashMap::new);
+        let elem_listeners = registry
+            .entry(element_id)
+            .or_insert_with(std::collections::HashMap::new);
         let type_listeners = elem_listeners.entry(event_type).or_insert_with(Vec::new);
         type_listeners.push(callback);
     });
@@ -650,14 +858,18 @@ fn element_add_event_listener(args: Vec<Value>) -> Value {
 }
 
 fn element_remove_event_listener(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Undefined; }
+    if args.is_empty() {
+        return Value::Undefined;
+    }
     // Simplified: just return undefined, proper implementation needs element identity tracking
     Value::Undefined
 }
 
 fn element_dispatch_event(args: Vec<Value>) -> Value {
     // element.dispatchEvent(event) -> returns true if event was not cancelled
-    if args.is_empty() { return Value::Boolean(true); }
+    if args.is_empty() {
+        return Value::Boolean(true);
+    }
     // In a full implementation, we'd call the registered callbacks
     // For now, just signal success
     Value::Boolean(true)
@@ -666,7 +878,7 @@ fn element_focus(args: Vec<Value>) -> Value {
     // Focus the element - in a full impl, this would update the focused element
     // and potentially scroll into view
     let _element = args.first(); // The element being focused
-    // Signal that UI state changed (for cursor positioning, etc.)
+                                 // Signal that UI state changed (for cursor positioning, etc.)
     DOM_MUTATED.with(|d| *d.borrow_mut() = true);
     Value::Undefined
 }
@@ -683,7 +895,7 @@ fn element_click(args: Vec<Value>) -> Value {
     let _element = args.first();
     // In a full implementation, this would:
     // 1. Dispatch mousedown event
-    // 2. Dispatch mouseup event  
+    // 2. Dispatch mouseup event
     // 3. Dispatch click event
     // 4. If it's a link, navigate
     // 5. If it's a button in a form, submit
@@ -758,48 +970,58 @@ fn classlist_item(args: Vec<Value>) -> Value {
 
 // Window functions
 fn native_set_timeout(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Number(0.0); }
+    if args.is_empty() {
+        return Value::Number(0.0);
+    }
     let callback = args[0].clone();
     let delay_ms = args.get(1).map(|v| v.to_number() as u64).unwrap_or(0);
-    
+
     let id = NEXT_TIMER_ID.with(|id| {
         let current = *id.borrow();
         *id.borrow_mut() = current + 1;
         current
     });
-    
+
     TIMER_STORAGE.with(|timers| {
-        timers.borrow_mut().insert(id, StoredTimer {
-            callback,
-            delay_ms,
-            repeat: false,
-            created_at: std::time::Instant::now(),
-        });
+        timers.borrow_mut().insert(
+            id,
+            StoredTimer {
+                callback,
+                delay_ms,
+                repeat: false,
+                created_at: std::time::Instant::now(),
+            },
+        );
     });
-    
+
     Value::Number(id as f64)
 }
 
 fn native_set_interval(args: Vec<Value>) -> Value {
-    if args.is_empty() { return Value::Number(0.0); }
+    if args.is_empty() {
+        return Value::Number(0.0);
+    }
     let callback = args[0].clone();
     let delay_ms = args.get(1).map(|v| v.to_number() as u64).unwrap_or(0);
-    
+
     let id = NEXT_TIMER_ID.with(|id| {
         let current = *id.borrow();
         *id.borrow_mut() = current + 1;
         current
     });
-    
+
     TIMER_STORAGE.with(|timers| {
-        timers.borrow_mut().insert(id, StoredTimer {
-            callback,
-            delay_ms,
-            repeat: true,
-            created_at: std::time::Instant::now(),
-        });
+        timers.borrow_mut().insert(
+            id,
+            StoredTimer {
+                callback,
+                delay_ms,
+                repeat: true,
+                created_at: std::time::Instant::now(),
+            },
+        );
     });
-    
+
     Value::Number(id as f64)
 }
 
@@ -844,7 +1066,9 @@ fn native_prompt(args: Vec<Value>) -> Value {
 
 fn native_add_event_listener(args: Vec<Value>) -> Value {
     // window.addEventListener(type, callback)
-    if args.len() < 2 { return Value::Undefined; }
+    if args.len() < 2 {
+        return Value::Undefined;
+    }
     let event_type = match &args[0] {
         Value::String(s) => s.clone(),
         _ => return Value::Undefined,
@@ -852,7 +1076,9 @@ fn native_add_event_listener(args: Vec<Value>) -> Value {
     let callback = args[1].clone();
     EVENT_REGISTRY.with(|reg| {
         let mut registry = reg.borrow_mut();
-        let window_listeners = registry.entry("__window__".to_string()).or_insert_with(std::collections::HashMap::new);
+        let window_listeners = registry
+            .entry("__window__".to_string())
+            .or_insert_with(std::collections::HashMap::new);
         let type_listeners = window_listeners.entry(event_type).or_insert_with(Vec::new);
         type_listeners.push(callback);
     });
@@ -861,7 +1087,9 @@ fn native_add_event_listener(args: Vec<Value>) -> Value {
 
 fn native_remove_event_listener(args: Vec<Value>) -> Value {
     // window.removeEventListener(type, callback) - basic implementation
-    if args.is_empty() { return Value::Undefined; }
+    if args.is_empty() {
+        return Value::Undefined;
+    }
     let event_type = match &args[0] {
         Value::String(s) => s.clone(),
         _ => return Value::Undefined,
@@ -881,14 +1109,23 @@ thread_local! {
 }
 
 fn native_storage_get(args: Vec<Value>) -> Value {
-    let key = args.first().map(|v| v.to_string_value()).unwrap_or_default();
+    let key = args
+        .first()
+        .map(|v| v.to_string_value())
+        .unwrap_or_default();
     STORAGE.with(|s| {
-        s.borrow().get(&key).map(|v| Value::String(v.clone())).unwrap_or(Value::Null)
+        s.borrow()
+            .get(&key)
+            .map(|v| Value::String(v.clone()))
+            .unwrap_or(Value::Null)
     })
 }
 
 fn native_storage_set(args: Vec<Value>) -> Value {
-    let key = args.first().map(|v| v.to_string_value()).unwrap_or_default();
+    let key = args
+        .first()
+        .map(|v| v.to_string_value())
+        .unwrap_or_default();
     let value = args.get(1).map(|v| v.to_string_value()).unwrap_or_default();
     STORAGE.with(|s| {
         s.borrow_mut().insert(key, value);
@@ -897,7 +1134,10 @@ fn native_storage_set(args: Vec<Value>) -> Value {
 }
 
 fn native_storage_remove(args: Vec<Value>) -> Value {
-    let key = args.first().map(|v| v.to_string_value()).unwrap_or_default();
+    let key = args
+        .first()
+        .map(|v| v.to_string_value())
+        .unwrap_or_default();
     STORAGE.with(|s| {
         s.borrow_mut().remove(&key);
     });
@@ -915,7 +1155,11 @@ fn native_storage_key(args: Vec<Value>) -> Value {
     let index = args.first().map(|v| v.to_number() as usize).unwrap_or(0);
     STORAGE.with(|s| {
         let storage = s.borrow();
-        storage.keys().nth(index).map(|k| Value::String(k.clone())).unwrap_or(Value::Null)
+        storage
+            .keys()
+            .nth(index)
+            .map(|k| Value::String(k.clone()))
+            .unwrap_or(Value::Null)
     })
 }
 
@@ -950,7 +1194,9 @@ mod tests {
         assert!(ScriptEngine::describe_expression(&Expr::Number(42.0)).contains("Number"));
         assert!(ScriptEngine::describe_expression(&Expr::String("hi".into())).contains("String"));
         assert!(ScriptEngine::describe_expression(&Expr::Boolean(true)).contains("Boolean"));
-        assert!(ScriptEngine::describe_expression(&Expr::Identifier("x".into())).contains("Identifier"));
+        assert!(
+            ScriptEngine::describe_expression(&Expr::Identifier("x".into())).contains("Identifier")
+        );
         assert!(ScriptEngine::describe_expression(&Expr::Array(vec![])).contains("Array"));
         assert!(ScriptEngine::describe_expression(&Expr::Object(vec![])).contains("Object"));
     }
@@ -1048,7 +1294,9 @@ mod tests {
     fn test_fire_window_event() {
         let mut engine = ScriptEngine::new();
         // Create a simple event value
-        let event = Value::Object(std::rc::Rc::new(std::cell::RefCell::new(std::collections::HashMap::new())));
+        let event = Value::Object(std::rc::Rc::new(std::cell::RefCell::new(
+            std::collections::HashMap::new(),
+        )));
         let results = engine.fire_window_event("click", event);
         // No listeners registered, so results should be empty
         assert!(results.is_empty());

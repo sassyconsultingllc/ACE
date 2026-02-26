@@ -5,7 +5,6 @@
 // NO MYSTERY TRAFFIC. NO HIDDEN REQUESTS. FULL TRANSPARENCY.
 // ==============================================================================
 
-
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -60,10 +59,13 @@ impl ConnectionType {
             ConnectionType::Other => "[X]",
         }
     }
-    
+
     pub fn from_content_type(ct: &str) -> Self {
         let ct_lower = crate::fontcase::ascii_lower(ct);
-        if ct_lower.contains("octet-stream") || ct_lower.contains("zip") || ct_lower.contains("application/x-msdownload") {
+        if ct_lower.contains("octet-stream")
+            || ct_lower.contains("zip")
+            || ct_lower.contains("application/x-msdownload")
+        {
             ConnectionType::Download
         } else if ct_lower.contains("html") {
             ConnectionType::Document
@@ -100,10 +102,14 @@ impl ActiveConnection {
     pub fn log_line(&self) -> String {
         format!(
             "[{}] {} {} {}:{} secure={} bytes={}/{}",
-            self.id, self.request_method, self.url,
-            self.ip_address.as_deref().unwrap_or("-"), self.port,
+            self.id,
+            self.request_method,
+            self.url,
+            self.ip_address.as_deref().unwrap_or("-"),
+            self.port,
             self.is_secure,
-            self.bytes_sent, self.bytes_received
+            self.bytes_sent,
+            self.bytes_received
         )
     }
 }
@@ -148,33 +154,35 @@ impl BandwidthTracker {
             session_start: Instant::now(),
         }
     }
-    
+
     pub fn record(&mut self, bytes_down: u64, bytes_up: u64) {
         self.total_down += bytes_down;
         self.total_up += bytes_up;
-        
+
         self.samples.push(BandwidthSample {
             timestamp: Instant::now(),
             bytes_down,
             bytes_up,
         });
-        
+
         let cutoff = Instant::now() - Duration::from_secs(120);
         self.samples.retain(|s| s.timestamp > cutoff);
     }
-    
+
     pub fn current_speed(&self) -> (f64, f64) {
         let now = Instant::now();
         let window = Duration::from_secs(1);
         let cutoff = now - window;
-        
-        let (down, up) = self.samples.iter()
+
+        let (down, up) = self
+            .samples
+            .iter()
             .filter(|s| s.timestamp > cutoff)
             .fold((0u64, 0u64), |(d, u), s| (d + s.bytes_down, u + s.bytes_up));
-        
+
         (down as f64, up as f64)
     }
-    
+
     pub fn total(&self) -> (u64, u64) {
         (self.total_down, self.total_up)
     }
@@ -232,15 +240,15 @@ impl NetworkMonitor {
             domain_stats: HashMap::new(),
         }
     }
-    
+
     pub fn start_connection(&mut self, url: &str, conn_type: ConnectionType) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
-        
+
         let domain = extract_domain(url);
         let is_secure = url.starts_with("https://");
         let port = if is_secure { 443 } else { 80 };
-        
+
         let connection = ActiveConnection {
             id,
             url: url.to_string(),
@@ -257,7 +265,7 @@ impl NetworkMonitor {
             ip_address: None,
             port,
         };
-        
+
         self.connections.insert(id, connection);
         self.domain_stats.entry(domain).or_default().request_count += 1;
 
@@ -268,27 +276,27 @@ impl NetworkMonitor {
 
         id
     }
-    
+
     pub fn update_connection(&mut self, id: u64, bytes_down: u64, bytes_up: u64) {
         if let Some(conn) = self.connections.get_mut(&id) {
             conn.bytes_received += bytes_down;
             conn.bytes_sent += bytes_up;
-            
+
             if bytes_down > 0 {
                 conn.state = ConnectionState::Downloading;
             } else if bytes_up > 0 {
                 conn.state = ConnectionState::Uploading;
             }
-            
+
             self.bandwidth.record(bytes_down, bytes_up);
-            
+
             if let Some(stats) = self.domain_stats.get_mut(&conn.domain) {
                 stats.bytes_received += bytes_down;
                 stats.bytes_sent += bytes_up;
             }
         }
     }
-    
+
     pub fn complete_connection(&mut self, id: u64, status_code: u16, content_type: Option<String>) {
         if let Some(conn) = self.connections.get_mut(&id) {
             conn.state = ConnectionState::Complete;
@@ -300,7 +308,7 @@ impl NetworkMonitor {
             conn.content_type = content_type;
         }
     }
-    
+
     pub fn fail_connection(&mut self, id: u64, error: &str) {
         if let Some(conn) = self.connections.get_mut(&id) {
             if error == "cancelled" {
@@ -310,10 +318,10 @@ impl NetworkMonitor {
             }
         }
     }
-    
+
     pub fn is_blocked(&mut self, url: &str) -> bool {
         let domain = extract_domain(url);
-        
+
         for blocked in &self.blocked_domains {
             if domain.contains(blocked) || url.contains(blocked) {
                 self.blocked_count += 1;
@@ -323,25 +331,30 @@ impl NetworkMonitor {
                 return true;
             }
         }
-        
+
         false
     }
-    
+
     pub fn active_connections(&self) -> Vec<&ActiveConnection> {
-        self.connections.values()
-            .filter(|c| matches!(c.state, 
-                ConnectionState::Connecting | 
-                ConnectionState::Uploading | 
-                ConnectionState::Downloading))
+        self.connections
+            .values()
+            .filter(|c| {
+                matches!(
+                    c.state,
+                    ConnectionState::Connecting
+                        | ConnectionState::Uploading
+                        | ConnectionState::Downloading
+                )
+            })
             .collect()
     }
-    
+
     pub fn all_connections(&self) -> Vec<&ActiveConnection> {
         let mut conns: Vec<_> = self.connections.values().collect();
         conns.sort_by(|a, b| b.started_at.cmp(&a.started_at));
         conns
     }
-    
+
     pub fn active_count(&self) -> usize {
         self.active_connections().len()
     }
@@ -349,22 +362,27 @@ impl NetworkMonitor {
     pub fn current_speed(&self) -> (f64, f64) {
         self.bandwidth.current_speed()
     }
-    
+
     pub fn total_transferred(&self) -> (u64, u64) {
         // Touch session elapsed to include uptime tracking
         let _session = self.bandwidth.session_elapsed();
         self.bandwidth.total()
     }
-    
+
     pub fn blocked_count(&self) -> u64 {
         self.blocked_count
     }
-    
+
     pub fn cleanup_old(&mut self, max_age: Duration) {
         let cutoff = Instant::now() - max_age;
         self.connections.retain(|_, c| {
-            c.started_at > cutoff || 
-            matches!(c.state, ConnectionState::Connecting | ConnectionState::Uploading | ConnectionState::Downloading)
+            c.started_at > cutoff
+                || matches!(
+                    c.state,
+                    ConnectionState::Connecting
+                        | ConnectionState::Uploading
+                        | ConnectionState::Downloading
+                )
         });
     }
 }
@@ -418,12 +436,15 @@ impl Default for ActivityIndicatorState {
 // ==============================================================================
 
 fn extract_domain(url: &str) -> String {
-    let url = url.trim_start_matches("https://")
+    let url = url
+        .trim_start_matches("https://")
         .trim_start_matches("http://");
-    
-    url.split('/').next()
+
+    url.split('/')
+        .next()
         .unwrap_or(url)
-        .split(':').next()
+        .split(':')
+        .next()
         .unwrap_or(url)
         .to_string()
 }
@@ -470,28 +491,29 @@ pub fn format_duration(dur: Duration) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_network_monitor() {
         let mut monitor = NetworkMonitor::new();
-        
-        let id = monitor.start_connection("https://example.com/page.html", ConnectionType::Document);
+
+        let id =
+            monitor.start_connection("https://example.com/page.html", ConnectionType::Document);
         assert_eq!(monitor.active_count(), 1);
-        
+
         monitor.update_connection(id, 1024, 0);
         monitor.complete_connection(id, 200, Some("text/html".to_string()));
-        
+
         assert_eq!(monitor.active_count(), 0);
     }
-    
+
     #[test]
     fn test_blocked_domains() {
         let mut monitor = NetworkMonitor::new();
-        
+
         assert!(monitor.is_blocked("https://google-analytics.com/collect"));
         assert!(!monitor.is_blocked("https://example.com"));
     }
-    
+
     #[test]
     fn test_format_bytes() {
         assert_eq!(format_bytes(500), "500 B");

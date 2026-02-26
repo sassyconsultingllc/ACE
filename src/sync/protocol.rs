@@ -23,7 +23,11 @@ pub enum MessagePayload {
     #[serde(rename = "state")]
     State(BrowserState),
     #[serde(rename = "ack")]
-    Ack { message_id: u64, success: bool, error: Option<String> },
+    Ack {
+        message_id: u64,
+        success: bool,
+        error: Option<String>,
+    },
     #[serde(rename = "ping")]
     Ping,
     #[serde(rename = "pong")]
@@ -55,7 +59,7 @@ pub enum SyncCommand {
     TabCloseOthers { tab_id: u64 },
     #[serde(rename = "tab.close_right")]
     TabCloseRight { tab_id: u64 },
-    
+
     // Navigation
     #[serde(rename = "nav.back")]
     NavBack,
@@ -67,7 +71,7 @@ pub enum SyncCommand {
     NavStop,
     #[serde(rename = "nav.go")]
     NavGo { url: String },
-    
+
     // Scroll control
     #[serde(rename = "scroll.to")]
     ScrollTo { x: i32, y: i32 },
@@ -77,7 +81,7 @@ pub enum SyncCommand {
     ScrollTop,
     #[serde(rename = "scroll.bottom")]
     ScrollBottom,
-    
+
     // Page interaction
     #[serde(rename = "page.click")]
     PageClick { x: i32, y: i32 },
@@ -93,15 +97,19 @@ pub enum SyncCommand {
     PageFindPrev,
     #[serde(rename = "page.zoom")]
     PageZoom { level: f32 },
-    
+
     // Bookmarks
     #[serde(rename = "bookmark.add")]
-    BookmarkAdd { url: String, title: String, folder: Option<String> },
+    BookmarkAdd {
+        url: String,
+        title: String,
+        folder: Option<String>,
+    },
     #[serde(rename = "bookmark.remove")]
     BookmarkRemove { url: String },
     #[serde(rename = "bookmark.list")]
     BookmarkList { folder: Option<String> },
-    
+
     // History
     #[serde(rename = "history.list")]
     HistoryList { limit: usize, offset: usize },
@@ -109,7 +117,7 @@ pub enum SyncCommand {
     HistorySearch { query: String, limit: usize },
     #[serde(rename = "history.clear")]
     HistoryClear { from: Option<u64>, to: Option<u64> },
-    
+
     // Downloads
     #[serde(rename = "download.list")]
     DownloadList,
@@ -119,13 +127,16 @@ pub enum SyncCommand {
     DownloadResume { download_id: u64 },
     #[serde(rename = "download.cancel")]
     DownloadCancel { download_id: u64 },
-    
+
     // Settings
     #[serde(rename = "settings.get")]
     SettingsGet { key: String },
     #[serde(rename = "settings.set")]
-    SettingsSet { key: String, value: serde_json::Value },
-    
+    SettingsSet {
+        key: String,
+        value: serde_json::Value,
+    },
+
     // HUD configuration
     #[serde(rename = "hud.configure")]
     HudConfigure { widgets: Vec<HudWidget> },
@@ -133,7 +144,7 @@ pub enum SyncCommand {
     HudShow { widget_id: String },
     #[serde(rename = "hud.hide")]
     HudHide { widget_id: String },
-    
+
     // State requests
     #[serde(rename = "state.request")]
     StateRequest { include: Vec<String> },
@@ -152,7 +163,7 @@ pub enum SyncEvent {
     Connected { browser_id: String, version: String },
     #[serde(rename = "disconnected")]
     Disconnected { reason: String },
-    
+
     // Tab events
     #[serde(rename = "tab.created")]
     TabCreated { tab: TabInfo },
@@ -163,8 +174,12 @@ pub enum SyncEvent {
     #[serde(rename = "tab.activated")]
     TabActivated { tab_id: u64 },
     #[serde(rename = "tab.moved")]
-    TabMoved { tab_id: u64, from_index: usize, to_index: usize },
-    
+    TabMoved {
+        tab_id: u64,
+        from_index: usize,
+        to_index: usize,
+    },
+
     // Navigation events
     #[serde(rename = "nav.started")]
     NavStarted { tab_id: u64, url: String },
@@ -173,35 +188,60 @@ pub enum SyncEvent {
     #[serde(rename = "nav.completed")]
     NavCompleted { tab_id: u64, url: String },
     #[serde(rename = "nav.failed")]
-    NavFailed { tab_id: u64, url: String, error: String },
-    
+    NavFailed {
+        tab_id: u64,
+        url: String,
+        error: String,
+    },
+
     // Page events
     #[serde(rename = "page.title_changed")]
     PageTitleChanged { tab_id: u64, title: String },
     #[serde(rename = "page.favicon_changed")]
-    PageFaviconChanged { tab_id: u64, favicon_url: Option<String> },
+    PageFaviconChanged {
+        tab_id: u64,
+        favicon_url: Option<String>,
+    },
     #[serde(rename = "page.scroll")]
-    PageScroll { tab_id: u64, x: i32, y: i32, max_x: i32, max_y: i32 },
+    PageScroll {
+        tab_id: u64,
+        x: i32,
+        y: i32,
+        max_x: i32,
+        max_y: i32,
+    },
     #[serde(rename = "page.load_progress")]
     PageLoadProgress { tab_id: u64, progress: f32 },
-    
+
     // Download events
     #[serde(rename = "download.started")]
     DownloadStarted { download: DownloadInfo },
     #[serde(rename = "download.progress")]
-    DownloadProgress { download_id: u64, received: u64, total: Option<u64> },
+    DownloadProgress {
+        download_id: u64,
+        received: u64,
+        total: Option<u64>,
+    },
     #[serde(rename = "download.completed")]
     DownloadCompleted { download_id: u64, path: String },
     #[serde(rename = "download.failed")]
     DownloadFailed { download_id: u64, error: String },
-    
+
     // Find events
     #[serde(rename = "find.results")]
-    FindResults { query: String, count: usize, active_index: usize },
-    
+    FindResults {
+        query: String,
+        count: usize,
+        active_index: usize,
+    },
+
     // Notification
     #[serde(rename = "notification")]
-    Notification { title: String, message: String, icon: Option<String> },
+    Notification {
+        title: String,
+        message: String,
+        icon: Option<String>,
+    },
 }
 
 /// Full browser state for initial sync
@@ -307,9 +347,9 @@ pub enum HudPosition {
 impl SyncMessage {
     pub fn new(payload: MessagePayload) -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
-        
+
         static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-        
+
         Self {
             id: NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
             timestamp: SystemTime::now()
@@ -319,35 +359,39 @@ impl SyncMessage {
             payload,
         }
     }
-    
+
     pub fn command(cmd: SyncCommand) -> Self {
         Self::new(MessagePayload::Command(cmd))
     }
-    
+
     pub fn event(evt: SyncEvent) -> Self {
         Self::new(MessagePayload::Event(evt))
     }
-    
+
     pub fn state(state: BrowserState) -> Self {
         Self::new(MessagePayload::State(state))
     }
-    
+
     pub fn ack(message_id: u64, success: bool, error: Option<String>) -> Self {
-        Self::new(MessagePayload::Ack { message_id, success, error })
+        Self::new(MessagePayload::Ack {
+            message_id,
+            success,
+            error,
+        })
     }
-    
+
     pub fn ping() -> Self {
         Self::new(MessagePayload::Ping)
     }
-    
+
     pub fn pong() -> Self {
         Self::new(MessagePayload::Pong)
     }
-    
+
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(self)
     }
-    
+
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
     }
@@ -362,37 +406,37 @@ pub enum UserCommand {
     /// List available users for login
     #[serde(rename = "users.list")]
     ListUsers,
-    
+
     /// Authenticate as a user
     #[serde(rename = "auth")]
-    Authenticate { 
-        user_id: String, 
-        pin: Option<String> 
+    Authenticate {
+        user_id: String,
+        pin: Option<String>,
     },
-    
+
     /// Logout current user
     #[serde(rename = "logout")]
     Logout,
-    
+
     /// Add a new user (admin only)
     #[serde(rename = "users.add")]
-    AddUser { 
+    AddUser {
         name: String,
         #[serde(default)]
         pin: Option<String>,
     },
-    
+
     /// Remove a user (admin only)  
     #[serde(rename = "users.remove")]
     RemoveUser { user_id: String },
-    
+
     /// Set user's PIN
     #[serde(rename = "users.set_pin")]
-    SetPin { 
-        user_id: String, 
-        pin: Option<String> 
+    SetPin {
+        user_id: String,
+        pin: Option<String>,
     },
-    
+
     /// Make user an admin
     #[serde(rename = "users.make_admin")]
     MakeAdmin { user_id: String },
@@ -404,33 +448,27 @@ pub enum UserCommand {
 pub enum UserEvent {
     /// List of users for login screen
     #[serde(rename = "users")]
-    UserList { 
-        users: Vec<crate::sync::UserLoginInfo> 
+    UserList {
+        users: Vec<crate::sync::UserLoginInfo>,
     },
-    
+
     /// Authentication successful
     #[serde(rename = "auth_ok")]
-    AuthOk { 
+    AuthOk {
         user_id: String,
         user_name: String,
         is_admin: bool,
     },
-    
+
     /// Authentication failed
     #[serde(rename = "auth_fail")]
-    AuthFail { 
-        reason: String 
-    },
-    
+    AuthFail { reason: String },
+
     /// User added
     #[serde(rename = "user_added")]
-    UserAdded { 
-        user: crate::sync::UserLoginInfo 
-    },
-    
+    UserAdded { user: crate::sync::UserLoginInfo },
+
     /// User removed
     #[serde(rename = "user_removed")]
-    UserRemoved { 
-        user_id: String 
-    },
+    UserRemoved { user_id: String },
 }

@@ -1,9 +1,9 @@
 // Extensions - WebExtension-compatible extension support
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtensionManifest {
@@ -41,7 +41,9 @@ pub struct ContentScript {
     pub all_frames: bool,
 }
 
-fn default_run_at() -> String { "document_idle".to_string() }
+fn default_run_at() -> String {
+    "document_idle".to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundScript {
@@ -53,7 +55,9 @@ pub struct BackgroundScript {
     pub persistent: bool,
 }
 
-fn default_persistent() -> bool { false }
+fn default_persistent() -> bool {
+    false
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrowserAction {
@@ -90,12 +94,12 @@ impl Extension {
         let manifest_path = Path::new(path).join("manifest.json");
         let manifest_content = fs::read_to_string(&manifest_path)
             .map_err(|e| format!("Failed to read manifest: {}", e))?;
-        
+
         let manifest: ExtensionManifest = serde_json::from_str(&manifest_content)
             .map_err(|e| format!("Failed to parse manifest: {}", e))?;
-        
+
         let id = crate::fontcase::ascii_lower(&manifest.name).replace(' ', "-");
-        
+
         // Load content scripts
         let mut content_scripts_code = HashMap::new();
         for cs in &manifest.content_scripts {
@@ -106,7 +110,7 @@ impl Extension {
                 }
             }
         }
-        
+
         // Load background script
         let background_script_code = if let Some(ref bg) = manifest.background {
             if let Some(ref sw) = bg.service_worker {
@@ -121,7 +125,7 @@ impl Extension {
         } else {
             None
         };
-        
+
         Ok(Extension {
             id,
             path: path.to_string(),
@@ -133,64 +137,88 @@ impl Extension {
     }
 
     pub fn matches_url(&self, url: &str) -> Vec<&ContentScript> {
-        self.manifest.content_scripts.iter().filter(|cs| {
-            cs.matches.iter().any(|pattern| Self::match_pattern(pattern, url))
-        }).collect()
+        self.manifest
+            .content_scripts
+            .iter()
+            .filter(|cs| {
+                cs.matches
+                    .iter()
+                    .any(|pattern| Self::match_pattern(pattern, url))
+            })
+            .collect()
     }
 
     fn match_pattern(pattern: &str, url: &str) -> bool {
-        if pattern == "<all_urls>" { return true; }
-        
+        if pattern == "<all_urls>" {
+            return true;
+        }
+
         // Parse pattern: scheme://host/path
         let parts: Vec<&str> = pattern.splitn(2, "://").collect();
-        if parts.len() != 2 { return false; }
-        
+        if parts.len() != 2 {
+            return false;
+        }
+
         let scheme_pattern = parts[0];
         let rest = parts[1];
-        
+
         // Check scheme
-        let url_scheme = if url.starts_with("https://") { "https" }
-                        else if url.starts_with("http://") { "http" }
-                        else { return false; };
-        
-        if scheme_pattern != "*" && scheme_pattern != url_scheme { return false; }
-        
+        let url_scheme = if url.starts_with("https://") {
+            "https"
+        } else if url.starts_with("http://") {
+            "http"
+        } else {
+            return false;
+        };
+
+        if scheme_pattern != "*" && scheme_pattern != url_scheme {
+            return false;
+        }
+
         // Parse host and path
         let (host_pattern, path_pattern) = if let Some(idx) = rest.find('/') {
             (&rest[..idx], &rest[idx..])
         } else {
             (rest, "/*")
         };
-        
+
         // Get URL host and path
-        let url_without_scheme = if let Some(stripped) = url.strip_prefix("https://") { stripped }
-                     else if let Some(stripped) = url.strip_prefix("http://") { stripped }
-                     else { url };
-        
+        let url_without_scheme = if let Some(stripped) = url.strip_prefix("https://") {
+            stripped
+        } else if let Some(stripped) = url.strip_prefix("http://") {
+            stripped
+        } else {
+            url
+        };
+
         let (url_host, url_path) = if let Some(idx) = url_without_scheme.find('/') {
             (&url_without_scheme[..idx], &url_without_scheme[idx..])
         } else {
             (url_without_scheme, "/")
         };
-        
+
         // Match host
         if host_pattern != "*" {
             if let Some(suffix) = host_pattern.strip_prefix("*.") {
-                if !url_host.ends_with(suffix) && url_host != suffix { return false; }
+                if !url_host.ends_with(suffix) && url_host != suffix {
+                    return false;
+                }
             } else if host_pattern != url_host {
                 return false;
             }
         }
-        
+
         // Match path
         if path_pattern != "/*" {
             if let Some(prefix) = path_pattern.strip_suffix('*') {
-                if !url_path.starts_with(prefix) { return false; }
+                if !url_path.starts_with(prefix) {
+                    return false;
+                }
             } else if path_pattern != url_path {
                 return false;
             }
         }
-        
+
         true
     }
 
@@ -215,16 +243,19 @@ impl ExtensionManager {
     pub fn load_extension(&mut self, path: &str) -> Result<(), String> {
         let extension = Extension::load(path)?;
         let id = extension.id.clone();
-        
+
         // Initialize storage
         self.storage.insert(id.clone(), HashMap::new());
-        
+
         // Run background script if present
         if let Some(ref _bg_code) = extension.background_script_code {
             // Background scripts would run in a separate context
-            println!("[Extension] Loaded background script for: {}", extension.manifest.name);
+            println!(
+                "[Extension] Loaded background script for: {}",
+                extension.manifest.name
+            );
         }
-        
+
         self.extensions.push(extension);
         Ok(())
     }
@@ -248,10 +279,12 @@ impl ExtensionManager {
 
     pub fn get_content_scripts(&self, url: &str) -> Vec<String> {
         let mut scripts = Vec::new();
-        
+
         for ext in &self.extensions {
-            if !ext.enabled { continue; }
-            
+            if !ext.enabled {
+                continue;
+            }
+
             for cs in ext.matches_url(url) {
                 for js_file in &cs.js {
                     if let Some(code) = ext.get_content_script_code(js_file) {
@@ -260,16 +293,18 @@ impl ExtensionManager {
                 }
             }
         }
-        
+
         scripts
     }
 
     pub fn get_content_styles(&self, url: &str) -> Vec<String> {
         let mut styles = Vec::new();
-        
+
         for ext in &self.extensions {
-            if !ext.enabled { continue; }
-            
+            if !ext.enabled {
+                continue;
+            }
+
             for cs in ext.matches_url(url) {
                 for css_file in &cs.css {
                     let css_path = Path::new(&ext.path).join(css_file);
@@ -279,7 +314,7 @@ impl ExtensionManager {
                 }
             }
         }
-        
+
         styles
     }
 
@@ -300,18 +335,23 @@ impl ExtensionManager {
     }
 
     pub fn list_extensions(&self) -> Vec<ExtensionInfo> {
-        self.extensions.iter().map(|e| ExtensionInfo {
-            id: e.id.clone(),
-            name: e.manifest.name.clone(),
-            version: e.manifest.version.clone(),
-            description: e.manifest.description.clone(),
-            enabled: e.enabled,
-        }).collect()
+        self.extensions
+            .iter()
+            .map(|e| ExtensionInfo {
+                id: e.id.clone(),
+                name: e.manifest.name.clone(),
+                version: e.manifest.version.clone(),
+                description: e.manifest.description.clone(),
+                enabled: e.enabled,
+            })
+            .collect()
     }
 }
 
 impl Default for ExtensionManager {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -330,7 +370,9 @@ pub struct ExtensionAPI {
 
 impl ExtensionAPI {
     pub fn new(ext_id: &str) -> Self {
-        ExtensionAPI { extension_id: ext_id.to_string() }
+        ExtensionAPI {
+            extension_id: ext_id.to_string(),
+        }
     }
 
     pub fn send_message(&self, _message: &str) -> Result<String, String> {
@@ -373,7 +415,8 @@ mod tests {
         fs::write(path.join("style.css"), "p { color: red; }").expect("write css");
 
         let mut mgr = ExtensionManager::new();
-        mgr.load_extension(path.to_str().unwrap()).expect("load ext");
+        mgr.load_extension(path.to_str().unwrap())
+            .expect("load ext");
 
         let styles = mgr.get_content_styles("http://example/");
         assert!(!styles.is_empty(), "styles should be found");
@@ -389,6 +432,9 @@ mod tests {
         renderer.apply_content_styles(&styles);
 
         let doc = renderer.cached_doc.expect("doc");
-        assert!(!doc.styles.is_empty(), "document styles should include extension styles");
+        assert!(
+            !doc.styles.is_empty(),
+            "document styles should include extension styles"
+        );
     }
 }

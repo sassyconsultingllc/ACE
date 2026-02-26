@@ -6,11 +6,10 @@
 //! - Commit creation (with approval)
 //! - Branch management
 
-
+use chrono::{DateTime, TimeZone, Utc};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
-use chrono::{DateTime, Utc, TimeZone};
-use serde::{Deserialize, Serialize};
 
 /// Git operation result
 pub type GitResult<T> = Result<T, GitError>;
@@ -82,7 +81,7 @@ impl ChangeStatus {
             ChangeStatus::Unmerged => "U",
         }
     }
-    
+
     pub fn color(&self) -> (u8, u8, u8) {
         match self {
             ChangeStatus::Added => (100, 200, 100),
@@ -161,25 +160,25 @@ impl McpGit {
             next_op_id: 1,
         }
     }
-    
+
     /// Set the repository path
     pub fn set_repo(&mut self, path: &str) -> GitResult<()> {
         let path_buf = PathBuf::from(path);
-        
+
         // Check if it's a git repository
         let git_dir = path_buf.join(".git");
         if !git_dir.exists() {
             return Err(GitError::NotARepository(path.to_string()));
         }
-        
+
         self.repo_path = Some(path_buf);
         Ok(())
     }
-    
+
     /// Find git repository from a path (walks up directory tree)
     pub fn find_repo(&mut self, path: &str) -> GitResult<String> {
         let mut current = PathBuf::from(path);
-        
+
         loop {
             let git_dir = current.join(".git");
             if git_dir.exists() {
@@ -187,76 +186,74 @@ impl McpGit {
                 self.repo_path = Some(current);
                 return Ok(repo_path);
             }
-            
+
             if !current.pop() {
                 return Err(GitError::NotARepository(path.to_string()));
             }
         }
     }
-    
+
     /// Run a git command
     fn git_cmd(&self, args: &[&str]) -> GitResult<String> {
-        let repo = self.repo_path.as_ref()
-            .ok_or(GitError::NotConfigured)?;
-        
+        let repo = self.repo_path.as_ref().ok_or(GitError::NotConfigured)?;
+
         let output = Command::new("git")
             .args(args)
             .current_dir(repo)
             .output()
             .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-        
+
         if output.status.success() {
-            String::from_utf8(output.stdout)
-                .map_err(|e| GitError::ParseError(e.to_string()))
+            String::from_utf8(output.stdout).map_err(|e| GitError::ParseError(e.to_string()))
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
             Err(GitError::CommandFailed(stderr.to_string()))
         }
     }
-    
+
     /// Get repository status
     pub fn status(&self) -> GitResult<RepoStatus> {
-        let repo = self.repo_path.as_ref()
-            .ok_or(GitError::NotConfigured)?;
-        
+        let repo = self.repo_path.as_ref().ok_or(GitError::NotConfigured)?;
+
         // Get current branch
-        let branch = self.git_cmd(&["rev-parse", "--abbrev-ref", "HEAD"])?
+        let branch = self
+            .git_cmd(&["rev-parse", "--abbrev-ref", "HEAD"])?
             .trim()
             .to_string();
-        
+
         let is_detached = branch == "HEAD";
-        
+
         // Get ahead/behind counts
         let (ahead, behind) = self.get_ahead_behind(&branch)?;
-        
+
         // Get status
         let status_output = self.git_cmd(&["status", "--porcelain=v1"])?;
-        
+
         let mut staged = Vec::new();
         let mut unstaged = Vec::new();
         let mut untracked = Vec::new();
         let mut has_conflicts = false;
-        
+
         for line in status_output.lines() {
             if line.len() < 3 {
                 continue;
             }
-            
+
             let index_status = line.chars().next().unwrap_or(' ');
             let work_status = line.chars().nth(1).unwrap_or(' ');
             let path = line[3..].to_string();
-            
+
             // Check for conflicts
             if index_status == 'U' || work_status == 'U' {
                 has_conflicts = true;
             }
-            
+
             // Untracked files
             if index_status == '?' {
                 untracked.push(path);
                 continue;
             }
-            
+
             // Staged changes
             if index_status != ' ' && index_status != '?' {
                 staged.push(FileChange {
@@ -265,7 +262,7 @@ impl McpGit {
                     old_path: None,
                 });
             }
-            
+
             // Unstaged changes
             if work_status != ' ' && work_status != '?' {
                 unstaged.push(FileChange {
@@ -275,7 +272,7 @@ impl McpGit {
                 });
             }
         }
-        
+
         Ok(RepoStatus {
             path: repo.to_string_lossy().to_string(),
             branch,
@@ -288,11 +285,16 @@ impl McpGit {
             has_conflicts,
         })
     }
-    
+
     /// Get ahead/behind count for a branch
     fn get_ahead_behind(&self, branch: &str) -> GitResult<(u32, u32)> {
-        let result = self.git_cmd(&["rev-list", "--left-right", "--count", &format!("{}...@{{u}}", branch)]);
-        
+        let result = self.git_cmd(&[
+            "rev-list",
+            "--left-right",
+            "--count",
+            &format!("{}...@{{u}}", branch),
+        ]);
+
         match result {
             Ok(output) => {
                 let parts: Vec<&str> = output.split_whitespace().collect();
@@ -307,7 +309,7 @@ impl McpGit {
             Err(_) => Ok((0, 0)), // No upstream configured
         }
     }
-    
+
     /// Get commit history
     pub fn log(&self, count: usize) -> GitResult<Vec<Commit>> {
         let output = self.git_cmd(&[
@@ -315,14 +317,14 @@ impl McpGit {
             &format!("-{}", count),
             "--format=%H|%h|%an|%ae|%at|%s|%P",
         ])?;
-        
+
         let mut commits = Vec::new();
-        
+
         for line in output.lines() {
             let parts: Vec<&str> = line.split('|').collect();
             if parts.len() >= 6 {
                 let timestamp: i64 = parts[4].parse().unwrap_or(0);
-                
+
                 commits.push(Commit {
                     hash: parts[0].to_string(),
                     short_hash: parts[1].to_string(),
@@ -330,16 +332,17 @@ impl McpGit {
                     email: parts[3].to_string(),
                     date: Utc.timestamp_opt(timestamp, 0).unwrap(),
                     message: parts[5].to_string(),
-                    parent_hashes: parts.get(6)
+                    parent_hashes: parts
+                        .get(6)
                         .map(|p| p.split_whitespace().map(String::from).collect())
                         .unwrap_or_default(),
                 });
             }
         }
-        
+
         Ok(commits)
     }
-    
+
     /// Get list of branches
     pub fn branches(&self) -> GitResult<Vec<Branch>> {
         let output = self.git_cmd(&[
@@ -347,29 +350,33 @@ impl McpGit {
             "-a",
             "--format=%(refname:short)|%(HEAD)|%(upstream:short)|%(upstream:track)",
         ])?;
-        
+
         let mut branches = Vec::new();
-        
+
         for line in output.lines() {
             let parts: Vec<&str> = line.split('|').collect();
             if parts.is_empty() {
                 continue;
             }
-            
+
             let name = parts[0].to_string();
             let is_current = parts.get(1).map(|s| *s == "*").unwrap_or(false);
             let is_remote = name.starts_with("remotes/") || name.starts_with("origin/");
             let tracking = parts.get(2).and_then(|s| {
-                if s.is_empty() { None } else { Some(s.to_string()) }
+                if s.is_empty() {
+                    None
+                } else {
+                    Some(s.to_string())
+                }
             });
-            
+
             // Parse ahead/behind from track info
             let (ahead, behind) = if let Some(track) = parts.get(3) {
                 parse_track_info(track)
             } else {
                 (0, 0)
             };
-            
+
             branches.push(Branch {
                 name,
                 is_current,
@@ -380,10 +387,10 @@ impl McpGit {
                 last_commit: None,
             });
         }
-        
+
         Ok(branches)
     }
-    
+
     /// Get diff for a file
     pub fn diff_file(&self, path: &str, staged: bool) -> GitResult<String> {
         let args = if staged {
@@ -391,10 +398,10 @@ impl McpGit {
         } else {
             vec!["diff", "--", path]
         };
-        
+
         self.git_cmd(&args)
     }
-    
+
     /// Get full diff
     pub fn diff(&self, staged: bool) -> GitResult<String> {
         let args = if staged {
@@ -402,10 +409,10 @@ impl McpGit {
         } else {
             vec!["diff"]
         };
-        
+
         self.git_cmd(&args)
     }
-    
+
     /// Stage files
     pub fn stage(&self, paths: &[&str]) -> GitResult<()> {
         let mut args = vec!["add"];
@@ -413,7 +420,7 @@ impl McpGit {
         self.git_cmd(&args)?;
         Ok(())
     }
-    
+
     /// Unstage files
     pub fn unstage(&self, paths: &[&str]) -> GitResult<()> {
         let mut args = vec!["reset", "HEAD", "--"];
@@ -421,14 +428,14 @@ impl McpGit {
         self.git_cmd(&args)?;
         Ok(())
     }
-    
+
     /// Queue a commit (requires approval)
     pub fn queue_commit(&mut self, message: &str, files: Option<Vec<String>>) -> u64 {
         let id = self.next_op_id;
         self.next_op_id += 1;
-        
+
         let files = files.unwrap_or_default();
-        
+
         self.pending_ops.push(PendingGitOp {
             id,
             operation: GitOperation::Commit {
@@ -438,15 +445,15 @@ impl McpGit {
             description: format!("Commit: {}", message),
             created_at: Utc::now(),
         });
-        
+
         id
     }
-    
+
     /// Queue a branch creation
     pub fn queue_create_branch(&mut self, name: &str, from: Option<&str>) -> u64 {
         let id = self.next_op_id;
         self.next_op_id += 1;
-        
+
         self.pending_ops.push(PendingGitOp {
             id,
             operation: GitOperation::CreateBranch {
@@ -456,27 +463,27 @@ impl McpGit {
             description: format!("Create branch: {}", name),
             created_at: Utc::now(),
         });
-        
+
         id
     }
-    
+
     /// Get pending operations
     pub fn pending_operations(&self) -> &[PendingGitOp] {
         &self.pending_ops
     }
-    
+
     /// Approve and execute a pending operation
     pub fn approve(&mut self, id: u64) -> GitResult<()> {
         let idx = self.pending_ops.iter().position(|op| op.id == id);
-        
+
         if let Some(idx) = idx {
             let op = self.pending_ops.remove(idx);
             self.execute_operation(&op.operation)?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Execute a git operation
     fn execute_operation(&self, op: &GitOperation) -> GitResult<()> {
         match op {
@@ -487,7 +494,7 @@ impl McpGit {
                 }
                 self.git_cmd(&["commit", "-m", message])?;
             }
-            
+
             GitOperation::CreateBranch { name, from } => {
                 if let Some(base) = from {
                     self.git_cmd(&["branch", name, base])?;
@@ -495,15 +502,15 @@ impl McpGit {
                     self.git_cmd(&["branch", name])?;
                 }
             }
-            
+
             GitOperation::SwitchBranch { name } => {
                 self.git_cmd(&["checkout", name])?;
             }
-            
+
             GitOperation::Merge { branch } => {
                 self.git_cmd(&["merge", branch])?;
             }
-            
+
             GitOperation::Stash { message } => {
                 if let Some(msg) = message {
                     self.git_cmd(&["stash", "push", "-m", msg])?;
@@ -511,11 +518,11 @@ impl McpGit {
                     self.git_cmd(&["stash"])?;
                 }
             }
-            
+
             GitOperation::StashPop => {
                 self.git_cmd(&["stash", "pop"])?;
             }
-            
+
             GitOperation::Reset { mode, target } => {
                 let mode_arg = match mode {
                     ResetMode::Soft => "--soft",
@@ -525,19 +532,19 @@ impl McpGit {
                 self.git_cmd(&["reset", mode_arg, target])?;
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Get file blame
     pub fn blame(&self, path: &str) -> GitResult<Vec<BlameLine>> {
         let output = self.git_cmd(&["blame", "--line-porcelain", path])?;
-        
+
         let mut lines = Vec::new();
         let mut current_commit = String::new();
         let mut current_author = String::new();
         let mut current_time: i64 = 0;
-        
+
         for line in output.lines() {
             if line.len() == 40 && line.chars().all(|c| c.is_ascii_hexdigit()) {
                 current_commit = line[..8].to_string();
@@ -554,14 +561,14 @@ impl McpGit {
                 });
             }
         }
-        
+
         Ok(lines)
     }
-    
+
     /// Show a specific commit
     pub fn show_commit(&self, hash: &str) -> GitResult<CommitDetails> {
         let output = self.git_cmd(&["show", "--stat", "--format=fuller", hash])?;
-        
+
         let mut details = CommitDetails {
             hash: hash.to_string(),
             author: String::new(),
@@ -575,10 +582,10 @@ impl McpGit {
             deletions: 0,
             changed_files: Vec::new(),
         };
-        
+
         let mut _in_message = false;
         let mut in_stats = false;
-        
+
         for line in output.lines() {
             if let Some(author) = line.strip_prefix("Author: ") {
                 if let Some((name, email)) = parse_author(author) {
@@ -617,7 +624,7 @@ impl McpGit {
                 }
             }
         }
-        
+
         Ok(details)
     }
 }
@@ -670,24 +677,28 @@ fn char_to_status(c: char) -> ChangeStatus {
 fn parse_track_info(track: &str) -> (u32, u32) {
     let mut ahead = 0;
     let mut behind = 0;
-    
+
     if track.contains("ahead") {
         if let Some(n) = track.split("ahead ").nth(1) {
-            ahead = n.split(']').next()
+            ahead = n
+                .split(']')
+                .next()
                 .and_then(|s| s.split(',').next())
                 .and_then(|s| s.trim().parse().ok())
                 .unwrap_or(0);
         }
     }
-    
+
     if track.contains("behind") {
         if let Some(n) = track.split("behind ").nth(1) {
-            behind = n.split(']').next()
+            behind = n
+                .split(']')
+                .next()
                 .and_then(|s| s.trim().parse().ok())
                 .unwrap_or(0);
         }
     }
-    
+
     (ahead, behind)
 }
 
@@ -695,7 +706,7 @@ fn parse_author(s: &str) -> Option<(String, String)> {
     // Format: "Name <email>"
     if let Some(email_start) = s.find('<') {
         let name = s[..email_start].trim().to_string();
-        let email = s[email_start+1..].trim_end_matches('>').to_string();
+        let email = s[email_start + 1..].trim_end_matches('>').to_string();
         Some((name, email))
     } else {
         None
@@ -705,23 +716,23 @@ fn parse_author(s: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_status_parsing() {
         let status = char_to_status('M');
         assert_eq!(status, ChangeStatus::Modified);
-        
+
         let status = char_to_status('A');
         assert_eq!(status, ChangeStatus::Added);
     }
-    
+
     #[test]
     fn test_track_info_parsing() {
         let (ahead, behind) = parse_track_info("[ahead 3, behind 2]");
         assert_eq!(ahead, 3);
         assert_eq!(behind, 2);
     }
-    
+
     #[test]
     fn test_author_parsing() {
         let (name, email) = parse_author("John Doe <john@example.com>").unwrap();
