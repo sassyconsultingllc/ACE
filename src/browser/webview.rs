@@ -22,9 +22,17 @@ impl WebViewManager {
     pub fn new(messages: Arc<Mutex<Vec<WebViewMessage>>>) -> Self {
         Self { messages }
     }
-    
-    pub fn navigate(&mut self, _tab_id: TabId, _url: &str) -> Result<()> { Ok(()) }
-    pub fn go_back(&mut self, _tab_id: TabId) -> Result<()> { Ok(()) }
-    pub fn go_forward(&mut self, _tab_id: TabId) -> Result<()> { Ok(()) }
-    pub fn reload(&mut self, _tab_id: TabId) -> Result<()> { Ok(()) }
+
+    pub fn navigate(&mut self, _tab_id: TabId, _url: &str) -> Result<()> {
+        Ok(())
+    }
+    pub fn go_back(&mut self, _tab_id: TabId) -> Result<()> {
+        Ok(())
+    }
+    pub fn go_forward(&mut self, _tab_id: TabId) -> Result<()> {
+        Ok(())
+    }
+    pub fn reload(&mut self, _tab_id: TabId) -> Result<()> {
+        Ok(())
+    }
 }

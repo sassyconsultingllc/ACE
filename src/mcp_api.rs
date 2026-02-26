@@ -12,12 +12,11 @@
 //!
 //! Supports streaming responses for real-time feedback.
 
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::mcp::{AgentRole, AgentConfig, McpMessage, MessageRole, Provider};
+use crate::mcp::{AgentConfig, AgentRole, McpMessage, MessageRole, Provider};
 
 /// Result type for API operations
 pub type ApiResult<T> = Result<T, ApiError>;
@@ -78,19 +77,19 @@ impl McpApiClient {
         configs.insert(AgentRole::Orchestrator, AgentConfig::manus_default());
         configs.insert(AgentRole::Coder, AgentConfig::claude_default());
         configs.insert(AgentRole::Auditor, AgentConfig::gemini_default());
-        
+
         McpApiClient {
             configs,
             timeout: Duration::from_secs(60),
             retry_count: 3,
         }
     }
-    
+
     /// Configure an agent
     pub fn configure(&mut self, config: AgentConfig) {
         self.configs.insert(config.role, config);
     }
-    
+
     /// Configure for all-local mode using Ollama
     pub fn configure_local(&mut self) {
         self.configure(AgentConfig::voice_ollama());
@@ -98,34 +97,34 @@ impl McpApiClient {
         self.configure(AgentConfig::coder_ollama());
         self.configure(AgentConfig::auditor_ollama());
     }
-    
+
     /// Configure for Together.ai (cheaper cloud alternative)
     pub fn configure_together(&mut self, api_key: &str) {
         let mut voice = AgentConfig::voice_together();
         voice.api_key = Some(api_key.to_string());
         self.configure(voice);
-        
+
         let mut orch = AgentConfig::manus_default();
         orch.provider = Provider::Together;
         orch.api_key = Some(api_key.to_string());
         self.configure(orch);
-        
+
         let mut coder = AgentConfig::coder_together();
         coder.api_key = Some(api_key.to_string());
         self.configure(coder);
-        
+
         let mut auditor = AgentConfig::auditor_together();
         auditor.api_key = Some(api_key.to_string());
         self.configure(auditor);
     }
-    
+
     /// Set API key for an agent
     pub fn set_api_key(&mut self, role: AgentRole, key: String) {
         if let Some(config) = self.configs.get_mut(&role) {
             config.api_key = Some(key);
         }
     }
-    
+
     /// Set timeout
     pub fn set_timeout(&mut self, timeout: Duration) {
         self.timeout = timeout;
@@ -139,20 +138,28 @@ impl McpApiClient {
     /// Check if an agent is configured and ready
     /// For local providers (Ollama), we don't need an API key
     pub fn is_ready(&self, role: AgentRole) -> bool {
-        self.configs.get(&role)
+        self.configs
+            .get(&role)
             .map(|c| c.enabled && (c.api_key.is_some() || c.provider.is_local()))
             .unwrap_or(false)
     }
-    
+
     // ==============================================================================
     // Unified Call Interface
     // ==============================================================================
-    
+
     /// Universal call method - routes to correct provider based on config
-    pub fn call(&self, role: AgentRole, messages: &[ChatMessage], system: &str) -> ApiResult<ChatResponse> {
-        let config = self.configs.get(&role)
+    pub fn call(
+        &self,
+        role: AgentRole,
+        messages: &[ChatMessage],
+        system: &str,
+    ) -> ApiResult<ChatResponse> {
+        let config = self
+            .configs
+            .get(&role)
             .ok_or(ApiError::NotConfigured(role))?;
-        
+
         match config.provider {
             Provider::Xai => self.call_openai_compatible(config, messages, Some(system)),
             Provider::Together => self.call_openai_compatible(config, messages, Some(system)),
@@ -166,18 +173,25 @@ impl McpApiClient {
                     finish_reason: "stop".to_string(),
                     usage: None,
                 })
-            },
+            }
             Provider::HuggingFace => self.call_huggingface(config, messages, system),
             Provider::Ollama => self.call_ollama(config, messages, system),
             Provider::Custom => self.call_openai_compatible(config, messages, Some(system)),
         }
     }
-    
+
     /// Call OpenAI-compatible API (xAI, Together, OpenAI, etc.)
-    fn call_openai_compatible(&self, config: &AgentConfig, messages: &[ChatMessage], system: Option<&str>) -> ApiResult<ChatResponse> {
-        let api_key = config.api_key.as_ref()
+    fn call_openai_compatible(
+        &self,
+        config: &AgentConfig,
+        messages: &[ChatMessage],
+        system: Option<&str>,
+    ) -> ApiResult<ChatResponse> {
+        let api_key = config
+            .api_key
+            .as_ref()
             .ok_or_else(|| ApiError::Auth(format!("{} API key not set", config.provider.name())))?;
-        
+
         let request = GrokRequest {
             model: config.model.clone(),
             messages: build_messages(messages, system),
@@ -185,15 +199,22 @@ impl McpApiClient {
             temperature: config.temperature,
             stream: false,
         };
-        
+
         self.send_request(&config.api_url, api_key, &request)
     }
-    
+
     /// Call Hugging Face Inference Endpoint
-    fn call_huggingface(&self, config: &AgentConfig, messages: &[ChatMessage], system: &str) -> ApiResult<ChatResponse> {
-        let api_key = config.api_key.as_ref()
+    fn call_huggingface(
+        &self,
+        config: &AgentConfig,
+        messages: &[ChatMessage],
+        system: &str,
+    ) -> ApiResult<ChatResponse> {
+        let api_key = config
+            .api_key
+            .as_ref()
             .ok_or_else(|| ApiError::Auth("Hugging Face API key not set".to_string()))?;
-        
+
         // HF Inference Endpoints use OpenAI-compatible API
         let request = GrokRequest {
             model: config.model.clone(),
@@ -202,21 +223,21 @@ impl McpApiClient {
             temperature: config.temperature,
             stream: false,
         };
-        
+
         // HF uses Bearer token auth
-        let body = serde_json::to_string(&request)
-            .map_err(|e| ApiError::Parse(e.to_string()))?;
-        
+        let body = serde_json::to_string(&request).map_err(|e| ApiError::Parse(e.to_string()))?;
+
         let response = ureq::post(&config.api_url)
             .set("Content-Type", "application/json")
             .set("Authorization", &format!("Bearer {}", api_key))
             .timeout(self.timeout)
             .send_string(&body)
             .map_err(|e| ApiError::Network(e.to_string()))?;
-        
-        let grok_response: GrokResponse = response.into_json()
+
+        let grok_response: GrokResponse = response
+            .into_json()
             .map_err(|e| ApiError::Parse(e.to_string()))?;
-        
+
         if let Some(choice) = grok_response.choices.first() {
             Ok(ChatResponse {
                 content: choice.message.content.clone(),
@@ -231,18 +252,25 @@ impl McpApiClient {
             Err(ApiError::Parse("No response from Hugging Face".to_string()))
         }
     }
-    
+
     /// Call local Ollama
-    fn call_ollama(&self, config: &AgentConfig, messages: &[ChatMessage], system: &str) -> ApiResult<ChatResponse> {
+    fn call_ollama(
+        &self,
+        config: &AgentConfig,
+        messages: &[ChatMessage],
+        system: &str,
+    ) -> ApiResult<ChatResponse> {
         // Build Ollama request format
         let ollama_messages: Vec<OllamaMessage> = std::iter::once(OllamaMessage {
             role: "system".to_string(),
             content: system.to_string(),
-        }).chain(messages.iter().map(|m| OllamaMessage {
+        })
+        .chain(messages.iter().map(|m| OllamaMessage {
             role: m.role.clone(),
             content: m.content.clone(),
-        })).collect();
-        
+        }))
+        .collect();
+
         let request = OllamaRequest {
             model: config.model.clone(),
             messages: ollama_messages,
@@ -252,30 +280,35 @@ impl McpApiClient {
                 temperature: config.temperature,
             }),
         };
-        
-        let body = serde_json::to_string(&request)
-            .map_err(|e| ApiError::Parse(e.to_string()))?;
-        
+
+        let body = serde_json::to_string(&request).map_err(|e| ApiError::Parse(e.to_string()))?;
+
         let response = ureq::post(&config.api_url)
             .set("Content-Type", "application/json")
             .timeout(self.timeout)
             .send_string(&body)
             .map_err(|e| ApiError::Network(e.to_string()))?;
-        
-        let ollama_response: OllamaResponse = response.into_json()
+
+        let ollama_response: OllamaResponse = response
+            .into_json()
             .map_err(|e| ApiError::Parse(e.to_string()))?;
-        
+
         Ok(ChatResponse {
             content: ollama_response.message.content,
-            finish_reason: if ollama_response.done { "stop".to_string() } else { "length".to_string() },
+            finish_reason: if ollama_response.done {
+                "stop".to_string()
+            } else {
+                "length".to_string()
+            },
             usage: Some(TokenUsage {
                 prompt_tokens: ollama_response.prompt_eval_count.unwrap_or(0),
                 completion_tokens: ollama_response.eval_count.unwrap_or(0),
-                total_tokens: ollama_response.prompt_eval_count.unwrap_or(0) + ollama_response.eval_count.unwrap_or(0),
+                total_tokens: ollama_response.prompt_eval_count.unwrap_or(0)
+                    + ollama_response.eval_count.unwrap_or(0),
             }),
         })
     }
-    
+
     /// Check if Ollama is running locally
     pub fn check_ollama(&self) -> bool {
         ureq::get("http://localhost:11434/api/tags")
@@ -283,32 +316,41 @@ impl McpApiClient {
             .call()
             .is_ok()
     }
-    
+
     /// List available Ollama models
     pub fn list_ollama_models(&self) -> ApiResult<Vec<String>> {
         let response = ureq::get("http://localhost:11434/api/tags")
             .timeout(Duration::from_secs(5))
             .call()
             .map_err(|e| ApiError::Network(e.to_string()))?;
-        
-        let tags: OllamaTagsResponse = response.into_json()
+
+        let tags: OllamaTagsResponse = response
+            .into_json()
             .map_err(|e| ApiError::Parse(e.to_string()))?;
-        
+
         Ok(tags.models.into_iter().map(|m| m.name).collect())
     }
-    
+
     // ==============================================================================
     // Provider-Specific Call Methods (Legacy, still useful)
     // ==============================================================================
-    
+
     /// Send request to Grok (xAI)
-    pub fn call_grok(&self, messages: &[ChatMessage], system: Option<&str>) -> ApiResult<ChatResponse> {
-        let config = self.configs.get(&AgentRole::Voice)
+    pub fn call_grok(
+        &self,
+        messages: &[ChatMessage],
+        system: Option<&str>,
+    ) -> ApiResult<ChatResponse> {
+        let config = self
+            .configs
+            .get(&AgentRole::Voice)
             .ok_or(ApiError::NotConfigured(AgentRole::Voice))?;
-        
-        let api_key = config.api_key.as_ref()
+
+        let api_key = config
+            .api_key
+            .as_ref()
             .ok_or_else(|| ApiError::Auth("Grok API key not set".to_string()))?;
-        
+
         // Build xAI request
         let request = GrokRequest {
             model: config.model.clone(),
@@ -317,18 +359,26 @@ impl McpApiClient {
             temperature: config.temperature,
             stream: false,
         };
-        
+
         self.send_request(&config.api_url, api_key, &request)
     }
-    
+
     /// Send request to Manus
-    pub fn call_manus(&self, messages: &[ChatMessage], context: Option<&TaskContext>) -> ApiResult<OrchestrationResponse> {
-        let config = self.configs.get(&AgentRole::Orchestrator)
+    pub fn call_manus(
+        &self,
+        messages: &[ChatMessage],
+        context: Option<&TaskContext>,
+    ) -> ApiResult<OrchestrationResponse> {
+        let config = self
+            .configs
+            .get(&AgentRole::Orchestrator)
             .ok_or(ApiError::NotConfigured(AgentRole::Orchestrator))?;
-        
-        let api_key = config.api_key.as_ref()
+
+        let api_key = config
+            .api_key
+            .as_ref()
             .ok_or_else(|| ApiError::Auth("Manus API key not set".to_string()))?;
-        
+
         // Build Manus request
         let request = ManusRequest {
             model: config.model.clone(),
@@ -336,58 +386,80 @@ impl McpApiClient {
             context: context.cloned(),
             max_tokens: config.max_tokens,
         };
-        
+
         self.send_orchestration_request(&config.api_url, api_key, &request)
     }
-    
+
     /// Send request to Claude (Anthropic)
     pub fn call_claude(&self, messages: &[ChatMessage], system: &str) -> ApiResult<ChatResponse> {
-        let config = self.configs.get(&AgentRole::Coder)
+        let config = self
+            .configs
+            .get(&AgentRole::Coder)
             .ok_or(ApiError::NotConfigured(AgentRole::Coder))?;
-        
-        let api_key = config.api_key.as_ref()
+
+        let api_key = config
+            .api_key
+            .as_ref()
             .ok_or_else(|| ApiError::Auth("Claude API key not set".to_string()))?;
-        
+
         // Build Anthropic request
         let request = ClaudeRequest {
             model: config.model.clone(),
             max_tokens: config.max_tokens,
             system: system.to_string(),
-            messages: messages.iter().map(|m| ClaudeMessage {
-                role: m.role.clone(),
-                content: m.content.clone(),
-            }).collect(),
+            messages: messages
+                .iter()
+                .map(|m| ClaudeMessage {
+                    role: m.role.clone(),
+                    content: m.content.clone(),
+                })
+                .collect(),
         };
-        
+
         self.send_claude_request(&config.api_url, api_key, &request)
     }
-    
+
     /// Send request to Gemini (Google) for auditing
     pub fn call_gemini(&self, messages: &[ChatMessage], context: &str) -> ApiResult<AuditResponse> {
-        let config = self.configs.get(&AgentRole::Auditor)
+        let config = self
+            .configs
+            .get(&AgentRole::Auditor)
             .ok_or(ApiError::NotConfigured(AgentRole::Auditor))?;
-        
-        let api_key = config.api_key.as_ref()
+
+        let api_key = config
+            .api_key
+            .as_ref()
             .ok_or_else(|| ApiError::Auth("Gemini API key not set".to_string()))?;
-        
+
         // Build Gemini request
         let request = GeminiRequest {
-            contents: messages.iter().map(|m| GeminiContent {
-                role: if m.role == "user" { "user".to_string() } else { "model".to_string() },
-                parts: vec![GeminiPart { text: m.content.clone() }],
-            }).collect(),
+            contents: messages
+                .iter()
+                .map(|m| GeminiContent {
+                    role: if m.role == "user" {
+                        "user".to_string()
+                    } else {
+                        "model".to_string()
+                    },
+                    parts: vec![GeminiPart {
+                        text: m.content.clone(),
+                    }],
+                })
+                .collect(),
             system_instruction: Some(GeminiSystemInstruction {
-                parts: vec![GeminiPart { text: context.to_string() }],
+                parts: vec![GeminiPart {
+                    text: context.to_string(),
+                }],
             }),
             generation_config: Some(GeminiGenerationConfig {
                 max_output_tokens: config.max_tokens,
                 temperature: config.temperature,
             }),
         };
-        
+
         self.send_gemini_request(&config.api_url, &config.model, api_key, &request)
     }
-    
+
     /// Generic HTTP request sender
     fn send_request<T: Serialize, R: for<'de> Deserialize<'de>>(
         &self,
@@ -395,21 +467,20 @@ impl McpApiClient {
         api_key: &str,
         request: &T,
     ) -> ApiResult<R> {
-        let body = serde_json::to_string(request)
-            .map_err(|e| ApiError::Parse(e.to_string()))?;
-        
+        let body = serde_json::to_string(request).map_err(|e| ApiError::Parse(e.to_string()))?;
+
         let response = ureq::post(url)
             .set("Content-Type", "application/json")
             .set("Authorization", &format!("Bearer {}", api_key))
             .timeout(self.timeout)
             .send_string(&body);
-        
+
         match response {
             Ok(resp) => {
-                let text = resp.into_string()
+                let text = resp
+                    .into_string()
                     .map_err(|e| ApiError::Parse(e.to_string()))?;
-                serde_json::from_str(&text)
-                    .map_err(|e| ApiError::Parse(e.to_string()))
+                serde_json::from_str(&text).map_err(|e| ApiError::Parse(e.to_string()))
             }
             Err(ureq::Error::Status(status, resp)) => {
                 let error_text = resp.into_string().unwrap_or_default();
@@ -418,7 +489,10 @@ impl McpApiClient {
                     429 => Err(ApiError::RateLimit { retry_after: None }),
                     400..=499 => Err(ApiError::InvalidRequest(error_text)),
                     500..=599 => Err(ApiError::Server(error_text)),
-                    _ => Err(ApiError::Network(format!("Status {}: {}", status, error_text))),
+                    _ => Err(ApiError::Network(format!(
+                        "Status {}: {}",
+                        status, error_text
+                    ))),
                 }
             }
             Err(ureq::Error::Transport(t)) => {
@@ -430,7 +504,7 @@ impl McpApiClient {
             }
         }
     }
-    
+
     fn send_orchestration_request(
         &self,
         url: &str,
@@ -439,41 +513,44 @@ impl McpApiClient {
     ) -> ApiResult<OrchestrationResponse> {
         self.send_request(url, api_key, request)
     }
-    
+
     fn send_claude_request(
         &self,
         url: &str,
         api_key: &str,
         request: &ClaudeRequest,
     ) -> ApiResult<ChatResponse> {
-        let body = serde_json::to_string(request)
-            .map_err(|e| ApiError::Parse(e.to_string()))?;
-        
+        let body = serde_json::to_string(request).map_err(|e| ApiError::Parse(e.to_string()))?;
+
         let response = ureq::post(url)
             .set("Content-Type", "application/json")
             .set("x-api-key", api_key)
             .set("anthropic-version", "2024-01-01")
             .timeout(self.timeout)
             .send_string(&body);
-        
+
         match response {
             Ok(resp) => {
-                let text = resp.into_string()
+                let text = resp
+                    .into_string()
                     .map_err(|e| ApiError::Parse(e.to_string()))?;
-                
+
                 // Parse Claude's response format
-                let claude_resp: ClaudeResponse = serde_json::from_str(&text)
-                    .map_err(|e| ApiError::Parse(e.to_string()))?;
-                
+                let claude_resp: ClaudeResponse =
+                    serde_json::from_str(&text).map_err(|e| ApiError::Parse(e.to_string()))?;
+
                 Ok(ChatResponse {
-                    content: claude_resp.content.first()
+                    content: claude_resp
+                        .content
+                        .first()
                         .map(|c| c.text.clone())
                         .unwrap_or_default(),
                     finish_reason: claude_resp.stop_reason,
                     usage: Some(TokenUsage {
                         prompt_tokens: claude_resp.usage.input_tokens,
                         completion_tokens: claude_resp.usage.output_tokens,
-                        total_tokens: claude_resp.usage.input_tokens + claude_resp.usage.output_tokens,
+                        total_tokens: claude_resp.usage.input_tokens
+                            + claude_resp.usage.output_tokens,
                     }),
                 })
             }
@@ -484,7 +561,10 @@ impl McpApiClient {
                     429 => Err(ApiError::RateLimit { retry_after: None }),
                     400..=499 => Err(ApiError::InvalidRequest(error_text)),
                     500..=599 => Err(ApiError::Server(error_text)),
-                    _ => Err(ApiError::Network(format!("Status {}: {}", status, error_text))),
+                    _ => Err(ApiError::Network(format!(
+                        "Status {}: {}",
+                        status, error_text
+                    ))),
                 }
             }
             Err(ureq::Error::Transport(t)) => {
@@ -496,7 +576,7 @@ impl McpApiClient {
             }
         }
     }
-    
+
     fn send_gemini_request(
         &self,
         base_url: &str,
@@ -504,32 +584,34 @@ impl McpApiClient {
         api_key: &str,
         request: &GeminiRequest,
     ) -> ApiResult<AuditResponse> {
-        let body = serde_json::to_string(request)
-            .map_err(|e| ApiError::Parse(e.to_string()))?;
-        
+        let body = serde_json::to_string(request).map_err(|e| ApiError::Parse(e.to_string()))?;
+
         // Gemini API URL format: {base_url}/{model}:generateContent?key={api_key}
         let url = format!("{}/{}:generateContent?key={}", base_url, model, api_key);
-        
+
         let response = ureq::post(&url)
             .set("Content-Type", "application/json")
             .timeout(self.timeout)
             .send_string(&body);
-        
+
         match response {
             Ok(resp) => {
-                let text = resp.into_string()
+                let text = resp
+                    .into_string()
                     .map_err(|e| ApiError::Parse(e.to_string()))?;
-                
+
                 // Parse Gemini's response format
-                let gemini_resp: GeminiResponse = serde_json::from_str(&text)
-                    .map_err(|e| ApiError::Parse(e.to_string()))?;
-                
+                let gemini_resp: GeminiResponse =
+                    serde_json::from_str(&text).map_err(|e| ApiError::Parse(e.to_string()))?;
+
                 // Extract content from response
-                let content = gemini_resp.candidates.first()
+                let content = gemini_resp
+                    .candidates
+                    .first()
                     .and_then(|c| c.content.parts.first())
                     .map(|p| p.text.clone())
                     .unwrap_or_default();
-                
+
                 // Try to parse structured audit response from content
                 // If it's JSON, parse it; otherwise create a basic response
                 if let Ok(audit) = serde_json::from_str::<AuditResponse>(&content) {
@@ -560,7 +642,10 @@ impl McpApiClient {
                     429 => Err(ApiError::RateLimit { retry_after: None }),
                     400..=499 => Err(ApiError::InvalidRequest(error_text)),
                     500..=599 => Err(ApiError::Server(error_text)),
-                    _ => Err(ApiError::Network(format!("Status {}: {}", status, error_text))),
+                    _ => Err(ApiError::Network(format!(
+                        "Status {}: {}",
+                        status, error_text
+                    ))),
                 }
             }
             Err(ureq::Error::Transport(t)) => {
@@ -596,14 +681,14 @@ impl ChatMessage {
             content: content.to_string(),
         }
     }
-    
+
     pub fn assistant(content: &str) -> Self {
         ChatMessage {
             role: "assistant".to_string(),
             content: content.to_string(),
         }
     }
-    
+
     pub fn system(content: &str) -> Self {
         ChatMessage {
             role: "system".to_string(),
@@ -891,34 +976,37 @@ struct OllamaModel {
 
 fn build_messages(messages: &[ChatMessage], system: Option<&str>) -> Vec<GrokMessage> {
     let mut result = Vec::new();
-    
+
     if let Some(sys) = system {
         result.push(GrokMessage {
             role: "system".to_string(),
             content: sys.to_string(),
         });
     }
-    
+
     for msg in messages {
         result.push(GrokMessage {
             role: msg.role.clone(),
             content: msg.content.clone(),
         });
     }
-    
+
     result
 }
 
 /// Convert MCP messages to chat messages
 pub fn mcp_to_chat(messages: &[McpMessage]) -> Vec<ChatMessage> {
-    messages.iter().map(|m| ChatMessage {
-        role: match m.role {
-            MessageRole::User => "user".to_string(),
-            MessageRole::Agent => "assistant".to_string(),
-            MessageRole::System => "system".to_string(),
-        },
-        content: m.content.clone(),
-    }).collect()
+    messages
+        .iter()
+        .map(|m| ChatMessage {
+            role: match m.role {
+                MessageRole::User => "user".to_string(),
+                MessageRole::Agent => "assistant".to_string(),
+                MessageRole::System => "system".to_string(),
+            },
+            content: m.content.clone(),
+        })
+        .collect()
 }
 
 // ===== System Prompts =====
@@ -1052,19 +1140,21 @@ pub fn api_capabilities_summary(client: &mut McpApiClient) -> String {
     let user_msg = ChatMessage::user("ping");
     let assistant_msg = ChatMessage::assistant("pong");
     let system_msg = ChatMessage::system("context");
-    let _ = writeln!(summary, "roles: {} {} {}", user_msg.role, assistant_msg.role, system_msg.role);
+    let _ = writeln!(
+        summary,
+        "roles: {} {} {}",
+        user_msg.role, assistant_msg.role, system_msg.role
+    );
 
     // Exercise mcp_to_chat
-    let mcp_msgs = vec![
-        McpMessage {
-            id: 0,
-            role: MessageRole::User,
-            agent: None,
-            content: "hello".to_string(),
-            timestamp: chrono::Utc::now(),
-            metadata: HashMap::new(),
-        },
-    ];
+    let mcp_msgs = vec![McpMessage {
+        id: 0,
+        role: MessageRole::User,
+        agent: None,
+        content: "hello".to_string(),
+        timestamp: chrono::Utc::now(),
+        metadata: HashMap::new(),
+    }];
     let converted = mcp_to_chat(&mcp_msgs);
     let _ = writeln!(summary, "converted_messages: {}", converted.len());
 
@@ -1106,13 +1196,19 @@ pub fn api_capabilities_summary(client: &mut McpApiClient) -> String {
         content_type: "text".to_string(),
         text: "hello".to_string(),
     };
-    let _ = writeln!(summary, "claude_content_type: {}", claude_content.content_type);
+    let _ = writeln!(
+        summary,
+        "claude_content_type: {}",
+        claude_content.content_type
+    );
 
     // Exercise Gemini response field reads
     let gemini_resp = GeminiResponse {
         candidates: vec![GeminiCandidate {
             content: GeminiResponseContent {
-                parts: vec![GeminiResponsePart { text: "ok".to_string() }],
+                parts: vec![GeminiResponsePart {
+                    text: "ok".to_string(),
+                }],
                 role: "model".to_string(),
             },
             finish_reason: Some("STOP".to_string()),
@@ -1178,7 +1274,11 @@ pub fn api_capabilities_summary(client: &mut McpApiClient) -> String {
         }],
     };
     for m in &ollama_tags.models {
-        let _ = writeln!(summary, "ollama_model: {} size={} modified={}", m.name, m.size, m.modified_at);
+        let _ = writeln!(
+            summary,
+            "ollama_model: {} size={} modified={}",
+            m.name, m.size, m.modified_at
+        );
     }
 
     // Exercise configure method via AgentConfig
@@ -1192,8 +1292,12 @@ pub fn api_capabilities_summary(client: &mut McpApiClient) -> String {
     // Exercise Ollama-specific methods
     let _ = writeln!(summary, "ollama_available: {}", client.check_ollama());
     match client.list_ollama_models() {
-        Ok(models) => { let _ = writeln!(summary, "ollama_model_count: {}", models.len()); }
-        Err(e) => { let _ = writeln!(summary, "ollama_list_err: {}", e); }
+        Ok(models) => {
+            let _ = writeln!(summary, "ollama_model_count: {}", models.len());
+        }
+        Err(e) => {
+            let _ = writeln!(summary, "ollama_list_err: {}", e);
+        }
     }
 
     summary
@@ -1202,36 +1306,34 @@ pub fn api_capabilities_summary(client: &mut McpApiClient) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_client_creation() {
         let client = McpApiClient::new();
         assert!(!client.is_ready(AgentRole::Voice)); // No key set
     }
-    
+
     #[test]
     fn test_chat_message() {
         let msg = ChatMessage::user("hello");
         assert_eq!(msg.role, "user");
         assert_eq!(msg.content, "hello");
     }
-    
+
     #[test]
     fn test_mcp_to_chat() {
         use chrono::Utc;
         use std::collections::HashMap;
-        
-        let mcp_msgs = vec![
-            McpMessage {
-                id: 1,
-                role: MessageRole::User,
-                agent: None,
-                content: "test".to_string(),
-                timestamp: Utc::now(),
-                metadata: HashMap::new(),
-            }
-        ];
-        
+
+        let mcp_msgs = vec![McpMessage {
+            id: 1,
+            role: MessageRole::User,
+            agent: None,
+            content: "test".to_string(),
+            timestamp: Utc::now(),
+            metadata: HashMap::new(),
+        }];
+
         let chat_msgs = mcp_to_chat(&mcp_msgs);
         assert_eq!(chat_msgs.len(), 1);
         assert_eq!(chat_msgs[0].role, "user");

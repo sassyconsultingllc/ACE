@@ -1,15 +1,13 @@
 //! WebSocket server for phone sync
 //! Handles connections from phone companion app
 
-use super::protocol::{
-    SyncMessage, MessagePayload, SyncCommand, SyncEvent, BrowserState,
-};
+use super::protocol::{BrowserState, MessagePayload, SyncCommand, SyncEvent, SyncMessage};
 use std::collections::HashMap;
+use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
 const WS_MAGIC: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -30,15 +28,15 @@ pub struct SyncServer {
     running: Arc<Mutex<bool>>,
     clients: Arc<Mutex<HashMap<u64, Client>>>,
     next_client_id: Arc<Mutex<u64>>,
-    
+
     // Channel for commands from phone
     command_tx: Sender<(u64, SyncCommand)>,
     command_rx: Receiver<(u64, SyncCommand)>,
-    
+
     // Channel for events to phone
     event_tx: Sender<SyncEvent>,
     event_rx: Arc<Mutex<Receiver<SyncEvent>>>,
-    
+
     // QR code data for easy connection
     qr_data: Option<String>,
 }
@@ -47,7 +45,7 @@ impl SyncServer {
     pub fn new(port: u16) -> Self {
         let (command_tx, command_rx) = channel();
         let (event_tx, event_rx) = channel();
-        
+
         Self {
             port,
             running: Arc::new(Mutex::new(false)),
@@ -60,28 +58,29 @@ impl SyncServer {
             qr_data: None,
         }
     }
-    
+
     /// Start the WebSocket server
     pub fn start(&mut self) -> Result<(), String> {
         let listener = TcpListener::bind(format!("0.0.0.0:{}", self.port))
             .map_err(|e| format!("Failed to bind: {}", e))?;
-        
-        listener.set_nonblocking(true)
+
+        listener
+            .set_nonblocking(true)
             .map_err(|e| format!("Failed to set nonblocking: {}", e))?;
-        
+
         *self.running.lock().unwrap() = true;
-        
+
         // Generate QR data
         if let Ok(ip) = get_local_ip() {
             self.qr_data = Some(format!("sassy://{}:{}", ip, self.port));
         }
-        
+
         let running = self.running.clone();
         let clients = self.clients.clone();
         let next_id = self.next_client_id.clone();
         let cmd_tx = self.command_tx.clone();
         let event_rx = self.event_rx.clone();
-        
+
         // Accept connections in background thread
         thread::spawn(move || {
             while *running.lock().unwrap() {
@@ -91,14 +90,14 @@ impl SyncServer {
                         let client_id = *id_lock;
                         *id_lock += 1;
                         drop(id_lock);
-                        
+
                         let clients_clone = clients.clone();
                         let cmd_tx_clone = cmd_tx.clone();
-                        
+
                         thread::spawn(move || {
                             if let Ok(client) = handle_websocket_handshake(stream, client_id) {
                                 clients_clone.lock().unwrap().insert(client_id, client);
-                                
+
                                 // Handle client in this thread
                                 handle_client(client_id, clients_clone.clone(), cmd_tx_clone);
                             }
@@ -114,11 +113,11 @@ impl SyncServer {
                 }
             }
         });
-        
+
         // Broadcast events in background thread
         let running2 = self.running.clone();
         let clients2 = self.clients.clone();
-        
+
         thread::spawn(move || {
             while *running2.lock().unwrap() {
                 if let Ok(rx) = event_rx.lock() {
@@ -132,40 +131,40 @@ impl SyncServer {
                 thread::sleep(Duration::from_millis(10));
             }
         });
-        
+
         Ok(())
     }
-    
+
     /// Stop the server
     pub fn stop(&mut self) {
         *self.running.lock().unwrap() = false;
     }
-    
+
     /// Check if server is running
     pub fn is_running(&self) -> bool {
         *self.running.lock().unwrap()
     }
-    
+
     /// Get number of connected clients
     pub fn client_count(&self) -> usize {
         self.clients.lock().unwrap().len()
     }
-    
+
     /// Get QR code data for phone to scan
     pub fn qr_data(&self) -> Option<&str> {
         self.qr_data.as_deref()
     }
-    
+
     /// Poll for incoming commands (non-blocking)
     pub fn poll_command(&self) -> Option<(u64, SyncCommand)> {
         self.command_rx.try_recv().ok()
     }
-    
+
     /// Send event to all connected phones
     pub fn broadcast_event(&self, event: SyncEvent) {
         let _ = self.event_tx.send(event);
     }
-    
+
     /// Send message to specific client
     pub fn send_to_client(&self, client_id: u64, message: SyncMessage) {
         if let Ok(json) = message.to_json() {
@@ -175,13 +174,13 @@ impl SyncServer {
             }
         }
     }
-    
+
     /// Send full state to a client
     pub fn send_state(&self, client_id: u64, state: BrowserState) {
         let msg = SyncMessage::state(state);
         self.send_to_client(client_id, msg);
     }
-    
+
     /// Disconnect a client
     pub fn disconnect_client(&self, client_id: u64) {
         self.clients.lock().unwrap().remove(&client_id);
@@ -190,43 +189,42 @@ impl SyncServer {
 
 fn get_local_ip() -> Result<String, String> {
     // Try to find local IP
-    let socket = std::net::UdpSocket::bind("0.0.0.0:0")
-        .map_err(|e| e.to_string())?;
-    socket.connect("8.8.8.8:80")
-        .map_err(|e| e.to_string())?;
-    let addr = socket.local_addr()
-        .map_err(|e| e.to_string())?;
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
+    socket.connect("8.8.8.8:80").map_err(|e| e.to_string())?;
+    let addr = socket.local_addr().map_err(|e| e.to_string())?;
     Ok(addr.ip().to_string())
 }
 
 fn handle_websocket_handshake(mut stream: TcpStream, client_id: u64) -> Result<Client, String> {
     let mut buffer = [0u8; 4096];
-    let n = stream.read(&mut buffer)
+    let n = stream
+        .read(&mut buffer)
         .map_err(|e| format!("Read error: {}", e))?;
-    
+
     let request = String::from_utf8_lossy(&buffer[..n]);
-    
+
     // Parse WebSocket key
-    let key = request.lines()
+    let key = request
+        .lines()
         .find(|line| crate::fontcase::ascii_lower(line).starts_with("sec-websocket-key:"))
         .and_then(|line| line.split(':').nth(1))
         .map(|k| k.trim().to_string())
         .ok_or("Missing Sec-WebSocket-Key")?;
-    
+
     // Generate accept key
     let accept = {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let combined = format!("{}{}", key, WS_MAGIC);
-        
+
         // Simple hash (in production use proper SHA-1 + base64)
         let mut hasher = DefaultHasher::new();
         combined.hash(&mut hasher);
         let hash = hasher.finish();
         base64_encode(&hash.to_be_bytes())
     };
-    
+
     // Send handshake response
     let response = format!(
         "HTTP/1.1 101 Switching Protocols`r`n\
@@ -235,13 +233,15 @@ fn handle_websocket_handshake(mut stream: TcpStream, client_id: u64) -> Result<C
          Sec-WebSocket-Accept: {}`r`n`r`n",
         accept
     );
-    
-    stream.write_all(response.as_bytes())
+
+    stream
+        .write_all(response.as_bytes())
         .map_err(|e| format!("Write error: {}", e))?;
-    
-    stream.set_nonblocking(true)
+
+    stream
+        .set_nonblocking(true)
         .map_err(|e| format!("Failed to set nonblocking: {}", e))?;
-    
+
     let now = Instant::now();
     Ok(Client {
         id: client_id,
@@ -264,7 +264,7 @@ fn handle_client(
                 Some(c) => c,
                 None => return, // Client disconnected
             };
-            
+
             // Try to read frame
             match read_websocket_frame(&mut client.stream) {
                 Ok(Some(data)) => {
@@ -290,12 +290,12 @@ fn handle_client(
                 Err(_) => false,  // Connection closed or error
             }
         };
-        
+
         if !should_continue {
             clients.lock().unwrap().remove(&client_id);
             return;
         }
-        
+
         thread::sleep(Duration::from_millis(10));
     }
 }
@@ -307,17 +307,17 @@ fn read_websocket_frame(stream: &mut TcpStream) -> Result<Option<String>, String
         Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(None),
         Err(e) => return Err(e.to_string()),
     }
-    
+
     let _fin = (header[0] & 0x80) != 0;
     let opcode = header[0] & 0x0F;
     let masked = (header[1] & 0x80) != 0;
     let mut length = (header[1] & 0x7F) as usize;
-    
+
     // Handle close frame
     if opcode == 8 {
         return Err("Connection closed".into());
     }
-    
+
     // Extended length
     if length == 126 {
         let mut ext = [0u8; 2];
@@ -328,7 +328,7 @@ fn read_websocket_frame(stream: &mut TcpStream) -> Result<Option<String>, String
         stream.read_exact(&mut ext).map_err(|e| e.to_string())?;
         length = u64::from_be_bytes(ext) as usize;
     }
-    
+
     // Read mask key if present
     let mask = if masked {
         let mut mask = [0u8; 4];
@@ -337,18 +337,18 @@ fn read_websocket_frame(stream: &mut TcpStream) -> Result<Option<String>, String
     } else {
         None
     };
-    
+
     // Read payload
     let mut payload = vec![0u8; length];
     stream.read_exact(&mut payload).map_err(|e| e.to_string())?;
-    
+
     // Unmask if needed
     if let Some(mask) = mask {
         for i in 0..payload.len() {
             payload[i] ^= mask[i % 4];
         }
     }
-    
+
     String::from_utf8(payload)
         .map(Some)
         .map_err(|e| e.to_string())
@@ -357,12 +357,12 @@ fn read_websocket_frame(stream: &mut TcpStream) -> Result<Option<String>, String
 fn send_websocket_frame(stream: &mut TcpStream, data: &str) -> Result<(), String> {
     let payload = data.as_bytes();
     let len = payload.len();
-    
+
     let mut frame = Vec::new();
-    
+
     // FIN + text opcode
     frame.push(0x81);
-    
+
     // Length
     if len < 126 {
         frame.push(len as u8);
@@ -373,24 +373,23 @@ fn send_websocket_frame(stream: &mut TcpStream, data: &str) -> Result<(), String
         frame.push(127);
         frame.extend_from_slice(&(len as u64).to_be_bytes());
     }
-    
+
     // Payload (server doesn't mask)
     frame.extend_from_slice(payload);
-    
-    stream.write_all(&frame)
-        .map_err(|e| e.to_string())
+
+    stream.write_all(&frame).map_err(|e| e.to_string())
 }
 
 fn broadcast_to_clients(clients: &Arc<Mutex<HashMap<u64, Client>>>, message: &str) {
     let mut clients = clients.lock().unwrap();
     let mut disconnected = Vec::new();
-    
+
     for (id, client) in clients.iter_mut() {
         if send_websocket_frame(&mut client.stream, message).is_err() {
             disconnected.push(*id);
         }
     }
-    
+
     for id in disconnected {
         clients.remove(&id);
     }
@@ -398,30 +397,30 @@ fn broadcast_to_clients(clients: &Arc<Mutex<HashMap<u64, Client>>>, message: &st
 
 fn base64_encode(data: &[u8]) -> String {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    
+
     let mut result = String::new();
     let chunks = data.chunks(3);
-    
+
     for chunk in chunks {
         let b0 = chunk[0] as usize;
         let b1 = chunk.get(1).copied().unwrap_or(0) as usize;
         let b2 = chunk.get(2).copied().unwrap_or(0) as usize;
-        
+
         result.push(ALPHABET[b0 >> 2] as char);
         result.push(ALPHABET[((b0 & 0x03) << 4) | (b1 >> 4)] as char);
-        
+
         if chunk.len() > 1 {
             result.push(ALPHABET[((b1 & 0x0F) << 2) | (b2 >> 6)] as char);
         } else {
             result.push('=');
         }
-        
+
         if chunk.len() > 2 {
             result.push(ALPHABET[b2 & 0x3F] as char);
         } else {
             result.push('=');
         }
     }
-    
+
     result
 }

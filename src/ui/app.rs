@@ -1,6 +1,6 @@
-use eframe::egui::{self, ColorImage, Vec2};
-use crate::ui::UI;
 use crate::ui::render::UIRenderer;
+use crate::ui::UI;
+use eframe::egui::{self, ColorImage, Vec2};
 
 /// Small egui app that exercises `crate::ui` runtime APIs for manual testing.
 pub struct UIMain {
@@ -13,7 +13,11 @@ impl UIMain {
     pub fn new() -> Self {
         let ui_state = UI::new(1200, 800);
         let renderer = UIRenderer::new(800, 600);
-        Self { ui_state, renderer, img_texture: None }
+        Self {
+            ui_state,
+            renderer,
+            img_texture: None,
+        }
     }
 }
 
@@ -37,17 +41,19 @@ impl eframe::App for UIMain {
             });
         });
 
-        egui::SidePanel::left("left_panel").resizable(true).show(ctx, |ui| {
-            ui.heading("Sidebar (demo)");
-            ui.label(format!("Hover: {:?}", self.ui_state.hover_element));
-            if ui.button("Toggle Left Sidebar").clicked() {
-                self.ui_state.sidebar_layout.toggle(crate::ui::Edge::Left);
-            }
-            ui.separator();
-            ui.label("Theme:");
-            let theme = self.ui_state.theme_manager.current();
-            ui.label(&theme.meta.name);
-        });
+        egui::SidePanel::left("left_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Sidebar (demo)");
+                ui.label(format!("Hover: {:?}", self.ui_state.hover_element));
+                if ui.button("Toggle Left Sidebar").clicked() {
+                    self.ui_state.sidebar_layout.toggle(crate::ui::Edge::Left);
+                }
+                ui.separator();
+                ui.label("Theme:");
+                let theme = self.ui_state.theme_manager.current();
+                ui.label(&theme.meta.name);
+            });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("UI Module Demo");
@@ -61,9 +67,27 @@ impl eframe::App for UIMain {
             // Use renderer to draw a nav bar and some tab list into buffer
             self.renderer.resize(w as u32, h as u32);
             let theme = self.ui_state.theme_manager.current().clone();
-            let state = crate::ui::render::NavBarState { can_back: true, can_forward: true, loading: false, show_help_button: true, help_enabled: true, help_open: false };
-            let nav_bounds = crate::ui::Rect { x: 0, y: 0, width: w as u32, height: 48 };
-            self.renderer.draw_nav_bar(&mut buffer, nav_bounds, &theme, "https://example.com", state);
+            let state = crate::ui::render::NavBarState {
+                can_back: true,
+                can_forward: true,
+                loading: false,
+                show_help_button: true,
+                help_enabled: true,
+                help_open: false,
+            };
+            let nav_bounds = crate::ui::Rect {
+                x: 0,
+                y: 0,
+                width: w as u32,
+                height: 48,
+            };
+            self.renderer.draw_nav_bar(
+                &mut buffer,
+                nav_bounds,
+                &theme,
+                "https://example.com",
+                state,
+            );
 
             // Convert u32 ARGB buffer to RGBA bytes for egui
             let mut pixels: Vec<u8> = Vec::with_capacity(w * h * 4);
@@ -92,8 +116,12 @@ impl eframe::App for UIMain {
 /// Convenience runner for manual testing from other code.
 pub fn run_ui() -> Result<(), String> {
     let native_options = eframe::NativeOptions::default();
-    eframe::run_native("Sassy UI Demo", native_options, Box::new(|_cc| Ok(Box::new(UIMain::new()))))
-        .map_err(|e| format!("failed to run ui: {}", e))
+    eframe::run_native(
+        "Sassy UI Demo",
+        native_options,
+        Box::new(|_cc| Ok(Box::new(UIMain::new()))),
+    )
+    .map_err(|e| format!("failed to run ui: {}", e))
 }
 
 #[cfg(test)]
@@ -112,7 +140,9 @@ mod tests {
 
         // Create a tab and check count
         let prev = app.ui_state.tab_manager.tab_count();
-        app.ui_state.tab_manager.create_tab("https://example.com".into());
+        app.ui_state
+            .tab_manager
+            .create_tab("https://example.com".into());
         assert_eq!(app.ui_state.tab_manager.tab_count(), prev + 1);
 
         // Toggle a sidebar

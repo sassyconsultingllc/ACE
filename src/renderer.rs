@@ -1,11 +1,11 @@
 // Renderer - Main renderer coordination
 
-use crate::dom::{Document, NodeRef, Node};
-use crate::style::{StyleEngine, ComputedStyle};
-use crate::layout::{LayoutEngine, LayoutBox};
+use crate::dom::{Document, Node, NodeRef};
+use crate::layout::{LayoutBox, LayoutEngine};
 use crate::paint::Painter;
-use std::collections::HashMap;
+use crate::style::{ComputedStyle, StyleEngine};
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 pub struct Renderer {
     pub document: Document,
@@ -83,8 +83,9 @@ impl Renderer {
 
     fn compute_node_styles(&mut self, node: &NodeRef) {
         let style = self.style_engine.compute_style(node);
-        self.computed_styles.insert(node.as_ref() as *const _, style);
-        
+        self.computed_styles
+            .insert(node.as_ref() as *const _, style);
+
         let children: Vec<NodeRef> = node.borrow().children.to_vec();
         for child in children {
             self.compute_node_styles(&child);
@@ -92,7 +93,10 @@ impl Renderer {
     }
 
     pub fn layout(&mut self) {
-        self.layout_tree = Some(self.layout_engine.layout(&self.document.root, &self.computed_styles));
+        self.layout_tree = Some(
+            self.layout_engine
+                .layout(&self.document.root, &self.computed_styles),
+        );
         if let Some(ref layout) = self.layout_tree {
             self.max_scroll = (layout.bounds.height - self.layout_engine.viewport_height).max(0.0);
         }
@@ -143,7 +147,9 @@ impl Renderer {
 
     pub fn get_element_rect(&self, node: &NodeRef) -> Option<crate::layout::Rect> {
         if let Some(ref layout) = self.layout_tree {
-            self.layout_engine.find_layout_for_node(layout, node).map(|l| l.border)
+            self.layout_engine
+                .find_layout_for_node(layout, node)
+                .map(|l| l.border)
         } else {
             None
         }
@@ -162,17 +168,25 @@ impl Renderer {
     }
 
     pub fn get_links(&self) -> Vec<(String, NodeRef)> {
-        self.document.get_links().iter().filter_map(|node| {
-            let n = node.borrow();
-            n.get_attribute("href").map(|href| (href, node.clone()))
-        }).collect()
+        self.document
+            .get_links()
+            .iter()
+            .filter_map(|node| {
+                let n = node.borrow();
+                n.get_attribute("href").map(|href| (href, node.clone()))
+            })
+            .collect()
     }
 
     pub fn get_images(&self) -> Vec<(String, NodeRef)> {
-        self.document.get_images().iter().filter_map(|node| {
-            let n = node.borrow();
-            n.get_attribute("src").map(|src| (src, node.clone()))
-        }).collect()
+        self.document
+            .get_images()
+            .iter()
+            .filter_map(|node| {
+                let n = node.borrow();
+                n.get_attribute("src").map(|src| (src, node.clone()))
+            })
+            .collect()
     }
 
     pub fn get_forms(&self) -> Vec<NodeRef> {
@@ -180,14 +194,18 @@ impl Renderer {
     }
 
     pub fn get_scripts(&self) -> Vec<String> {
-        self.document.get_scripts().iter().filter_map(|node| {
-            let n = node.borrow();
-            if n.get_attribute("src").is_some() {
-                n.get_attribute("src")
-            } else {
-                Some(n.get_inner_text())
-            }
-        }).collect()
+        self.document
+            .get_scripts()
+            .iter()
+            .filter_map(|node| {
+                let n = node.borrow();
+                if n.get_attribute("src").is_some() {
+                    n.get_attribute("src")
+                } else {
+                    Some(n.get_inner_text())
+                }
+            })
+            .collect()
     }
 
     /// Summary for diagnostics - wires get_links, get_images, get_forms, get_scripts, get_element_rect
@@ -196,7 +214,9 @@ impl Renderer {
         let images = self.get_images();
         let forms = self.get_forms();
         let scripts = self.get_scripts();
-        let first_link_rect = links.first().and_then(|(_, node)| self.get_element_rect(node));
+        let first_link_rect = links
+            .first()
+            .and_then(|(_, node)| self.get_element_rect(node));
         format!(
             "Renderer[title={}, scroll={:.0}/{:.0}, links={}, images={}, forms={}, scripts={}, first_rect={}]",
             self.get_title(), self.scroll_y, self.max_scroll,
@@ -216,25 +236,45 @@ pub trait RenderStage {
 }
 
 impl RenderPipeline {
-    pub fn new() -> Self { RenderPipeline { stages: Vec::new() } }
-    pub fn add_stage(&mut self, stage: Box<dyn RenderStage>) { self.stages.push(stage); }
+    pub fn new() -> Self {
+        RenderPipeline { stages: Vec::new() }
+    }
+    pub fn add_stage(&mut self, stage: Box<dyn RenderStage>) {
+        self.stages.push(stage);
+    }
     pub fn execute(&mut self, renderer: &mut Renderer) {
-        for stage in &mut self.stages { stage.execute(renderer); }
+        for stage in &mut self.stages {
+            stage.execute(renderer);
+        }
     }
 }
 
 impl Default for RenderPipeline {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub struct StyleStage;
-impl RenderStage for StyleStage { fn execute(&mut self, r: &mut Renderer) { r.compute_styles(); } }
+impl RenderStage for StyleStage {
+    fn execute(&mut self, r: &mut Renderer) {
+        r.compute_styles();
+    }
+}
 
 pub struct LayoutStage;
-impl RenderStage for LayoutStage { fn execute(&mut self, r: &mut Renderer) { r.layout(); } }
+impl RenderStage for LayoutStage {
+    fn execute(&mut self, r: &mut Renderer) {
+        r.layout();
+    }
+}
 
 pub struct PaintStage;
-impl RenderStage for PaintStage { fn execute(&mut self, r: &mut Renderer) { r.paint(); } }
+impl RenderStage for PaintStage {
+    fn execute(&mut self, r: &mut Renderer) {
+        r.paint();
+    }
+}
 
 /// Build the default 3-stage pipeline (style -> layout -> paint)
 pub fn build_default_pipeline() -> RenderPipeline {
@@ -325,7 +365,9 @@ mod tests {
     #[test]
     fn test_get_links_images_forms_scripts() {
         let mut r = Renderer::new(800, 600);
-        r.parse_html("<body><a href='x'>L</a><img src='y'><form><input></form><script>1</script></body>");
+        r.parse_html(
+            "<body><a href='x'>L</a><img src='y'><form><input></form><script>1</script></body>",
+        );
         r.render();
         let links = r.get_links();
         let images = r.get_images();
@@ -376,7 +418,9 @@ mod tests {
     #[test]
     fn test_base_url_extraction() {
         let mut r = Renderer::new(800, 600);
-        r.parse_html(r#"<html><head><base href="https://example.com/"></head><body>Base</body></html>"#);
+        r.parse_html(
+            r#"<html><head><base href="https://example.com/"></head><body>Base</body></html>"#,
+        );
         assert_eq!(r.document.base_url.as_deref(), Some("https://example.com/"));
     }
 }

@@ -1,13 +1,11 @@
 //! Tab tile system - visual grid of tab previews
 //! Like Windows alt+tab but for browser tabs
 
-
-use std::time::{Duration, Instant};
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 /// Tab content type
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum TabContent {
     /// Standard web page
     #[default]
@@ -19,7 +17,6 @@ pub enum TabContent {
     /// Settings page
     Settings,
 }
-
 
 /// Embedded terminal state
 #[derive(Debug, Clone)]
@@ -69,9 +66,15 @@ impl TerminalStyle {
         let mut parts = Vec::new();
         parts.push(format!("fg={}", self.fg_color.name()));
         parts.push(format!("bg={}", self.bg_color.name()));
-        if self.bold { parts.push("bold".into()); }
-        if self.dim { parts.push("dim".into()); }
-        if self.underline { parts.push("underline".into()); }
+        if self.bold {
+            parts.push("bold".into());
+        }
+        if self.dim {
+            parts.push("dim".into());
+        }
+        if self.underline {
+            parts.push("underline".into());
+        }
         parts.join(",")
     }
 }
@@ -158,7 +161,7 @@ impl TerminalState {
         let cwd = std::env::current_dir()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| "~".to_string());
-        
+
         let mut output = VecDeque::new();
         output.push_back(TerminalLine {
             text: format!("Sassy Terminal - {}", cwd),
@@ -172,7 +175,7 @@ impl TerminalState {
             text: String::new(),
             style: TerminalStyle::default(),
         });
-        
+
         Self {
             output,
             max_lines: 10000,
@@ -186,7 +189,7 @@ impl TerminalState {
             env: std::env::vars().collect(),
         }
     }
-    
+
     /// Get the shell prompt
     pub fn prompt(&self) -> String {
         let exit_indicator = match self.last_exit_code {
@@ -195,7 +198,7 @@ impl TerminalState {
         };
         format!("{} {} ", self.short_cwd(), exit_indicator)
     }
-    
+
     fn short_cwd(&self) -> String {
         // Shorten the path like fish shell
         if let Some(home) = self.env.get("HOME").or_else(|| self.env.get("USERPROFILE")) {
@@ -205,7 +208,7 @@ impl TerminalState {
         }
         self.cwd.clone()
     }
-    
+
     /// Add a line to output
     pub fn print(&mut self, text: &str, style: TerminalStyle) {
         self.output.push_back(TerminalLine {
@@ -216,20 +219,23 @@ impl TerminalState {
             self.output.pop_front();
         }
     }
-    
+
     /// Add output with default style
     pub fn println(&mut self, text: &str) {
         self.print(text, TerminalStyle::default());
     }
-    
+
     /// Print error output
     pub fn print_error(&mut self, text: &str) {
-        self.print(text, TerminalStyle {
-            fg_color: TerminalColor::Red,
-            ..Default::default()
-        });
+        self.print(
+            text,
+            TerminalStyle {
+                fg_color: TerminalColor::Red,
+                ..Default::default()
+            },
+        );
     }
-    
+
     /// Execute a command and capture output
     pub fn execute(&mut self, command: &str) {
         // Add to history
@@ -237,30 +243,35 @@ impl TerminalState {
             self.history.push(command.to_string());
         }
         self.history_index = None;
-        
+
         // Print the command
-        self.print(&format!("{}{}", self.prompt(), command), TerminalStyle {
-            fg_color: TerminalColor::Green,
-            ..Default::default()
-        });
-        
+        self.print(
+            &format!("{}{}", self.prompt(), command),
+            TerminalStyle {
+                fg_color: TerminalColor::Green,
+                ..Default::default()
+            },
+        );
+
         // Handle built-in commands
         let parts: Vec<&str> = command.split_whitespace().collect();
         if parts.is_empty() {
             return;
         }
-        
+
         match parts[0] {
             "cd" => {
                 let target = parts.get(1).copied().unwrap_or("~");
                 let target = if target == "~" {
-                    self.env.get("HOME").or_else(|| self.env.get("USERPROFILE"))
+                    self.env
+                        .get("HOME")
+                        .or_else(|| self.env.get("USERPROFILE"))
                         .map(|s| s.as_str())
                         .unwrap_or(".")
                 } else {
                     target
                 };
-                
+
                 match std::env::set_current_dir(target) {
                     Ok(_) => {
                         self.cwd = std::env::current_dir()
@@ -288,7 +299,9 @@ impl TerminalState {
                 self.last_exit_code = Some(0);
             }
             "env" | "export" if parts.len() == 1 => {
-                let env_lines: Vec<String> = self.env.iter()
+                let env_lines: Vec<String> = self
+                    .env
+                    .iter()
                     .map(|(k, v)| format!("{}={}", k, v))
                     .collect();
                 for line in env_lines {
@@ -313,16 +326,16 @@ impl TerminalState {
             }
         }
     }
-    
+
     fn run_external_command(&mut self, command: &str) {
         #[cfg(target_os = "windows")]
         let shell = ("cmd", "/C");
-        
+
         #[cfg(not(target_os = "windows"))]
         let shell = ("sh", "-c");
-        
+
         self.running = true;
-        
+
         match std::process::Command::new(shell.0)
             .arg(shell.1)
             .arg(command)
@@ -338,7 +351,7 @@ impl TerminalState {
                         self.println(line);
                     }
                 }
-                
+
                 // Print stderr
                 if !output.stderr.is_empty() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -346,7 +359,7 @@ impl TerminalState {
                         self.print_error(line);
                     }
                 }
-                
+
                 self.last_exit_code = output.status.code();
             }
             Err(e) => {
@@ -354,16 +367,16 @@ impl TerminalState {
                 self.last_exit_code = Some(127);
             }
         }
-        
+
         self.running = false;
     }
-    
+
     /// Handle input character
     pub fn input_char(&mut self, c: char) {
         self.input_buffer.insert(self.cursor_pos, c);
         self.cursor_pos += 1;
     }
-    
+
     /// Handle backspace
     pub fn backspace(&mut self) {
         if self.cursor_pos > 0 {
@@ -371,33 +384,33 @@ impl TerminalState {
             self.input_buffer.remove(self.cursor_pos);
         }
     }
-    
+
     /// Handle delete
     pub fn delete(&mut self) {
         if self.cursor_pos < self.input_buffer.len() {
             self.input_buffer.remove(self.cursor_pos);
         }
     }
-    
+
     /// Submit current input
     pub fn submit(&mut self) {
         let command = std::mem::take(&mut self.input_buffer);
         self.cursor_pos = 0;
         self.execute(&command);
     }
-    
+
     /// Navigate history up
     pub fn history_up(&mut self) {
         if self.history.is_empty() {
             return;
         }
-        
+
         self.history_index = Some(match self.history_index {
             None => self.history.len() - 1,
             Some(i) if i > 0 => i - 1,
             Some(i) => i,
         });
-        
+
         if let Some(idx) = self.history_index {
             if let Some(cmd) = self.history.get(idx) {
                 self.input_buffer = cmd.clone();
@@ -405,7 +418,7 @@ impl TerminalState {
             }
         }
     }
-    
+
     /// Navigate history down
     pub fn history_down(&mut self) {
         if let Some(idx) = self.history_index {
@@ -420,26 +433,26 @@ impl TerminalState {
             }
         }
     }
-    
+
     /// Move cursor left
     pub fn cursor_left(&mut self) {
         if self.cursor_pos > 0 {
             self.cursor_pos -= 1;
         }
     }
-    
+
     /// Move cursor right
     pub fn cursor_right(&mut self) {
         if self.cursor_pos < self.input_buffer.len() {
             self.cursor_pos += 1;
         }
     }
-    
+
     /// Move cursor to start
     pub fn cursor_home(&mut self) {
         self.cursor_pos = 0;
     }
-    
+
     /// Move cursor to end
     pub fn cursor_end(&mut self) {
         self.cursor_pos = self.input_buffer.len();
@@ -507,25 +520,25 @@ pub enum TrustLevel {
 pub struct TabSandbox {
     /// Current trust level
     pub trust_level: TrustLevel,
-    
+
     /// Interactions recorded for this page
     pub interactions: Vec<(MeaningfulInteraction, Instant)>,
-    
+
     /// When the page was loaded (for time-based trust)
     pub page_loaded: Instant,
-    
+
     /// Cumulative scroll distance (must be 500+ px to count)
     pub scroll_accumulated: i32,
-    
+
     /// Time spent with tab focused
     pub focus_time: Duration,
-    
+
     /// Last focus start
     pub focus_start: Option<Instant>,
-    
+
     /// Has the user been warned about this page?
     pub warning_shown: bool,
-    
+
     /// Restrictions currently in effect
     pub restrictions: SandboxRestrictions,
 }
@@ -568,7 +581,7 @@ impl TabSandbox {
             restrictions: SandboxRestrictions::strict(),
         }
     }
-    
+
     pub fn whitelisted() -> Self {
         Self {
             trust_level: TrustLevel::Whitelisted,
@@ -581,23 +594,27 @@ impl TabSandbox {
             restrictions: SandboxRestrictions::none(),
         }
     }
-    
+
     /// Record an interaction and update trust level
     pub fn record_interaction(&mut self, interaction: MeaningfulInteraction) {
         // Don't record if already trusted
-        if matches!(self.trust_level, TrustLevel::Trusted | TrustLevel::Whitelisted) {
+        if matches!(
+            self.trust_level,
+            TrustLevel::Trusted | TrustLevel::Whitelisted
+        ) {
             return;
         }
-        
+
         // Check if this is a meaningful new interaction
-        let dominated = self.interactions.iter().any(|(prev, _)| {
-            std::mem::discriminant(prev) == std::mem::discriminant(&interaction)
-        });
-        
+        let dominated = self
+            .interactions
+            .iter()
+            .any(|(prev, _)| std::mem::discriminant(prev) == std::mem::discriminant(&interaction));
+
         // For scroll, accumulate distance
         if let MeaningfulInteraction::Scroll { distance } = interaction {
             self.scroll_accumulated += distance.abs();
-            
+
             // Only count as interaction if scrolled 500+ pixels total
             if self.scroll_accumulated >= 500 && !dominated {
                 self.interactions.push((interaction, Instant::now()));
@@ -605,32 +622,32 @@ impl TabSandbox {
         } else if !dominated {
             self.interactions.push((interaction, Instant::now()));
         }
-        
+
         // Update trust level
         self.update_trust_level();
     }
-    
+
     /// Call when tab gains focus
     pub fn focus_gained(&mut self) {
         self.focus_start = Some(Instant::now());
     }
-    
+
     /// Call when tab loses focus
     pub fn focus_lost(&mut self) {
         if let Some(start) = self.focus_start.take() {
             self.focus_time += start.elapsed();
-            
+
             // Time spent can count as interaction
             if self.focus_time >= Duration::from_secs(30) {
                 self.record_interaction(MeaningfulInteraction::TimeSpent);
             }
         }
     }
-    
+
     /// Update trust level based on interactions
     fn update_trust_level(&mut self) {
         let unique_interactions = self.interactions.len();
-        
+
         self.trust_level = if unique_interactions >= 3 {
             TrustLevel::Trusted
         } else if unique_interactions >= 1 {
@@ -638,7 +655,7 @@ impl TabSandbox {
         } else {
             TrustLevel::Untrusted
         };
-        
+
         // Update restrictions based on trust
         self.restrictions = match self.trust_level {
             TrustLevel::Untrusted => SandboxRestrictions::strict(),
@@ -647,27 +664,25 @@ impl TabSandbox {
             TrustLevel::Whitelisted => SandboxRestrictions::none(),
         };
     }
-    
+
     /// Reset sandbox (for navigation)
     pub fn reset(&mut self) {
         *self = Self::new();
     }
-    
+
     /// Get interaction count
     pub fn interaction_count(&self) -> usize {
         self.interactions.len()
     }
-    
+
     /// Interactions needed for trust
     pub fn interactions_needed(&self) -> usize {
         3usize.saturating_sub(self.interactions.len())
     }
-    
+
     /// Describe the sandbox state for debugging / UI
     pub fn describe(&self) -> String {
-        let labels: Vec<&str> = self.interactions.iter()
-            .map(|(i, _)| i.label())
-            .collect();
+        let labels: Vec<&str> = self.interactions.iter().map(|(i, _)| i.label()).collect();
         format!(
             "trust={:?} interactions={} focus={:.1}s needed={} warning={}",
             self.trust_level,
@@ -675,7 +690,12 @@ impl TabSandbox {
             self.focus_time.as_secs_f64(),
             self.interactions_needed(),
             self.warning_shown,
-        ) + if labels.is_empty() { String::new() } else { format!(" types=[{}]", labels.join(",")) }.as_str()
+        ) + if labels.is_empty() {
+            String::new()
+        } else {
+            format!(" types=[{}]", labels.join(","))
+        }
+        .as_str()
     }
 
     /// Is page trusted enough for action?
@@ -727,7 +747,7 @@ impl SandboxRestrictions {
             block_protocol_handlers: true,
         }
     }
-    
+
     /// Some restrictions (building trust)
     pub fn moderate() -> Self {
         Self {
@@ -743,7 +763,7 @@ impl SandboxRestrictions {
             block_protocol_handlers: true,
         }
     }
-    
+
     /// Minimal restrictions (trusted)
     pub fn relaxed() -> Self {
         Self {
@@ -759,7 +779,7 @@ impl SandboxRestrictions {
             block_protocol_handlers: false,
         }
     }
-    
+
     /// No restrictions (whitelisted)
     pub fn none() -> Self {
         Self {
@@ -791,13 +811,13 @@ pub struct Tab {
     pub created_at: Instant,
     pub last_accessed: Instant,
     pub group_id: Option<u64>,
-    
+
     /// Per-page sandbox state
     pub sandbox: TabSandbox,
-    
+
     /// Tab content type
     pub content_type: TabContent,
-    
+
     /// Terminal state (if content_type is Terminal)
     pub terminal: Option<TerminalState>,
 }
@@ -806,7 +826,7 @@ pub struct Tab {
 pub struct TabPreview {
     pub width: u32,
     pub height: u32,
-    pub data: Vec<u32>,  // RGBA pixels
+    pub data: Vec<u32>, // RGBA pixels
     pub captured_at: Instant,
 }
 
@@ -819,31 +839,37 @@ impl TabPreview {
             captured_at: Instant::now(),
         }
     }
-    
-    pub fn from_buffer(buffer: &[u32], src_width: u32, src_height: u32, target_width: u32, target_height: u32) -> Self {
+
+    pub fn from_buffer(
+        buffer: &[u32],
+        src_width: u32,
+        src_height: u32,
+        target_width: u32,
+        target_height: u32,
+    ) -> Self {
         // Downsample the buffer to preview size
         let mut preview = Self::new(target_width, target_height);
-        
+
         let scale_x = src_width as f32 / target_width as f32;
         let scale_y = src_height as f32 / target_height as f32;
-        
+
         for y in 0..target_height {
             for x in 0..target_width {
                 let src_x = (x as f32 * scale_x) as u32;
                 let src_y = (y as f32 * scale_y) as u32;
                 let src_idx = (src_y * src_width + src_x) as usize;
                 let dst_idx = (y * target_width + x) as usize;
-                
+
                 if src_idx < buffer.len() {
                     preview.data[dst_idx] = buffer[src_idx];
                 }
             }
         }
-        
+
         preview.captured_at = Instant::now();
         preview
     }
-    
+
     pub fn is_stale(&self, max_age: Duration) -> bool {
         self.captured_at.elapsed() > max_age
     }
@@ -870,7 +896,7 @@ impl Tab {
             terminal: None,
         }
     }
-    
+
     /// Create a new terminal tab
     pub fn new_terminal(id: u64) -> Self {
         let now = Instant::now();
@@ -892,12 +918,12 @@ impl Tab {
             terminal: Some(TerminalState::new()),
         }
     }
-    
+
     /// Check if this is a terminal tab
     pub fn is_terminal(&self) -> bool {
         self.content_type == TabContent::Terminal
     }
-    
+
     /// Create a new PDF viewer tab
     pub fn new_pdf(id: u64, url: String) -> Self {
         let now = Instant::now();
@@ -933,14 +959,14 @@ impl Tab {
     pub fn touch(&mut self) {
         self.last_accessed = Instant::now();
     }
-    
+
     /// Reset sandbox for new navigation
     pub fn navigate(&mut self, url: &str) {
         self.url = url.to_string();
         self.sandbox.reset();
         self.loading = true;
     }
-    
+
     /// Get trust level text for UI
     pub fn trust_text(&self) -> &'static str {
         match self.sandbox.trust_level {
@@ -950,7 +976,7 @@ impl Tab {
             TrustLevel::Whitelisted => "Whitelisted",
         }
     }
-    
+
     /// Describe the tab state for accessibility / debugging
     pub fn status(&self) -> String {
         let mut parts = vec![
@@ -958,11 +984,21 @@ impl Tab {
             format!("type={}", self.content_label()),
             format!("trust={}", self.trust_text()),
         ];
-        if self.loading { parts.push("loading".into()); }
-        if self.pinned { parts.push("pinned".into()); }
-        if self.muted { parts.push("muted".into()); }
-        if self.audible { parts.push("audible".into()); }
-        if self.favicon.is_some() { parts.push("has-favicon".into()); }
+        if self.loading {
+            parts.push("loading".into());
+        }
+        if self.pinned {
+            parts.push("pinned".into());
+        }
+        if self.muted {
+            parts.push("muted".into());
+        }
+        if self.audible {
+            parts.push("audible".into());
+        }
+        if self.favicon.is_some() {
+            parts.push("has-favicon".into());
+        }
         if let Some(ref preview) = self.preview {
             if preview.is_stale(Duration::from_secs(60)) {
                 parts.push("preview-stale".into());
@@ -988,10 +1024,10 @@ impl Tab {
     /// Get trust indicator color
     pub fn trust_color(&self) -> u32 {
         match self.sandbox.trust_level {
-            TrustLevel::Untrusted => 0xffff4444,    // Red
-            TrustLevel::Building => 0xffffaa44,     // Orange
-            TrustLevel::Trusted => 0xff44ff44,      // Green
-            TrustLevel::Whitelisted => 0xff44aaff,  // Blue
+            TrustLevel::Untrusted => 0xffff4444,   // Red
+            TrustLevel::Building => 0xffffaa44,    // Orange
+            TrustLevel::Trusted => 0xff44ff44,     // Green
+            TrustLevel::Whitelisted => 0xff44aaff, // Blue
         }
     }
 }
@@ -1007,7 +1043,11 @@ pub struct TabGroup {
 impl TabGroup {
     /// Describe the group for UI display
     pub fn label(&self) -> String {
-        let state = if self.collapsed { "collapsed" } else { "expanded" };
+        let state = if self.collapsed {
+            "collapsed"
+        } else {
+            "expanded"
+        };
         format!("{} ({}, {})", self.name, self.color, state)
     }
 }
@@ -1035,21 +1075,21 @@ impl TileLayout {
         // Calculate optimal number of columns
         let padding = gap;
         let usable_width = available_width.saturating_sub(padding * 2);
-        
+
         // Start with max tiles that fit
         let mut columns = ((usable_width + gap) / (min_tile_width + gap)).max(1);
-        
+
         // Reduce columns if we have fewer tabs
         let rows_needed = (tab_count as u32).div_ceil(columns);
         if rows_needed == 1 && tab_count > 0 {
             columns = tab_count as u32;
         }
-        
+
         // Calculate tile width based on columns
-        let tile_width = ((usable_width + gap) / columns - gap)
-            .clamp(min_tile_width, max_tile_width);
+        let tile_width =
+            ((usable_width + gap) / columns - gap).clamp(min_tile_width, max_tile_width);
         let tile_height = (tile_width as f32 * aspect_ratio) as u32;
-        
+
         Self {
             columns,
             tile_width,
@@ -1058,48 +1098,48 @@ impl TileLayout {
             padding,
         }
     }
-    
+
     pub fn tile_rect(&self, index: usize) -> (u32, u32, u32, u32) {
         let col = index as u32 % self.columns;
         let row = index as u32 / self.columns;
-        
+
         let x = self.padding + col * (self.tile_width + self.gap);
         let y = self.padding + row * (self.tile_height + self.gap);
-        
+
         (x, y, self.tile_width, self.tile_height)
     }
-    
+
     pub fn total_height(&self, tab_count: usize) -> u32 {
         if tab_count == 0 {
             return self.padding * 2;
         }
-        
+
         let rows = (tab_count as u32).div_ceil(self.columns);
         self.padding * 2 + rows * self.tile_height + (rows - 1) * self.gap
     }
-    
+
     pub fn hit_test(&self, x: u32, y: u32, tab_count: usize) -> Option<usize> {
         if x < self.padding || y < self.padding {
             return None;
         }
-        
+
         let rel_x = x - self.padding;
         let rel_y = y - self.padding;
-        
+
         let col = rel_x / (self.tile_width + self.gap);
         let row = rel_y / (self.tile_height + self.gap);
-        
+
         // Check if actually within a tile (not in the gap)
         let tile_start_x = col * (self.tile_width + self.gap);
         let tile_start_y = row * (self.tile_height + self.gap);
-        
+
         if rel_x < tile_start_x + self.tile_width && rel_y < tile_start_y + self.tile_height {
             let index = (row * self.columns + col) as usize;
             if index < tab_count {
                 return Some(index);
             }
         }
-        
+
         None
     }
 }
@@ -1111,13 +1151,13 @@ pub struct TabManager {
     active_tab: Option<u64>,
     next_id: u64,
     next_group_id: u64,
-    
+
     // View state
     pub tile_view_active: bool,
     pub selected_index: Option<usize>,
     pub search_query: String,
     pub scroll_offset: u32,
-    
+
     // Settings
     pub preview_enabled: bool,
     pub preview_max_age: Duration,
@@ -1141,34 +1181,34 @@ impl TabManager {
             preview_size: (320, 240),
         }
     }
-    
+
     pub fn create_tab(&mut self, url: String) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
-        
+
         let tab = Tab::new(id, url);
         self.tabs.push(tab);
         self.active_tab = Some(id);
-        
+
         id
     }
-    
+
     /// Create a new terminal tab
     pub fn create_terminal_tab(&mut self) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
-        
+
         let tab = Tab::new_terminal(id);
         self.tabs.push(tab);
         self.active_tab = Some(id);
-        
+
         id
     }
-    
+
     pub fn close_tab(&mut self, id: u64) {
         if let Some(idx) = self.tabs.iter().position(|t| t.id == id) {
             self.tabs.remove(idx);
-            
+
             if self.active_tab == Some(id) {
                 // Activate nearest tab
                 self.active_tab = if idx > 0 {
@@ -1179,69 +1219,69 @@ impl TabManager {
             }
         }
     }
-    
+
     pub fn activate_tab(&mut self, id: u64) {
         if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
             tab.touch();
             self.active_tab = Some(id);
         }
     }
-    
+
     pub fn get_tab(&self, id: u64) -> Option<&Tab> {
         self.tabs.iter().find(|t| t.id == id)
     }
-    
+
     pub fn get_tab_mut(&mut self, id: u64) -> Option<&mut Tab> {
         self.tabs.iter_mut().find(|t| t.id == id)
     }
-    
+
     pub fn active_tab(&self) -> Option<&Tab> {
         self.active_tab.and_then(|id| self.get_tab(id))
     }
-    
+
     pub fn active_tab_mut(&mut self) -> Option<&mut Tab> {
         let id = self.active_tab?;
         self.get_tab_mut(id)
     }
-    
+
     pub fn tabs(&self) -> &[Tab] {
         &self.tabs
     }
-    
+
     pub fn tab_count(&self) -> usize {
         self.tabs.len()
     }
-    
+
     /// Get filtered tabs based on search query
     pub fn filtered_tabs(&self) -> Vec<&Tab> {
         if self.search_query.is_empty() {
             self.tabs.iter().collect()
         } else {
             let query = crate::fontcase::ascii_lower(&self.search_query);
-            self.tabs.iter()
+            self.tabs
+                .iter()
                 .filter(|t| {
-                    crate::fontcase::ascii_lower(&t.title).contains(&query) ||
-                    crate::fontcase::ascii_lower(&t.url).contains(&query)
+                    crate::fontcase::ascii_lower(&t.title).contains(&query)
+                        || crate::fontcase::ascii_lower(&t.url).contains(&query)
                 })
                 .collect()
         }
     }
-    
+
     /// Update tab preview from current render buffer
     pub fn capture_preview(&mut self, tab_id: u64, buffer: &[u32], width: u32, height: u32) {
         if !self.preview_enabled {
             return;
         }
         let (prev_w, prev_h) = self.preview_size;
-        
+
         if let Some(tab) = self.get_tab_mut(tab_id) {
             tab.preview = Some(TabPreview::from_buffer(
-                buffer, width, height,
-                prev_w, prev_h
+                buffer, width, height, prev_w, prev_h,
             ));
         }
     }
-    
+
     /// Toggle tile view
     pub fn toggle_tile_view(&mut self) {
         self.tile_view_active = !self.tile_view_active;
@@ -1255,51 +1295,51 @@ impl TabManager {
             self.search_query.clear();
         }
     }
-    
+
     /// Navigate tile selection
     pub fn select_next(&mut self) {
         let count = self.filtered_tabs().len();
         if count == 0 {
             return;
         }
-        
+
         self.selected_index = Some(match self.selected_index {
             Some(i) => (i + 1) % count,
             None => 0,
         });
     }
-    
+
     pub fn select_prev(&mut self) {
         let count = self.filtered_tabs().len();
         if count == 0 {
             return;
         }
-        
+
         self.selected_index = Some(match self.selected_index {
             Some(0) => count - 1,
             Some(i) => i - 1,
             None => count - 1,
         });
     }
-    
+
     pub fn select_row_down(&mut self, columns: u32) {
         let count = self.filtered_tabs().len();
         if count == 0 {
             return;
         }
-        
+
         self.selected_index = Some(match self.selected_index {
             Some(i) => ((i + columns as usize) % count).min(count - 1),
             None => 0,
         });
     }
-    
+
     pub fn select_row_up(&mut self, columns: u32) {
         let count = self.filtered_tabs().len();
         if count == 0 {
             return;
         }
-        
+
         let cols = columns as usize;
         self.selected_index = Some(match self.selected_index {
             Some(i) if i >= cols => i - cols,
@@ -1307,7 +1347,7 @@ impl TabManager {
             None => count - 1,
         });
     }
-    
+
     /// Activate selected tab and close tile view
     pub fn activate_selected(&mut self) {
         if let Some(idx) = self.selected_index {
@@ -1320,7 +1360,7 @@ impl TabManager {
         self.tile_view_active = false;
         self.search_query.clear();
     }
-    
+
     /// Close selected tab in tile view
     pub fn close_selected(&mut self) {
         if let Some(idx) = self.selected_index {
@@ -1328,7 +1368,7 @@ impl TabManager {
             if let Some(tab) = tabs.get(idx) {
                 let id = tab.id;
                 self.close_tab(id);
-                
+
                 // Adjust selection
                 let new_count = self.filtered_tabs().len();
                 if new_count == 0 {
@@ -1339,7 +1379,7 @@ impl TabManager {
             }
         }
     }
-    
+
     /// Move tab to a new position
     pub fn move_tab(&mut self, from: usize, to: usize) {
         if from < self.tabs.len() && to < self.tabs.len() {
@@ -1347,17 +1387,17 @@ impl TabManager {
             self.tabs.insert(to, tab);
         }
     }
-    
+
     /// Pin/unpin tab
     pub fn toggle_pin(&mut self, id: u64) {
         if let Some(tab) = self.get_tab_mut(id) {
             tab.pinned = !tab.pinned;
         }
-        
+
         // Move pinned tabs to start
         self.tabs.sort_by(|a, b| b.pinned.cmp(&a.pinned));
     }
-    
+
     /// Create a tab group
     /// Get the next unique tab ID and increment the counter
     pub fn next_id(&mut self) -> u64 {
@@ -1383,31 +1423,31 @@ impl TabManager {
     pub fn create_group(&mut self, name: String, color: String) -> u64 {
         let id = self.next_group_id;
         self.next_group_id += 1;
-        
+
         self.groups.push(TabGroup {
             id,
             name,
             color,
             collapsed: false,
         });
-        
+
         id
     }
-    
+
     /// Add tab to group
     pub fn add_to_group(&mut self, tab_id: u64, group_id: u64) {
         if let Some(tab) = self.get_tab_mut(tab_id) {
             tab.group_id = Some(group_id);
         }
     }
-    
+
     /// Remove tab from group
     pub fn remove_from_group(&mut self, tab_id: u64) {
         if let Some(tab) = self.get_tab_mut(tab_id) {
             tab.group_id = None;
         }
     }
-    
+
     /// Get all tab groups
     pub fn groups(&self) -> &[TabGroup] {
         &self.groups
@@ -1420,18 +1460,18 @@ impl TabManager {
         tabs.truncate(limit);
         tabs
     }
-    
+
     /// Duplicate a tab
     pub fn duplicate_tab(&mut self, id: u64) -> Option<u64> {
         let tab = self.get_tab(id)?;
         let url = tab.url.clone();
         let group_id = tab.group_id;
-        
+
         let new_id = self.create_tab(url);
         if let (Some(group_id), Some(tab)) = (group_id, self.get_tab_mut(new_id)) {
             tab.group_id = Some(group_id);
         }
-        
+
         Some(new_id)
     }
 }
@@ -1522,11 +1562,17 @@ mod tests {
         assert_eq!(sandbox.trust_level, TrustLevel::Untrusted);
 
         sandbox.record_interaction(MeaningfulInteraction::FormInput);
-        assert!(matches!(sandbox.trust_level, TrustLevel::Building | TrustLevel::Untrusted));
+        assert!(matches!(
+            sandbox.trust_level,
+            TrustLevel::Building | TrustLevel::Untrusted
+        ));
 
         sandbox.record_interaction(MeaningfulInteraction::LinkClick);
         sandbox.record_interaction(MeaningfulInteraction::TextSelection);
-        assert!(matches!(sandbox.trust_level, TrustLevel::Trusted | TrustLevel::Building));
+        assert!(matches!(
+            sandbox.trust_level,
+            TrustLevel::Trusted | TrustLevel::Building
+        ));
 
         // Exercise remaining interaction variants to ensure they are wired up
         let mut sandbox2 = TabSandbox::new();

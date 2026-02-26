@@ -97,11 +97,11 @@ impl HealthSnapshot {
     /// Status color for UI (R, G, B)
     pub fn status_color(&self) -> (u8, u8, u8) {
         match self.health_score() {
-            90..=100 => (60, 200, 80),   // Green
-            70..=89 => (120, 200, 60),   // Yellow-green
-            50..=69 => (240, 180, 40),   // Yellow
-            25..=49 => (240, 120, 40),   // Orange
-            _ => (220, 50, 50),          // Red
+            90..=100 => (60, 200, 80), // Green
+            70..=89 => (120, 200, 60), // Yellow-green
+            50..=69 => (240, 180, 40), // Yellow
+            25..=49 => (240, 120, 40), // Orange
+            _ => (220, 50, 50),        // Red
         }
     }
 
@@ -130,13 +130,18 @@ pub struct HealingDecision {
     pub action: HealingAction,
     pub target: Option<String>,
     pub rationale: String,
-    pub urgency: u8,        // 1=low ... 5=critical
-    pub confidence: f32,    // 0.0..1.0
+    pub urgency: u8,     // 1=low ... 5=critical
+    pub confidence: f32, // 0.0..1.0
     pub decided_at: Instant,
 }
 
 impl HealingDecision {
-    pub fn new(action: HealingAction, rationale: impl Into<String>, urgency: u8, confidence: f32) -> Self {
+    pub fn new(
+        action: HealingAction,
+        rationale: impl Into<String>,
+        urgency: u8,
+        confidence: f32,
+    ) -> Self {
         Self {
             action,
             target: None,
@@ -359,7 +364,10 @@ impl HealthWatchdog {
         if snap.active_tabs > 35 {
             return HealingDecision::new(
                 HealingAction::SuspendBackgroundTabs,
-                format!("{} tabs open — suspending background tabs", snap.active_tabs),
+                format!(
+                    "{} tabs open — suspending background tabs",
+                    snap.active_tabs
+                ),
                 3,
                 0.85,
             );
@@ -369,7 +377,10 @@ impl HealthWatchdog {
         if snap.renderer_stalls_last_5min >= 4 {
             return HealingDecision::new(
                 HealingAction::RestartRenderer,
-                format!("{} renderer stalls — restarting pipeline", snap.renderer_stalls_last_5min),
+                format!(
+                    "{} renderer stalls — restarting pipeline",
+                    snap.renderer_stalls_last_5min
+                ),
                 3,
                 0.80,
             );
@@ -379,7 +390,10 @@ impl HealthWatchdog {
         if snap.recent_violations >= 5 {
             return HealingDecision::new(
                 HealingAction::TightenSandbox,
-                format!("{} sandbox violations — tightening restrictions", snap.recent_violations),
+                format!(
+                    "{} sandbox violations — tightening restrictions",
+                    snap.recent_violations
+                ),
                 3,
                 0.85,
             );
@@ -389,7 +403,10 @@ impl HealthWatchdog {
         if snap.detection_alerts_last_5min >= 5 {
             return HealingDecision::new(
                 HealingAction::ReapplyPoisoning,
-                format!("{} tracking attempts detected — reapplying poisoning", snap.detection_alerts_last_5min),
+                format!(
+                    "{} tracking attempts detected — reapplying poisoning",
+                    snap.detection_alerts_last_5min
+                ),
                 2,
                 0.80,
             );
@@ -399,7 +416,10 @@ impl HealthWatchdog {
         if snap.memory_estimate_mb > 2048 && snap.active_tabs > 20 {
             return HealingDecision::new(
                 HealingAction::SuspendBackgroundTabs,
-                format!("Memory {}MB with {} tabs — preemptive suspension", snap.memory_estimate_mb, snap.active_tabs),
+                format!(
+                    "Memory {}MB with {} tabs — preemptive suspension",
+                    snap.memory_estimate_mb, snap.active_tabs
+                ),
                 2,
                 0.70,
             );
@@ -409,7 +429,10 @@ impl HealthWatchdog {
         if self.consecutive_unhealthy >= 5 {
             return HealingDecision::new(
                 HealingAction::ForceScriptGc,
-                format!("{} consecutive unhealthy checks — forcing GC", self.consecutive_unhealthy),
+                format!(
+                    "{} consecutive unhealthy checks — forcing GC",
+                    self.consecutive_unhealthy
+                ),
                 3,
                 0.75,
             );
@@ -419,7 +442,12 @@ impl HealthWatchdog {
     }
 
     /// Record that a healing action was applied
-    pub fn record_action(&mut self, decision: HealingDecision, snapshot: HealthSnapshot, success: bool) {
+    pub fn record_action(
+        &mut self,
+        decision: HealingDecision,
+        snapshot: HealthSnapshot,
+        success: bool,
+    ) {
         self.last_action_time = Some(Instant::now());
         self.total_actions_applied += 1;
 
@@ -454,8 +482,21 @@ impl HealthWatchdog {
             return 0;
         }
 
-        let recent: Vec<u8> = self.snapshot_history.iter().rev().take(5).map(|s| s.health_score()).collect();
-        let older: Vec<u8> = self.snapshot_history.iter().rev().skip(5).take(5).map(|s| s.health_score()).collect();
+        let recent: Vec<u8> = self
+            .snapshot_history
+            .iter()
+            .rev()
+            .take(5)
+            .map(|s| s.health_score())
+            .collect();
+        let older: Vec<u8> = self
+            .snapshot_history
+            .iter()
+            .rev()
+            .skip(5)
+            .take(5)
+            .map(|s| s.health_score())
+            .collect();
 
         if older.is_empty() {
             return 0;
@@ -465,9 +506,13 @@ impl HealthWatchdog {
         let older_avg: f32 = older.iter().map(|&s| s as f32).sum::<f32>() / older.len() as f32;
 
         let diff = recent_avg - older_avg;
-        if diff > 5.0 { 1 }
-        else if diff < -5.0 { -1 }
-        else { 0 }
+        if diff > 5.0 {
+            1
+        } else if diff < -5.0 {
+            -1
+        } else {
+            0
+        }
     }
 
     /// Get the trend emoji for UI display
@@ -498,7 +543,9 @@ impl HealthWatchdog {
     pub fn status_summary(&self) -> String {
         let score = self.latest_score();
         let trend = self.trend_indicator();
-        let label = self.snapshot_history.back()
+        let label = self
+            .snapshot_history
+            .back()
             .map(|s| s.status_label())
             .unwrap_or("Starting");
         format!("{}{} {}", score, trend, label)
@@ -608,12 +655,8 @@ mod tests {
 
     #[test]
     fn test_healing_decision_describe() {
-        let d = HealingDecision::new(
-            HealingAction::ClearHttpCache,
-            "Memory too high",
-            3,
-            0.9,
-        ).with_target("all-caches");
+        let d = HealingDecision::new(HealingAction::ClearHttpCache, "Memory too high", 3, 0.9)
+            .with_target("all-caches");
         let desc = d.describe();
         assert!(desc.contains("ClearHttpCache"));
         assert!(desc.contains("all-caches"));

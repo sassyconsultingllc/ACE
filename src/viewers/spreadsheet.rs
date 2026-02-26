@@ -2,7 +2,7 @@
 //! Spreadsheet Viewer - XLSX, XLS, ODS, CSV viewer and editor
 
 use crate::file_handler::{CellValue, FileContent, OpenFile, Sheet, SpreadsheetContent};
-use eframe::egui::{self, Color32, FontId, RichText, Rect, Vec2, Stroke, Sense};
+use eframe::egui::{self, Color32, FontId, Rect, RichText, Sense, Stroke, Vec2};
 
 pub struct SpreadsheetViewer {
     active_sheet: usize,
@@ -36,22 +36,28 @@ impl SpreadsheetViewer {
             freeze_cols: 0,
         }
     }
-    
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
+
+    pub fn render(
+        &mut self,
+        ui: &mut egui::Ui,
+        file: &OpenFile,
+        zoom: f32,
+        icons: &crate::icons::Icons,
+    ) {
         if let FileContent::Spreadsheet(spreadsheet) = &file.content {
             // Toolbar
             self.render_toolbar(ui, spreadsheet, zoom, icons);
-            
+
             ui.separator();
-            
+
             // Formula bar
             self.render_formula_bar(ui, spreadsheet);
-            
+
             ui.separator();
-            
+
             // Main grid
             self.render_grid(ui, spreadsheet, zoom);
-            
+
             // Sheet tabs
             self.render_sheet_tabs(ui, spreadsheet);
         } else {
@@ -60,8 +66,14 @@ impl SpreadsheetViewer {
             });
         }
     }
-    
-    fn render_toolbar(&mut self, ui: &mut egui::Ui, _spreadsheet: &SpreadsheetContent, zoom: f32, icons: &crate::icons::Icons) {
+
+    fn render_toolbar(
+        &mut self,
+        ui: &mut egui::Ui,
+        _spreadsheet: &SpreadsheetContent,
+        zoom: f32,
+        icons: &crate::icons::Icons,
+    ) {
         ui.horizontal(|ui| {
             if ui.selectable_label(!self.edit_mode, "View").clicked() {
                 self.edit_mode = false;
@@ -69,13 +81,13 @@ impl SpreadsheetViewer {
             if ui.selectable_label(self.edit_mode, " Edit").clicked() {
                 self.edit_mode = true;
             }
-            
+
             ui.separator();
-            
+
             ui.checkbox(&mut self.show_gridlines, "# Grid");
-            
+
             ui.separator();
-            
+
             // Column width
             ui.label("Col Width:");
             if icons.button(ui, "minus", "Decrease column width").clicked() {
@@ -85,9 +97,9 @@ impl SpreadsheetViewer {
             if icons.button(ui, "plus", "Increase column width").clicked() {
                 self.default_column_width = (self.default_column_width + 10.0).min(300.0);
             }
-            
+
             ui.separator();
-            
+
             // Freeze panes
             ui.label("Freeze:");
             if ui.button("Row").clicked() {
@@ -104,7 +116,7 @@ impl SpreadsheetViewer {
                 self.freeze_rows = 0;
                 self.freeze_cols = 0;
             }
-            
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if let Some((row, col)) = self.selected_cell {
                     ui.label(format!("Cell: {}{}", column_name(col), row + 1));
@@ -113,7 +125,7 @@ impl SpreadsheetViewer {
             });
         });
     }
-    
+
     fn render_formula_bar(&mut self, ui: &mut egui::Ui, spreadsheet: &SpreadsheetContent) {
         ui.horizontal(|ui| {
             // Cell reference
@@ -122,13 +134,13 @@ impl SpreadsheetViewer {
             } else {
                 "".into()
             };
-            
+
             ui.label(RichText::new(cell_ref).strong().monospace());
             ui.separator();
-            
+
             // Formula/content input
             ui.label("fx");
-            
+
             let response = ui.text_edit_singleline(&mut self.formula_bar_text);
 
             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
@@ -157,7 +169,7 @@ impl SpreadsheetViewer {
                     }
                 }
             }
-            
+
             // Update formula bar when cell selected
             if let Some((row, col)) = self.selected_cell {
                 if let Some(sheet) = spreadsheet.sheets.get(self.active_sheet) {
@@ -182,27 +194,27 @@ impl SpreadsheetViewer {
             }
         });
     }
-    
+
     fn render_grid(&mut self, ui: &mut egui::Ui, spreadsheet: &SpreadsheetContent, zoom: f32) {
         let Some(sheet) = spreadsheet.sheets.get(self.active_sheet) else {
             ui.label("No sheets available");
             return;
         };
-        
+
         let row_count = sheet.cells.len();
         let col_count = sheet.cells.iter().map(|r| r.len()).max().unwrap_or(0);
-        
+
         if row_count == 0 || col_count == 0 {
             ui.centered_and_justified(|ui| {
                 ui.label("Empty spreadsheet");
             });
             return;
         }
-        
+
         let col_width = self.default_column_width * zoom;
         let row_height = self.default_row_height * zoom;
         let header_width = 50.0 * zoom;
-        
+
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -213,9 +225,9 @@ impl SpreadsheetViewer {
                     ),
                     Sense::click(),
                 );
-                
+
                 let origin = response.rect.min;
-                
+
                 // Draw column headers
                 for col in 0..col_count {
                     let x = origin.x + header_width + col as f32 * col_width;
@@ -223,10 +235,10 @@ impl SpreadsheetViewer {
                         egui::pos2(x, origin.y),
                         Vec2::new(col_width, row_height),
                     );
-                    
+
                     painter.rect_filled(rect, 0.0, Color32::from_gray(60));
                     painter.rect_stroke(rect, 0.0, Stroke::new(1.0, Color32::from_gray(40)));
-                    
+
                     painter.text(
                         rect.center(),
                         egui::Align2::CENTER_CENTER,
@@ -235,20 +247,20 @@ impl SpreadsheetViewer {
                         Color32::WHITE,
                     );
                 }
-                
+
                 // Draw row headers and cells
                 for row in 0..row_count {
                     let y = origin.y + row_height + row as f32 * row_height;
-                    
+
                     // Row header
                     let header_rect = Rect::from_min_size(
                         egui::pos2(origin.x, y),
                         Vec2::new(header_width, row_height),
                     );
-                    
+
                     painter.rect_filled(header_rect, 0.0, Color32::from_gray(60));
                     painter.rect_stroke(header_rect, 0.0, Stroke::new(1.0, Color32::from_gray(40)));
-                    
+
                     painter.text(
                         header_rect.center(),
                         egui::Align2::CENTER_CENTER,
@@ -256,48 +268,64 @@ impl SpreadsheetViewer {
                         FontId::proportional(12.0 * zoom),
                         Color32::WHITE,
                     );
-                    
+
                     // Cells
                     let cells = sheet.cells.get(row);
-                    
+
                     for col in 0..col_count {
                         let x = origin.x + header_width + col as f32 * col_width;
-                        let cell_rect = Rect::from_min_size(
-                            egui::pos2(x, y),
-                            Vec2::new(col_width, row_height),
-                        );
-                        
+                        let cell_rect =
+                            Rect::from_min_size(egui::pos2(x, y), Vec2::new(col_width, row_height));
+
                         // Selection highlight
                         let is_selected = self.selected_cell == Some((row, col));
-                        
+
                         if is_selected {
                             painter.rect_filled(cell_rect, 0.0, Color32::from_rgb(50, 80, 120));
-                            painter.rect_stroke(cell_rect, 0.0, Stroke::new(2.0, Color32::from_rgb(100, 150, 200)));
+                            painter.rect_stroke(
+                                cell_rect,
+                                0.0,
+                                Stroke::new(2.0, Color32::from_rgb(100, 150, 200)),
+                            );
                         } else if self.show_gridlines {
-                            painter.rect_stroke(cell_rect, 0.0, Stroke::new(1.0, Color32::from_gray(50)));
+                            painter.rect_stroke(
+                                cell_rect,
+                                0.0,
+                                Stroke::new(1.0, Color32::from_gray(50)),
+                            );
                         }
-                        
+
                         // Cell content
                         if let Some(cells) = cells {
                             if let Some(cell) = cells.get(col) {
                                 let (text, color) = match cell {
                                     CellValue::Empty => (String::new(), Color32::WHITE),
                                     CellValue::Text(s) => (s.clone(), Color32::WHITE),
-                                    CellValue::Number(n) => (format_number(*n), Color32::from_rgb(150, 200, 255)),
-                                    CellValue::Boolean(b) => (b.to_string().to_uppercase(), Color32::from_rgb(255, 200, 100)),
-                                    CellValue::Formula(f) => (f.clone(), Color32::from_rgb(100, 255, 150)),
+                                    CellValue::Number(n) => {
+                                        (format_number(*n), Color32::from_rgb(150, 200, 255))
+                                    }
+                                    CellValue::Boolean(b) => (
+                                        b.to_string().to_uppercase(),
+                                        Color32::from_rgb(255, 200, 100),
+                                    ),
+                                    CellValue::Formula(f) => {
+                                        (f.clone(), Color32::from_rgb(100, 255, 150))
+                                    }
                                     CellValue::Error(e) => (format!("#{}", e), Color32::RED),
-                                    CellValue::Date(d) => (d.clone(), Color32::from_rgb(200, 180, 255)),
-                                    CellValue::Currency(symbol, amount) => (format!("{}{:.2}", symbol, amount), Color32::from_rgb(100, 255, 200)),
+                                    CellValue::Date(d) => {
+                                        (d.clone(), Color32::from_rgb(200, 180, 255))
+                                    }
+                                    CellValue::Currency(symbol, amount) => (
+                                        format!("{}{:.2}", symbol, amount),
+                                        Color32::from_rgb(100, 255, 200),
+                                    ),
                                 };
-                                
+
                                 if !text.is_empty() {
                                     // Clip text to cell
-                                    let text_pos = egui::pos2(
-                                        cell_rect.left() + 4.0,
-                                        cell_rect.center().y,
-                                    );
-                                    
+                                    let text_pos =
+                                        egui::pos2(cell_rect.left() + 4.0, cell_rect.center().y);
+
                                     painter.text(
                                         text_pos,
                                         egui::Align2::LEFT_CENTER,
@@ -308,7 +336,7 @@ impl SpreadsheetViewer {
                                 }
                             }
                         }
-                        
+
                         // Handle click
                         if response.clicked() {
                             if let Some(pos) = response.interact_pointer_pos() {
@@ -321,7 +349,7 @@ impl SpreadsheetViewer {
                 }
             });
     }
-    
+
     fn render_sheet_tabs(&mut self, ui: &mut egui::Ui, spreadsheet: &SpreadsheetContent) {
         egui::TopBottomPanel::bottom("sheet_tabs")
             .resizable(false)
@@ -353,12 +381,18 @@ impl SpreadsheetViewer {
         }
 
         // Handle simple arithmetic
-        if formula.contains('+') || formula.contains('-') || formula.contains('*') || formula.contains('/') {
+        if formula.contains('+')
+            || formula.contains('-')
+            || formula.contains('*')
+            || formula.contains('/')
+        {
             return Self::evaluate_arithmetic(formula, sheet);
         }
 
         // Try to parse as number
-        formula.parse::<f64>().map_err(|_| format!("Invalid formula: {}", formula))
+        formula
+            .parse::<f64>()
+            .map_err(|_| format!("Invalid formula: {}", formula))
     }
 
     fn evaluate_function(formula: &str, sheet: &Sheet) -> Result<f64, String> {
@@ -458,7 +492,9 @@ impl SpreadsheetViewer {
             }
             "IF" => {
                 if args.len() != 3 {
-                    return Err("IF requires 3 arguments: condition, true_value, false_value".to_string());
+                    return Err(
+                        "IF requires 3 arguments: condition, true_value, false_value".to_string(),
+                    );
                 }
                 let condition = Self::evaluate_formula(args[0], sheet)?;
                 if condition != 0.0 {
@@ -585,7 +621,8 @@ impl SpreadsheetViewer {
             } else if let Some(val) = Self::parse_cell_reference(&part, sheet) {
                 val
             } else {
-                part.parse::<f64>().map_err(|_| format!("Invalid number: {}", part))?
+                part.parse::<f64>()
+                    .map_err(|_| format!("Invalid number: {}", part))?
             };
 
             if op == '+' {
@@ -608,7 +645,9 @@ impl SpreadsheetViewer {
                 let value = if let Some(val) = Self::parse_cell_reference(&current_num, sheet) {
                     val
                 } else {
-                    current_num.parse::<f64>().map_err(|_| format!("Invalid number: {}", current_num))?
+                    current_num
+                        .parse::<f64>()
+                        .map_err(|_| format!("Invalid number: {}", current_num))?
                 };
 
                 result = Some(if let Some(r) = result {
@@ -633,7 +672,9 @@ impl SpreadsheetViewer {
             let value = if let Some(val) = Self::parse_cell_reference(&current_num, sheet) {
                 val
             } else {
-                current_num.parse::<f64>().map_err(|_| format!("Invalid number: {}", current_num))?
+                current_num
+                    .parse::<f64>()
+                    .map_err(|_| format!("Invalid number: {}", current_num))?
             };
 
             result = Some(if let Some(r) = result {
@@ -654,7 +695,7 @@ impl SpreadsheetViewer {
 fn column_name(col: usize) -> String {
     let mut name = String::new();
     let mut n = col;
-    
+
     loop {
         name.insert(0, (b'A' + (n % 26) as u8) as char);
         if n < 26 {
@@ -662,7 +703,7 @@ fn column_name(col: usize) -> String {
         }
         n = n / 26 - 1;
     }
-    
+
     name
 }
 
@@ -672,6 +713,9 @@ fn format_number(n: f64) -> String {
     } else if n.abs() < 0.0001 || n.abs() >= 1e10 {
         format!("{:.2e}", n)
     } else {
-        format!("{:.4}", n).trim_end_matches('0').trim_end_matches('.').to_string()
+        format!("{:.4}", n)
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string()
     }
 }

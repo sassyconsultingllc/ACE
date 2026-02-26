@@ -198,10 +198,18 @@ impl BehavioralMimicLevel4 {
         let curve_pos = (t * (curve_len - 1) as f32) as usize;
         let velocity_factor = self.mouse.velocity_curve[curve_pos.min(curve_len - 1)];
 
-        let jitter_x = self.rng.gen_range(-self.mouse.micro_jitter..self.mouse.micro_jitter);
-        let jitter_y = self.rng.gen_range(-self.mouse.micro_jitter..self.mouse.micro_jitter);
-        let deviation_x = self.rng.gen_range(-self.mouse.path_deviation..self.mouse.path_deviation);
-        let deviation_y = self.rng.gen_range(-self.mouse.path_deviation..self.mouse.path_deviation);
+        let jitter_x = self
+            .rng
+            .gen_range(-self.mouse.micro_jitter..self.mouse.micro_jitter);
+        let jitter_y = self
+            .rng
+            .gen_range(-self.mouse.micro_jitter..self.mouse.micro_jitter);
+        let deviation_x = self
+            .rng
+            .gen_range(-self.mouse.path_deviation..self.mouse.path_deviation);
+        let deviation_y = self
+            .rng
+            .gen_range(-self.mouse.path_deviation..self.mouse.path_deviation);
 
         let poisoned_dx = raw_dx * velocity_factor + jitter_x + deviation_x;
         let poisoned_dy = raw_dy * velocity_factor + jitter_y + deviation_y;
@@ -219,8 +227,7 @@ impl BehavioralMimicLevel4 {
     /// decay profile, and jitter is added.
     pub fn mimic_scroll_delta(&mut self, raw_delta: f32) -> f32 {
         let profile_len = self.scroll.inertia_profile.len();
-        let profile_pos =
-            (self.rng.gen_range(0.0..1.0f32) * (profile_len - 1) as f32) as usize;
+        let profile_pos = (self.rng.gen_range(0.0..1.0f32) * (profile_len - 1) as f32) as usize;
         let inertia = self.scroll.inertia_profile[profile_pos.min(profile_len - 1)];
         let jitter = self
             .rng
@@ -237,11 +244,7 @@ impl BehavioralMimicLevel4 {
     /// in milliseconds that should elapse before injecting it.
     ///
     /// Returns `('\x08', delay)` when simulating a typo-correction backspace.
-    pub fn mimic_typing_char(
-        &mut self,
-        target: &str,
-        current_pos: usize,
-    ) -> (Option<char>, u64) {
+    pub fn mimic_typing_char(&mut self, target: &str, current_pos: usize) -> (Option<char>, u64) {
         if current_pos >= target.len() {
             return (None, 0);
         }
@@ -439,7 +442,10 @@ mod tests {
         let mut mimic = BehavioralMimicLevel4::new(42, None);
         let (_, delay) = mimic.mimic_typing_char("x", 0);
         // delay = base (40..200) + jitter (0..40), so range is [40, 240).
-        assert!(delay >= 40 && delay < 240, "Delay should be in expected range");
+        assert!(
+            delay >= 40 && delay < 240,
+            "Delay should be in expected range"
+        );
     }
 
     // -- poison evolution -----------------------------------------------------

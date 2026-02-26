@@ -31,14 +31,14 @@
 //!        3 meaningful interactions first.
 //!        Most spam sites never get there.
 
-pub mod quarantine;
+pub mod network;
 pub mod page;
 pub mod popup;
-pub mod network;
+pub mod quarantine;
 
+pub use page::{Interaction, PageTrust, SandboxManager};
+pub use popup::{PopupDecision, PopupHandler, PopupRequest};
 pub use quarantine::{Quarantine, QuarantinedFile, ReleaseStatus, WarningLevel};
-pub use page::{PageTrust, SandboxManager, Interaction};
-pub use popup::{PopupHandler, PopupRequest, PopupDecision};
 
 pub type Warning = quarantine::Warning;
 pub type PageSandbox = page::PageSandbox;
@@ -62,15 +62,15 @@ impl TrustLevel {
     pub fn can_execute(&self) -> bool {
         *self >= TrustLevel::Approved
     }
-    
+
     pub fn can_write_filesystem(&self) -> bool {
         *self >= TrustLevel::Approved
     }
-    
+
     pub fn can_access_network(&self) -> bool {
         *self >= TrustLevel::Established
     }
-    
+
     pub fn description(&self) -> &'static str {
         match self {
             TrustLevel::Untrusted => "Untrusted - Just loaded",
@@ -152,11 +152,11 @@ impl SecurityContext {
     pub fn new(origin: String, content_type: ContentType) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         origin.hash(&mut hasher);
         std::time::SystemTime::now().hash(&mut hasher);
-        
+
         Self {
             id: format!("ctx_{:016x}", hasher.finish()),
             origin,
@@ -168,34 +168,36 @@ impl SecurityContext {
             last_interaction: None,
         }
     }
-    
+
     pub fn record_interaction(&mut self, action: InteractionType) {
         let now = Instant::now();
-        
+
         if let Some(last) = self.last_interaction {
             if now.duration_since(last) < Duration::from_millis(500) {
-                self.record_violation(
-                    "Interactions too rapid",
-                    ViolationSeverity::Medium,
-                );
+                self.record_violation("Interactions too rapid", ViolationSeverity::Medium);
                 return;
             }
         }
-        
+
         self.interactions.push(InteractionRecord {
             action,
             timestamp: now,
         });
         self.last_interaction = Some(now);
-        
-        let meaningful = self.interactions.iter()
-            .filter(|i| matches!(i.action, 
-                InteractionType::Acknowledge | 
-                InteractionType::Review | 
-                InteractionType::Approve
-            ))
+
+        let meaningful = self
+            .interactions
+            .iter()
+            .filter(|i| {
+                matches!(
+                    i.action,
+                    InteractionType::Acknowledge
+                        | InteractionType::Review
+                        | InteractionType::Approve
+                )
+            })
             .count();
-        
+
         self.trust_level = match meaningful {
             0 => TrustLevel::Untrusted,
             1 => TrustLevel::Acknowledged,
@@ -204,14 +206,14 @@ impl SecurityContext {
             _ => TrustLevel::Established,
         };
     }
-    
+
     pub fn record_violation(&mut self, description: &str, severity: ViolationSeverity) {
         self.violations.push(Violation {
             description: description.to_string(),
             severity,
             timestamp: Instant::now(),
         });
-        
+
         match severity {
             ViolationSeverity::Critical | ViolationSeverity::High => {
                 self.trust_level = TrustLevel::Untrusted;
@@ -224,7 +226,7 @@ impl SecurityContext {
             _ => {}
         }
     }
-    
+
     pub fn meets_time_requirement(&self) -> bool {
         self.created_at.elapsed() >= Duration::from_secs(5)
     }
@@ -233,37 +235,52 @@ impl SecurityContext {
     pub fn interaction_for(action: &str) -> InteractionType {
         match action {
             "approve" => InteractionType::Approve,
-            "review"  => InteractionType::Review,
-            "ack"     => InteractionType::Acknowledge,
+            "review" => InteractionType::Review,
+            "ack" => InteractionType::Acknowledge,
             "execute" => InteractionType::Execute,
-            "deny"    => InteractionType::Deny,
-            _         => InteractionType::Acknowledge,
+            "deny" => InteractionType::Deny,
+            _ => InteractionType::Acknowledge,
         }
     }
 
     /// Human-readable summary of this context's current state
     pub fn describe(&self) -> String {
-        let time_ok = if self.meets_time_requirement() { "met" } else { "pending" };
-        let last_action = self.interactions.last().map(|i| {
-            let action_name = match i.action {
-                InteractionType::Acknowledge => "ack",
-                InteractionType::Review => "review",
-                InteractionType::Approve => "approve",
-                InteractionType::Execute => "exec",
-                InteractionType::Deny => "deny",
-            };
-            format!("{}@{:?}", action_name, i.timestamp.elapsed())
-        }).unwrap_or_default();
-        let last_violation = self.violations.last().map(|v| {
-            let sev = match v.severity {
-                ViolationSeverity::Low => "low",
-                ViolationSeverity::Medium => "med",
-                ViolationSeverity::High => "high",
-                ViolationSeverity::Critical => "crit",
-            };
-            format!("{}({})@{:?}", v.description, sev, v.timestamp.elapsed())
-        }).unwrap_or_default();
-        let last_int_ago = self.last_interaction.map(|t| format!("{:?}", t.elapsed())).unwrap_or_default();
+        let time_ok = if self.meets_time_requirement() {
+            "met"
+        } else {
+            "pending"
+        };
+        let last_action = self
+            .interactions
+            .last()
+            .map(|i| {
+                let action_name = match i.action {
+                    InteractionType::Acknowledge => "ack",
+                    InteractionType::Review => "review",
+                    InteractionType::Approve => "approve",
+                    InteractionType::Execute => "exec",
+                    InteractionType::Deny => "deny",
+                };
+                format!("{}@{:?}", action_name, i.timestamp.elapsed())
+            })
+            .unwrap_or_default();
+        let last_violation = self
+            .violations
+            .last()
+            .map(|v| {
+                let sev = match v.severity {
+                    ViolationSeverity::Low => "low",
+                    ViolationSeverity::Medium => "med",
+                    ViolationSeverity::High => "high",
+                    ViolationSeverity::Critical => "crit",
+                };
+                format!("{}({})@{:?}", v.description, sev, v.timestamp.elapsed())
+            })
+            .unwrap_or_default();
+        let last_int_ago = self
+            .last_interaction
+            .map(|t| format!("{:?}", t.elapsed()))
+            .unwrap_or_default();
         let content = format!("{:?}", self.content_type);
         let age = format!("{:?}", self.created_at.elapsed());
         format!(

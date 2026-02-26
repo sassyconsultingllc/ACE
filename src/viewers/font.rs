@@ -24,19 +24,25 @@ impl FontViewer {
             custom_text_mode: false,
         }
     }
-    
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
+
+    pub fn render(
+        &mut self,
+        ui: &mut egui::Ui,
+        file: &OpenFile,
+        zoom: f32,
+        icons: &crate::icons::Icons,
+    ) {
         if let FileContent::Font(font) = &file.content {
             self.render_toolbar(ui, font, icons);
             ui.separator();
-            
+
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     self.render_font_info(ui, font);
                     ui.separator();
                     self.render_preview(ui, font, zoom);
-                    
+
                     if self.show_charset {
                         ui.separator();
                         self.render_character_map(ui, font, zoom);
@@ -48,8 +54,13 @@ impl FontViewer {
             });
         }
     }
-    
-    fn render_toolbar(&mut self, ui: &mut egui::Ui, font: &FontContent, icons: &crate::icons::Icons) {
+
+    fn render_toolbar(
+        &mut self,
+        ui: &mut egui::Ui,
+        font: &FontContent,
+        icons: &crate::icons::Icons,
+    ) {
         ui.horizontal(|ui| {
             // View mode
             icons.inline(ui, "file-text");
@@ -57,54 +68,74 @@ impl FontViewer {
                 self.show_charset = false;
             }
             icons.inline(ui, "grid");
-            if ui.selectable_label(self.show_charset, "Character Map").clicked() {
+            if ui
+                .selectable_label(self.show_charset, "Character Map")
+                .clicked()
+            {
                 self.show_charset = true;
             }
-            
+
             ui.separator();
-            
+
             // Preview size
             ui.label("Size:");
             egui::ComboBox::from_id_salt("font_size")
-                .selected_text(format!("{}pt", self.preview_sizes[self.selected_size] as u32))
+                .selected_text(format!(
+                    "{}pt",
+                    self.preview_sizes[self.selected_size] as u32
+                ))
                 .show_ui(ui, |ui| {
                     for (idx, size) in self.preview_sizes.iter().enumerate() {
-                        if ui.selectable_label(idx == self.selected_size, format!("{}pt", *size as u32)).clicked() {
+                        if ui
+                            .selectable_label(
+                                idx == self.selected_size,
+                                format!("{}pt", *size as u32),
+                            )
+                            .clicked()
+                        {
                             self.selected_size = idx;
                         }
                     }
                 });
-            
+
             ui.separator();
-            
+
             icons.inline(ui, "pencil");
             ui.checkbox(&mut self.custom_text_mode, "Custom text");
-            
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // Weight and style badges
                 if font.is_italic {
                     ui.label(RichText::new("I").color(Color32::from_rgb(100, 200, 255)));
                 }
                 if font.weight >= 700 {
-                    ui.label(RichText::new("B").strong().color(Color32::from_rgb(255, 200, 100)));
+                    ui.label(
+                        RichText::new("B")
+                            .strong()
+                            .color(Color32::from_rgb(255, 200, 100)),
+                    );
                 }
                 if font.is_monospace {
                     ui.label(RichText::new("[X]¨").color(Color32::from_rgb(150, 255, 150)));
                 }
                 if font.is_variable {
-                    ui.label(RichText::new("VAR").small().color(Color32::from_rgb(255, 150, 255)));
+                    ui.label(
+                        RichText::new("VAR")
+                            .small()
+                            .color(Color32::from_rgb(255, 150, 255)),
+                    );
                 }
             });
         });
     }
-    
+
     fn render_font_info(&mut self, ui: &mut egui::Ui, font: &FontContent) {
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 ui.heading(RichText::new(&font.family_name).size(24.0));
                 ui.label(RichText::new(&font.subfamily).color(Color32::GRAY));
             });
-            
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
@@ -127,19 +158,19 @@ impl FontViewer {
             });
         });
     }
-    
+
     fn render_preview(&mut self, ui: &mut egui::Ui, font: &FontContent, zoom: f32) {
         ui.heading("Preview");
         ui.add_space(10.0);
-        
+
         if self.custom_text_mode {
             let size = self.preview_sizes[self.selected_size] * zoom;
-            
+
             ui.add(
                 egui::TextEdit::multiline(&mut self.preview_text)
                     .font(FontId::proportional(size))
                     .desired_width(f32::INFINITY)
-                    .desired_rows(5)
+                    .desired_rows(5),
             );
         } else {
             // Show at multiple sizes
@@ -148,53 +179,57 @@ impl FontViewer {
             let lowercase = "abcdefghijklmnopqrstuvwxyz";
             let numbers = "0123456789";
             let symbols = "!@#$%^&*()-=_+[]{}|;':\",./<>?";
-            
+
             // Large preview
             let large_size = 48.0 * zoom;
             ui.label(RichText::new(&font.family_name).size(large_size));
             ui.add_space(10.0);
-            
+
             // Pangram at various sizes
             for size in &[12.0, 16.0, 20.0, 24.0, 32.0] {
                 let scaled = size * zoom;
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("{}pt", *size as u32)).small().color(Color32::GRAY));
+                    ui.label(
+                        RichText::new(format!("{}pt", *size as u32))
+                            .small()
+                            .color(Color32::GRAY),
+                    );
                     ui.label(RichText::new(pangram).size(scaled));
                 });
             }
-            
+
             ui.add_space(20.0);
-            
+
             // Character sets
             let display_size = self.preview_sizes[self.selected_size] * zoom;
-            
+
             ui.label(RichText::new("Uppercase").small().color(Color32::GRAY));
             ui.label(RichText::new(uppercase).size(display_size));
-            
+
             ui.add_space(10.0);
-            
+
             ui.label(RichText::new("Lowercase").small().color(Color32::GRAY));
             ui.label(RichText::new(lowercase).size(display_size));
-            
+
             ui.add_space(10.0);
-            
+
             ui.label(RichText::new("Numbers").small().color(Color32::GRAY));
             ui.label(RichText::new(numbers).size(display_size));
-            
+
             ui.add_space(10.0);
-            
+
             ui.label(RichText::new("Symbols").small().color(Color32::GRAY));
             ui.label(RichText::new(symbols).size(display_size));
         }
     }
-    
+
     fn render_character_map(&mut self, ui: &mut egui::Ui, _font: &FontContent, zoom: f32) {
         ui.heading("Character Map");
         ui.add_space(10.0);
-        
+
         ui.horizontal(|ui| {
             ui.label("Range:");
-            
+
             if ui.button("Basic Latin").clicked() {
                 self.charset_start = 0x20;
             }
@@ -213,22 +248,26 @@ impl FontViewer {
             if ui.button("Emoji").clicked() {
                 self.charset_start = 0x1F300;
             }
-            
+
             if ui.button("<").clicked() {
                 self.charset_start = self.charset_start.saturating_sub(256);
             }
             if ui.button(">").clicked() {
                 self.charset_start = self.charset_start.saturating_add(256);
             }
-            
-            ui.label(format!("U+{:04X} - U+{:04X}", self.charset_start, self.charset_start + 255));
+
+            ui.label(format!(
+                "U+{:04X} - U+{:04X}",
+                self.charset_start,
+                self.charset_start + 255
+            ));
         });
-        
+
         ui.add_space(10.0);
-        
+
         let cell_size = 32.0 * zoom;
         let font_size = 18.0 * zoom;
-        
+
         egui::Grid::new("charset_grid")
             .num_columns(16)
             .spacing([2.0, 2.0])
@@ -236,18 +275,18 @@ impl FontViewer {
                 for row in 0..16 {
                     for col in 0..16 {
                         let codepoint = self.charset_start + (row * 16 + col);
-                        
+
                         let char_opt = char::from_u32(codepoint);
                         let display = char_opt
                             .filter(|c| !c.is_control())
                             .map(|c| c.to_string())
                             .unwrap_or_else(|| "·".into());
-                        
+
                         let response = ui.add_sized(
                             [cell_size, cell_size],
-                            egui::Button::new(RichText::new(&display).size(font_size))
+                            egui::Button::new(RichText::new(&display).size(font_size)),
                         );
-                        
+
                         response.on_hover_ui(|ui| {
                             ui.label(format!("U+{:04X}", codepoint));
                             if let Some(c) = char_opt {

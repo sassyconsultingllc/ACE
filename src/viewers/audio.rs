@@ -201,7 +201,11 @@ impl AudioViewer {
 
                 pb.sink = new_sink;
                 pb.position_offset = pos;
-                pb.started_at = if was_playing { Some(Instant::now()) } else { None };
+                pb.started_at = if was_playing {
+                    Some(Instant::now())
+                } else {
+                    None
+                };
                 self.is_playing = was_playing;
             }
         }
@@ -217,7 +221,13 @@ impl AudioViewer {
         }
     }
 
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, zoom: f32, icons: &crate::icons::Icons) {
+    pub fn render(
+        &mut self,
+        ui: &mut egui::Ui,
+        file: &OpenFile,
+        zoom: f32,
+        icons: &crate::icons::Icons,
+    ) {
         if let FileContent::Audio(audio) = &file.content {
             // Initialize playback if not done yet
             self.init_playback(&file.path);
@@ -278,9 +288,11 @@ impl AudioViewer {
                     // Playback error message
                     if let Some(err) = &self.playback_error {
                         ui.add_space(10.0);
-                        ui.label(RichText::new(format!("! {}", err))
-                            .color(Color32::from_rgb(255, 180, 80))
-                            .small());
+                        ui.label(
+                            RichText::new(format!("! {}", err))
+                                .color(Color32::from_rgb(255, 180, 80))
+                                .small(),
+                        );
                     }
 
                     ui.add_space(20.0);
@@ -293,7 +305,13 @@ impl AudioViewer {
         }
     }
 
-    fn render_album_art(&mut self, ui: &mut egui::Ui, audio: &AudioContent, zoom: f32, file_path: &std::path::Path) {
+    fn render_album_art(
+        &mut self,
+        ui: &mut egui::Ui,
+        audio: &AudioContent,
+        zoom: f32,
+        file_path: &std::path::Path,
+    ) {
         let art_size = 200.0 * zoom;
 
         ui.vertical_centered(|ui| {
@@ -311,10 +329,8 @@ impl AudioViewer {
                             let size = [rgba.width() as _, rgba.height() as _];
                             let pixels = rgba.as_flat_samples();
 
-                            let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                                size,
-                                pixels.as_slice(),
-                            );
+                            let color_image =
+                                egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
 
                             self.album_art_texture = Some(ui.ctx().load_texture(
                                 "album_art",
@@ -331,11 +347,9 @@ impl AudioViewer {
                 }
 
                 if let Some(texture) = &self.album_art_texture {
-                    egui::Frame::none()
-                        .rounding(8.0)
-                        .show(ui, |ui| {
-                            ui.add(egui::Image::new(texture).max_size(Vec2::splat(art_size)));
-                        });
+                    egui::Frame::none().rounding(8.0).show(ui, |ui| {
+                        ui.add(egui::Image::new(texture).max_size(Vec2::splat(art_size)));
+                    });
                 } else {
                     Self::render_placeholder_art(ui, art_size, zoom);
                 }
@@ -352,21 +366,22 @@ impl AudioViewer {
             .show(ui, |ui| {
                 ui.set_min_size(Vec2::splat(art_size));
                 ui.centered_and_justified(|ui| {
-                    ui.label(RichText::new("#").size(80.0 * zoom).color(Color32::from_rgb(100, 110, 130)));
+                    ui.label(
+                        RichText::new("#")
+                            .size(80.0 * zoom)
+                            .color(Color32::from_rgb(100, 110, 130)),
+                    );
                 });
             });
     }
 
     fn render_track_info(&self, ui: &mut egui::Ui, audio: &AudioContent) {
         ui.vertical_centered(|ui| {
-            let title = audio.title.as_deref()
-                .unwrap_or("Unknown Track");
+            let title = audio.title.as_deref().unwrap_or("Unknown Track");
 
-            let artist = audio.artist.as_deref()
-                .unwrap_or("Unknown Artist");
+            let artist = audio.artist.as_deref().unwrap_or("Unknown Artist");
 
-            let album = audio.album.as_deref()
-                .unwrap_or("");
+            let album = audio.album.as_deref().unwrap_or("");
 
             ui.label(RichText::new(title).size(24.0).strong());
             ui.label(RichText::new(artist).size(16.0).color(Color32::GRAY));
@@ -377,27 +392,46 @@ impl AudioViewer {
                 } else {
                     album.to_string()
                 };
-                ui.label(RichText::new(album_text).size(14.0).color(Color32::from_rgb(100, 100, 120)));
+                ui.label(
+                    RichText::new(album_text)
+                        .size(14.0)
+                        .color(Color32::from_rgb(100, 100, 120)),
+                );
             }
 
             if let Some(track_num) = audio.track {
-                ui.label(RichText::new(format!("Track {}", track_num))
-                    .size(12.0).color(Color32::from_rgb(80, 80, 100)));
+                ui.label(
+                    RichText::new(format!("Track {}", track_num))
+                        .size(12.0)
+                        .color(Color32::from_rgb(80, 80, 100)),
+                );
             }
         });
     }
 
-    fn render_waveform(&mut self, ui: &mut egui::Ui, audio: &AudioContent, zoom: f32, file_path: &std::path::Path, duration: f64) {
+    fn render_waveform(
+        &mut self,
+        ui: &mut egui::Ui,
+        audio: &AudioContent,
+        zoom: f32,
+        file_path: &std::path::Path,
+        duration: f64,
+    ) {
         let width = ui.available_width();
         let height = 60.0 * zoom;
 
-        let (response, painter) = ui.allocate_painter(Vec2::new(width, height), egui::Sense::click());
+        let (response, painter) =
+            ui.allocate_painter(Vec2::new(width, height), egui::Sense::click());
 
         // Background
         painter.rect_filled(response.rect, 4.0, Color32::from_rgb(35, 40, 50));
 
         let has_real_waveform = !audio.waveform_data.is_empty();
-        let bar_count = if has_real_waveform { audio.waveform_data.len() } else { 100 };
+        let bar_count = if has_real_waveform {
+            audio.waveform_data.len()
+        } else {
+            100
+        };
         let bar_width = width / bar_count as f32;
         let progress_ratio = self.current_position / duration.max(1.0);
 
@@ -408,9 +442,11 @@ impl AudioViewer {
             let amplitude = if has_real_waveform {
                 audio.waveform_data[i].min(1.0) * height * 0.85
             } else {
-                ((i as f32 * 0.1).sin().abs() * 0.5 +
-                 (i as f32 * 0.23).cos().abs() * 0.3 +
-                 (i as f32 * 0.07).sin().abs() * 0.2) * height * 0.8
+                ((i as f32 * 0.1).sin().abs() * 0.5
+                    + (i as f32 * 0.23).cos().abs() * 0.3
+                    + (i as f32 * 0.07).sin().abs() * 0.2)
+                    * height
+                    * 0.8
             };
 
             let is_played = (i as f32 / bar_count as f32) < progress_ratio as f32;
@@ -433,7 +469,10 @@ impl AudioViewer {
         // Playhead line
         let playhead_x = response.rect.left() + (progress_ratio as f32) * width;
         painter.line_segment(
-            [Pos2::new(playhead_x, response.rect.top()), Pos2::new(playhead_x, response.rect.bottom())],
+            [
+                Pos2::new(playhead_x, response.rect.top()),
+                Pos2::new(playhead_x, response.rect.bottom()),
+            ],
             Stroke::new(2.0, Color32::from_rgb(255, 255, 255)),
         );
 
@@ -448,16 +487,26 @@ impl AudioViewer {
         }
     }
 
-    fn render_progress(&mut self, ui: &mut egui::Ui, _audio: &AudioContent, file_path: &std::path::Path, duration: f64) {
+    fn render_progress(
+        &mut self,
+        ui: &mut egui::Ui,
+        _audio: &AudioContent,
+        file_path: &std::path::Path,
+        duration: f64,
+    ) {
         ui.horizontal(|ui| {
             ui.label(RichText::new(format_duration(self.current_position)).monospace());
 
             let mut progress = (self.current_position / duration.max(1.0)) as f32;
 
-            if ui.add(egui::Slider::new(&mut progress, 0.0..=1.0)
-                .show_value(false)
-                .trailing_fill(true)
-            ).changed() {
+            if ui
+                .add(
+                    egui::Slider::new(&mut progress, 0.0..=1.0)
+                        .show_value(false)
+                        .trailing_fill(true),
+                )
+                .changed()
+            {
                 let new_pos = progress as f64 * duration;
                 let path = file_path.to_path_buf();
                 self.seek_to(new_pos, &path, duration);
@@ -467,7 +516,13 @@ impl AudioViewer {
         });
     }
 
-    fn render_controls(&mut self, ui: &mut egui::Ui, file_path: &std::path::Path, duration: f64, icons: &crate::icons::Icons) {
+    fn render_controls(
+        &mut self,
+        ui: &mut egui::Ui,
+        file_path: &std::path::Path,
+        duration: f64,
+        icons: &crate::icons::Icons,
+    ) {
         ui.horizontal(|ui| {
             ui.add_space((ui.available_width() - 250.0).max(0.0) / 2.0);
 
@@ -483,7 +538,12 @@ impl AudioViewer {
                 Color32::GRAY
             };
 
-            if ui.add(egui::Button::new(RichText::new(repeat_text).size(11.0).color(repeat_color))).clicked() {
+            if ui
+                .add(egui::Button::new(
+                    RichText::new(repeat_text).size(11.0).color(repeat_color),
+                ))
+                .clicked()
+            {
                 self.repeat_mode = match self.repeat_mode {
                     RepeatMode::None => RepeatMode::One,
                     RepeatMode::One => RepeatMode::All,
@@ -494,19 +554,33 @@ impl AudioViewer {
             ui.add_space(8.0);
 
             // Previous (restart)
-            if icons.button_sized(ui, "skip-start", "Restart", 20.0).clicked() {
+            if icons
+                .button_sized(ui, "skip-start", "Restart", 20.0)
+                .clicked()
+            {
                 let path = file_path.to_path_buf();
                 self.seek_to(0.0, &path, duration);
             }
 
             // Play/Pause
             let play_icon_name = if self.is_playing { "pause" } else { "play" };
-            if icons.button_sized(ui, play_icon_name, if self.is_playing { "Pause" } else { "Play" }, 32.0).clicked() {
+            if icons
+                .button_sized(
+                    ui,
+                    play_icon_name,
+                    if self.is_playing { "Pause" } else { "Play" },
+                    32.0,
+                )
+                .clicked()
+            {
                 self.toggle_play();
             }
 
             // Skip forward 10s
-            if icons.button_sized(ui, "skip-end", "Skip +10s", 20.0).clicked() {
+            if icons
+                .button_sized(ui, "skip-end", "Skip +10s", 20.0)
+                .clicked()
+            {
                 let new_pos = (self.current_position + 10.0).min(duration);
                 let path = file_path.to_path_buf();
                 self.seek_to(new_pos, &path, duration);
@@ -515,7 +589,10 @@ impl AudioViewer {
             ui.add_space(8.0);
 
             // Waveform toggle
-            if icons.button_sized(ui, "music-note", "Toggle waveform", 16.0).clicked() {
+            if icons
+                .button_sized(ui, "music-note", "Toggle waveform", 16.0)
+                .clicked()
+            {
                 self.show_waveform = !self.show_waveform;
             }
         });
@@ -534,15 +611,22 @@ impl AudioViewer {
                 "volume-high"
             };
 
-            if icons.button_sized(ui, volume_icon_name, if self.is_muted { "Unmute" } else { "Mute" }, 16.0).clicked() {
+            if icons
+                .button_sized(
+                    ui,
+                    volume_icon_name,
+                    if self.is_muted { "Unmute" } else { "Mute" },
+                    16.0,
+                )
+                .clicked()
+            {
                 self.is_muted = !self.is_muted;
                 self.update_volume();
             }
 
             // Volume slider
             let old_vol = self.volume;
-            ui.add(egui::Slider::new(&mut self.volume, 0.0..=1.0)
-                .show_value(false));
+            ui.add(egui::Slider::new(&mut self.volume, 0.0..=1.0).show_value(false));
 
             if (self.volume - old_vol).abs() > 0.001 {
                 self.update_volume();
@@ -605,16 +689,21 @@ impl AudioViewer {
                 // Playback status
                 ui.label(RichText::new("Playback").small().color(Color32::GRAY));
                 let status = if self.playback.is_some() {
-                    if self.is_playing { "> Playing" } else { "|| Paused" }
+                    if self.is_playing {
+                        "> Playing"
+                    } else {
+                        "|| Paused"
+                    }
                 } else if self.playback_error.is_some() {
                     "! Error"
                 } else {
                     "Stop Stopped"
                 };
-                ui.label(RichText::new(status).color(
-                    if self.is_playing { Color32::from_rgb(100, 255, 100) }
-                    else { Color32::GRAY }
-                ));
+                ui.label(RichText::new(status).color(if self.is_playing {
+                    Color32::from_rgb(100, 255, 100)
+                } else {
+                    Color32::GRAY
+                }));
             });
     }
 }

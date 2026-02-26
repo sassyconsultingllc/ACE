@@ -110,7 +110,11 @@ impl PrintDialog {
                 // Number of copies
                 ui.horizontal(|ui| {
                     ui.label("Copies:");
-                    ui.add(egui::DragValue::new(&mut self.settings.copies).speed(1).range(1..=99));
+                    ui.add(
+                        egui::DragValue::new(&mut self.settings.copies)
+                            .speed(1)
+                            .range(1..=99),
+                    );
                 });
 
                 ui.add_space(8.0);
@@ -180,7 +184,11 @@ impl PrintDialog {
                         self.settings.page_range = parse_page_range(&self.page_range_text);
                     }
                 });
-                ui.label(egui::RichText::new("(e.g., 'All', '1-5', '1,3,5')").small().weak());
+                ui.label(
+                    egui::RichText::new("(e.g., 'All', '1-5', '1,3,5')")
+                        .small()
+                        .weak(),
+                );
 
                 ui.add_space(8.0);
 
@@ -311,7 +319,9 @@ pub fn print_page(content: &[u8], settings: &PrintSettings) -> Result<(), String
     let mut y_pos = height_mm - margin_top.0 - font_size;
 
     // Load built-in font
-    let font = doc.add_builtin_font(BuiltinFont::Helvetica).map_err(|e| e.to_string())?;
+    let font = doc
+        .add_builtin_font(BuiltinFont::Helvetica)
+        .map_err(|e| e.to_string())?;
 
     // Split text into lines and render
     let lines: Vec<&str> = text.lines().collect();
@@ -327,8 +337,7 @@ pub fn print_page(content: &[u8], settings: &PrintSettings) -> Result<(), String
             // Check if we need a new page
             if y_pos < margin_bottom.0 + font_size {
                 // Add new page
-                let (new_page, new_layer) =
-                    doc.add_page(Mm(width_mm), Mm(height_mm), "Layer 1");
+                let (new_page, new_layer) = doc.add_page(Mm(width_mm), Mm(height_mm), "Layer 1");
                 current_layer_ref = doc.get_page(new_page).get_layer(new_layer);
                 y_pos = height_mm - margin_top.0 - font_size;
             }
@@ -353,8 +362,7 @@ pub fn print_page(content: &[u8], settings: &PrintSettings) -> Result<(), String
 
     // Open the PDF with system viewer
     let temp_path = std::env::temp_dir().join("sassy_print_output.pdf");
-    std::fs::write(&temp_path, buffer)
-        .map_err(|e| format!("Failed to write PDF file: {}", e))?;
+    std::fs::write(&temp_path, buffer).map_err(|e| format!("Failed to write PDF file: {}", e))?;
 
     // Try to open with system default
     if let Err(e) = open::that(&temp_path) {
@@ -435,7 +443,8 @@ pub fn generate_preview(content: &[u8], settings: &PrintSettings) -> Option<Vec<
     let height_px = (height_in * 72.0) as u32;
 
     // Create white background
-    let mut img: RgbaImage = ImageBuffer::from_pixel(width_px, height_px, Rgba([255, 255, 255, 255]));
+    let mut img: RgbaImage =
+        ImageBuffer::from_pixel(width_px, height_px, Rgba([255, 255, 255, 255]));
 
     // Calculate margins in pixels
     let margin_top = (settings.margins.top * 72.0) as i32;
@@ -525,12 +534,7 @@ pub fn generate_preview(content: &[u8], settings: &PrintSettings) -> Option<Vec<
     let mut buffer = Vec::new();
     let encoder = ::image::codecs::png::PngEncoder::new(&mut buffer);
     use ::image::ImageEncoder;
-    match encoder.write_image(
-        &img,
-        width_px,
-        height_px,
-        ::image::ExtendedColorType::Rgba8,
-    ) {
+    match encoder.write_image(&img, width_px, height_px, ::image::ExtendedColorType::Rgba8) {
         Ok(_) => Some(buffer),
         Err(_) => None,
     }

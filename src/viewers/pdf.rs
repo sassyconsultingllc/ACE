@@ -64,11 +64,22 @@ struct EmbeddedImage {
 #[derive(Debug, Clone)]
 enum GraphicPrimitive {
     /// Stroked rectangle
-    StrokeRect { rect: [f32; 4], color: [f32; 3], width: f32 },
+    StrokeRect {
+        rect: [f32; 4],
+        color: [f32; 3],
+        width: f32,
+    },
     /// Filled rectangle
     FillRect { rect: [f32; 4], color: [f32; 3] },
     /// Line segment
-    Line { x1: f32, y1: f32, x2: f32, y2: f32, color: [f32; 3], width: f32 },
+    Line {
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        color: [f32; 3],
+        width: f32,
+    },
 }
 
 // ==============================================================================
@@ -98,8 +109,18 @@ pub struct PdfPage {
 
 #[derive(Debug, Clone)]
 pub enum Annotation {
-    Highlight { page: usize, start: usize, end: usize, color: Color32 },
-    Note { page: usize, position: Pos2, text: String, color: Color32 },
+    Highlight {
+        page: usize,
+        start: usize,
+        end: usize,
+        color: Color32,
+    },
+    Note {
+        page: usize,
+        position: Pos2,
+        text: String,
+        color: Color32,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -251,11 +272,20 @@ impl PdfViewer {
         }
     }
 
-    fn extract_page_dimensions(&self, doc: &lopdf::Document, page_id: lopdf::ObjectId, page: &mut PdfPage) {
+    fn extract_page_dimensions(
+        &self,
+        doc: &lopdf::Document,
+        page_id: lopdf::ObjectId,
+        page: &mut PdfPage,
+    ) {
         if let Ok(page_dict) = doc.get_dictionary(page_id) {
             // Try CropBox first, then MediaBox
             // use byte-slices so both branches have the same type (&[u8])
-            let box_key: &[u8] = if page_dict.has(b"CropBox") { &b"CropBox"[..] } else { &b"MediaBox"[..] };
+            let box_key: &[u8] = if page_dict.has(b"CropBox") {
+                &b"CropBox"[..]
+            } else {
+                &b"MediaBox"[..]
+            };
 
             if let Ok(obj) = page_dict.get(box_key) {
                 if let Ok(arr) = obj.as_array() {
@@ -278,7 +308,12 @@ impl PdfViewer {
         }
     }
 
-    fn extract_positioned_text(&self, doc: &lopdf::Document, page_id: lopdf::ObjectId, page: &mut PdfPage) {
+    fn extract_positioned_text(
+        &self,
+        doc: &lopdf::Document,
+        page_id: lopdf::ObjectId,
+        page: &mut PdfPage,
+    ) {
         let content_data = match doc.get_page_content(page_id) {
             Ok(data) => data,
             Err(_) => return,
@@ -330,7 +365,9 @@ impl PdfViewer {
                     }
                     if let Some(size) = op.operands.get(1) {
                         font_size = Self::obj_to_f32(size).unwrap_or(12.0).abs();
-                        if font_size < 1.0 { font_size = 12.0; }
+                        if font_size < 1.0 {
+                            font_size = 12.0;
+                        }
                     }
                 }
                 "Tm" if in_text => {
@@ -370,9 +407,8 @@ impl PdfViewer {
                     if let Some(operand) = op.operands.first() {
                         let text = self.extract_text_from_operand(operand);
                         if !text.is_empty() {
-                            let (bold, italic) = font_flags.get(&font_key)
-                                .copied()
-                                .unwrap_or((false, false));
+                            let (bold, italic) =
+                                font_flags.get(&font_key).copied().unwrap_or((false, false));
                             page.text_elements.push(TextElement {
                                 text: text.clone(),
                                 x: current_x,
@@ -414,9 +450,8 @@ impl PdfViewer {
                                 }
                             }
                             if !combined.is_empty() {
-                                let (bold, italic) = font_flags.get(&font_key)
-                                    .copied()
-                                    .unwrap_or((false, false));
+                                let (bold, italic) =
+                                    font_flags.get(&font_key).copied().unwrap_or((false, false));
                                 page.text_elements.push(TextElement {
                                     text: combined.clone(),
                                     x: current_x,
@@ -439,9 +474,8 @@ impl PdfViewer {
                     if let Some(operand) = op.operands.first() {
                         let text = self.extract_text_from_operand(operand);
                         if !text.is_empty() {
-                            let (bold, italic) = font_flags.get(&font_key)
-                                .copied()
-                                .unwrap_or((false, false));
+                            let (bold, italic) =
+                                font_flags.get(&font_key).copied().unwrap_or((false, false));
                             page.text_elements.push(TextElement {
                                 text,
                                 x: current_x,
@@ -484,7 +518,12 @@ impl PdfViewer {
         }
     }
 
-    fn extract_page_images(&self, doc: &lopdf::Document, page_id: lopdf::ObjectId, page: &mut PdfPage) {
+    fn extract_page_images(
+        &self,
+        doc: &lopdf::Document,
+        page_id: lopdf::ObjectId,
+        page: &mut PdfPage,
+    ) {
         if let Ok(images) = doc.get_page_images(page_id) {
             for pdf_img in &images {
                 // Try to decode the image data
@@ -495,10 +534,16 @@ impl PdfViewer {
         }
     }
 
-    fn decode_pdf_image(&self, img: &lopdf::xobject::PdfImage, _page: &PdfPage) -> Option<EmbeddedImage> {
+    fn decode_pdf_image(
+        &self,
+        img: &lopdf::xobject::PdfImage,
+        _page: &PdfPage,
+    ) -> Option<EmbeddedImage> {
         let width = img.width as u32;
         let height = img.height as u32;
-        if width == 0 || height == 0 { return None; }
+        if width == 0 || height == 0 {
+            return None;
+        }
 
         let filters: Vec<String> = img.filters.clone().unwrap_or_default();
         let content = img.content;
@@ -534,7 +579,14 @@ impl PdfViewer {
         })
     }
 
-    fn raw_to_rgba(&self, data: &[u8], width: u32, height: u32, _bpc: u32, color_space: &str) -> Option<Vec<u8>> {
+    fn raw_to_rgba(
+        &self,
+        data: &[u8],
+        width: u32,
+        height: u32,
+        _bpc: u32,
+        color_space: &str,
+    ) -> Option<Vec<u8>> {
         let pixel_count = (width * height) as usize;
 
         match color_space {
@@ -591,7 +643,12 @@ impl PdfViewer {
         }
     }
 
-    fn extract_graphics(&self, doc: &lopdf::Document, page_id: lopdf::ObjectId, page: &mut PdfPage) {
+    fn extract_graphics(
+        &self,
+        doc: &lopdf::Document,
+        page_id: lopdf::ObjectId,
+        page: &mut PdfPage,
+    ) {
         let content_data = match doc.get_page_content(page_id) {
             Ok(data) => data,
             Err(_) => return,
@@ -674,8 +731,10 @@ impl PdfViewer {
                         let x2 = Self::obj_to_f32(&op.operands[0]).unwrap_or(0.0);
                         let y2 = Self::obj_to_f32(&op.operands[1]).unwrap_or(0.0);
                         page.graphics.push(GraphicPrimitive::Line {
-                            x1: current_x, y1: current_y,
-                            x2, y2,
+                            x1: current_x,
+                            y1: current_y,
+                            x2,
+                            y2,
                             color: stroke_color,
                             width: line_width,
                         });
@@ -722,8 +781,10 @@ impl PdfViewer {
                         || (current_y - path_start_y).abs() > 0.01
                     {
                         page.graphics.push(GraphicPrimitive::Line {
-                            x1: current_x, y1: current_y,
-                            x2: path_start_x, y2: path_start_y,
+                            x1: current_x,
+                            y1: current_y,
+                            x2: path_start_x,
+                            y2: path_start_y,
                             color: stroke_color,
                             width: line_width,
                         });
@@ -763,7 +824,8 @@ impl PdfViewer {
     fn decode_pdf_string(&self, bytes: &[u8]) -> String {
         // Try UTF-16BE first (PDF text strings starting with BOM)
         if bytes.len() >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF {
-            let chars: Vec<u16> = bytes[2..].chunks_exact(2)
+            let chars: Vec<u16> = bytes[2..]
+                .chunks_exact(2)
                 .map(|c| u16::from_be_bytes([c[0], c[1]]))
                 .collect();
             return String::from_utf16_lossy(&chars);
@@ -794,7 +856,9 @@ impl PdfViewer {
     fn distribute_search_text(&mut self, full_text: &str) {
         // Distribute extracted text across pages for search
         let total_chars = full_text.len();
-        if self.total_pages == 0 { return; }
+        if self.total_pages == 0 {
+            return;
+        }
         let chars_per_page = total_chars / self.total_pages.max(1);
         let chars: Vec<char> = full_text.chars().collect();
 
@@ -883,7 +947,13 @@ impl PdfViewer {
     // RENDERING
     // ==============================================================================
 
-    pub fn render(&mut self, ui: &mut egui::Ui, file: &OpenFile, global_zoom: f32, icons: &crate::icons::Icons) {
+    pub fn render(
+        &mut self,
+        ui: &mut egui::Ui,
+        file: &OpenFile,
+        global_zoom: f32,
+        icons: &crate::icons::Icons,
+    ) {
         // Load PDF if needed
         if self.pdf_data.is_none() || self.pages.is_empty() {
             if let FileContent::Binary(data) = &file.content {
@@ -944,13 +1014,15 @@ impl PdfViewer {
             let resp = ui.add(egui::TextEdit::singleline(&mut page_str).desired_width(40.0));
             if resp.lost_focus() {
                 if let Ok(p) = page_str.parse::<usize>() {
-                    self.current_page = (p.saturating_sub(1)).min(self.total_pages.saturating_sub(1));
+                    self.current_page =
+                        (p.saturating_sub(1)).min(self.total_pages.saturating_sub(1));
                 }
             }
             ui.label(format!("/ {}", self.total_pages));
 
             if icons.button(ui, "arrow-right", "Next page").clicked()
-                && self.current_page + 1 < self.total_pages {
+                && self.current_page + 1 < self.total_pages
+            {
                 self.current_page += 1;
             }
             if icons.button(ui, "skip-end", "Last page").clicked() {
@@ -994,7 +1066,7 @@ impl PdfViewer {
                 let resp = ui.add(
                     egui::TextEdit::singleline(&mut self.search_query)
                         .hint_text("Search...")
-                        .desired_width(150.0)
+                        .desired_width(150.0),
                 );
                 if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     let q = self.search_query.clone();
@@ -1002,9 +1074,17 @@ impl PdfViewer {
                 }
 
                 if !self.search_results.is_empty() {
-                    if icons.button(ui, "arrow-down", "Next result").clicked() { self.next_search_result(); }
-                    if icons.button(ui, "arrow-up", "Previous result").clicked() { self.prev_search_result(); }
-                    ui.label(format!("{}/{}", self.current_search_index + 1, self.search_results.len()));
+                    if icons.button(ui, "arrow-down", "Next result").clicked() {
+                        self.next_search_result();
+                    }
+                    if icons.button(ui, "arrow-up", "Previous result").clicked() {
+                        self.prev_search_result();
+                    }
+                    ui.label(format!(
+                        "{}/{}",
+                        self.current_search_index + 1,
+                        self.search_results.len()
+                    ));
                 }
             });
         });
@@ -1067,15 +1147,21 @@ impl PdfViewer {
                         let text_width = elem.text.len() as f32 * elem.font_size * 0.3 * scale;
                         let text_height = (elem.font_size * scale).max(1.0).min(3.0);
 
-                        if tx >= page_rect.left() && tx < page_rect.right()
-                            && ty >= page_rect.top() && ty < page_rect.bottom()
+                        if tx >= page_rect.left()
+                            && tx < page_rect.right()
+                            && ty >= page_rect.top()
+                            && ty < page_rect.bottom()
                         {
                             let line_rect = Rect::from_min_size(
                                 Pos2::new(tx, ty),
                                 Vec2::new(text_width.min(page_rect.right() - tx), text_height),
                             );
                             let shade = 80 + (idx as u8 % 6) * 4;
-                            ui.painter().rect_filled(line_rect, 0.0, Color32::from_rgb(shade, shade, shade));
+                            ui.painter().rect_filled(
+                                line_rect,
+                                0.0,
+                                Color32::from_rgb(shade, shade, shade),
+                            );
                         }
                     }
 
@@ -1084,13 +1170,20 @@ impl PdfViewer {
                         let line_count = page.text.lines().count().min(20);
                         for line_idx in 0..line_count {
                             let ly = page_rect.top() + 4.0 + line_idx as f32 * 4.0;
-                            if ly + 2.0 > page_rect.bottom() { break; }
-                            let lw = (thumb_width - 20.0) * (0.6 + ((line_idx * 7) % 4) as f32 * 0.1);
+                            if ly + 2.0 > page_rect.bottom() {
+                                break;
+                            }
+                            let lw =
+                                (thumb_width - 20.0) * (0.6 + ((line_idx * 7) % 4) as f32 * 0.1);
                             let line_rect = Rect::from_min_size(
                                 Pos2::new(page_rect.left() + 4.0, ly),
                                 Vec2::new(lw, 2.0),
                             );
-                            ui.painter().rect_filled(line_rect, 0.0, Color32::from_rgb(180, 180, 190));
+                            ui.painter().rect_filled(
+                                line_rect,
+                                0.0,
+                                Color32::from_rgb(180, 180, 190),
+                            );
                         }
                     }
                 }
@@ -1102,7 +1195,11 @@ impl PdfViewer {
                     egui::Align2::CENTER_CENTER,
                     format!("{}", i + 1),
                     FontId::proportional(10.0),
-                    if is_current { Color32::from_rgb(100, 180, 255) } else { Color32::GRAY },
+                    if is_current {
+                        Color32::from_rgb(100, 180, 255)
+                    } else {
+                        Color32::GRAY
+                    },
                 );
 
                 ui.add_space(4.0);
@@ -1229,7 +1326,9 @@ impl PdfViewer {
                         (color[2] * 255.0) as u8,
                     );
                     // Skip white/near-white fills that would be invisible
-                    if color[0] > 0.98 && color[1] > 0.98 && color[2] > 0.98 { continue; }
+                    if color[0] > 0.98 && color[1] > 0.98 && color[2] > 0.98 {
+                        continue;
+                    }
 
                     let r = Rect::from_min_size(
                         Pos2::new(
@@ -1262,7 +1361,14 @@ impl PdfViewer {
                         painter.rect_stroke(r, 0.0, Stroke::new(*width * zoom, c));
                     }
                 }
-                GraphicPrimitive::Line { x1, y1, x2, y2, color, width } => {
+                GraphicPrimitive::Line {
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    color,
+                    width,
+                } => {
                     let c = Color32::from_rgb(
                         (color[0] * 255.0) as u8,
                         (color[1] * 255.0) as u8,
@@ -1282,18 +1388,29 @@ impl PdfViewer {
         }
     }
 
-    fn paint_images(&mut self, ui: &egui::Ui, painter: &egui::Painter, page: &PdfPage, page_rect: Rect, zoom: f32) {
+    fn paint_images(
+        &mut self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        page: &PdfPage,
+        page_rect: Rect,
+        zoom: f32,
+    ) {
         for (img_idx, img) in page.images.iter().enumerate() {
             let tex_key = format!("pdf_img_{}_{}", page.page_num, img_idx);
 
             // Create or reuse texture
-            let texture = self.image_textures.entry(tex_key.clone()).or_insert_with(|| {
-                let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                    [img.width as usize, img.height as usize],
-                    &img.rgba_data,
-                );
-                ui.ctx().load_texture(&tex_key, color_image, egui::TextureOptions::LINEAR)
-            });
+            let texture = self
+                .image_textures
+                .entry(tex_key.clone())
+                .or_insert_with(|| {
+                    let color_image = egui::ColorImage::from_rgba_unmultiplied(
+                        [img.width as usize, img.height as usize],
+                        &img.rgba_data,
+                    );
+                    ui.ctx()
+                        .load_texture(&tex_key, color_image, egui::TextureOptions::LINEAR)
+                });
 
             // Position the image on the page
             let img_width = img.display_width * zoom;
@@ -1311,20 +1428,30 @@ impl PdfViewer {
                 page_rect.top() + 20.0 * zoom
             };
 
-            let img_rect = Rect::from_min_size(
-                Pos2::new(ix, iy),
-                Vec2::new(img_width, img_height),
-            );
+            let img_rect = Rect::from_min_size(Pos2::new(ix, iy), Vec2::new(img_width, img_height));
 
-            painter.image(texture.id(), img_rect, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+            painter.image(
+                texture.id(),
+                img_rect,
+                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                Color32::WHITE,
+            );
         }
     }
 
-    fn paint_positioned_text(&self, painter: &egui::Painter, page: &PdfPage, page_rect: Rect, zoom: f32) {
+    fn paint_positioned_text(
+        &self,
+        painter: &egui::Painter,
+        page: &PdfPage,
+        page_rect: Rect,
+        zoom: f32,
+    ) {
         let page_h = page.height;
 
         for elem in &page.text_elements {
-            if elem.text.trim().is_empty() { continue; }
+            if elem.text.trim().is_empty() {
+                continue;
+            }
 
             let font_size = (elem.font_size * zoom).max(4.0).min(100.0);
 
@@ -1333,8 +1460,10 @@ impl PdfViewer {
             let screen_y = page_rect.top() + (page_h - elem.y) * zoom;
 
             // Skip if outside page bounds
-            if screen_x < page_rect.left() - 50.0 || screen_x > page_rect.right() + 50.0
-                || screen_y < page_rect.top() - 20.0 || screen_y > page_rect.bottom() + 20.0
+            if screen_x < page_rect.left() - 50.0
+                || screen_x > page_rect.right() + 50.0
+                || screen_y < page_rect.top() - 20.0
+                || screen_y > page_rect.bottom() + 20.0
             {
                 continue;
             }
@@ -1422,7 +1551,8 @@ impl PdfViewer {
     // ==============================================================================
 
     pub fn export_text(&self) -> String {
-        self.pages.iter()
+        self.pages
+            .iter()
             .map(|p| format!("=== Page {} ===\n{}\n", p.page_num + 1, p.text))
             .collect()
     }
@@ -1459,8 +1589,14 @@ mod tests {
 
     #[test]
     fn test_obj_to_f32() {
-        assert_eq!(PdfViewer::obj_to_f32(&lopdf::Object::Integer(42)), Some(42.0));
-        assert_eq!(PdfViewer::obj_to_f32(&lopdf::Object::Real(3.14)), Some(3.14));
+        assert_eq!(
+            PdfViewer::obj_to_f32(&lopdf::Object::Integer(42)),
+            Some(42.0)
+        );
+        assert_eq!(
+            PdfViewer::obj_to_f32(&lopdf::Object::Real(3.14)),
+            Some(3.14)
+        );
         assert_eq!(PdfViewer::obj_to_f32(&lopdf::Object::Boolean(true)), None);
     }
 }

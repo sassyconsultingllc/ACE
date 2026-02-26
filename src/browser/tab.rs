@@ -60,7 +60,7 @@ impl TabContent {
             favicon: None,
         }
     }
-    
+
     pub fn get_display_url(&self) -> String {
         match self {
             TabContent::Web { url, .. } => url.clone(),
@@ -102,19 +102,19 @@ impl Tab {
             input_handler: TabInputHandler::new(id.0 ^ 0xdeadbeef_cafebabe),
         }
     }
-    
+
     pub fn new_tab() -> Self {
         Self::new(TabContent::NewTab)
     }
-    
+
     pub fn web(url: impl Into<String>) -> Self {
         Self::new(TabContent::web(url))
     }
-    
+
     pub fn file(file: OpenFile) -> Self {
         Self::new(TabContent::File(Box::new(file)))
     }
-    
+
     /// Get the tab's display title
     pub fn title(&self) -> String {
         match &self.content {
@@ -129,11 +129,11 @@ impl Tab {
                     title.clone()
                 }
             }
-            TabContent::File(f) => {
-                f.path.file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "File".into())
-            }
+            TabContent::File(f) => f
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "File".into()),
             TabContent::NewTab => "New Tab".into(),
             TabContent::Settings => "Settings".into(),
             TabContent::History => "History".into(),
@@ -141,12 +141,16 @@ impl Tab {
             TabContent::Downloads => "Downloads".into(),
         }
     }
-    
+
     /// Get icon for the tab
     pub fn icon(&self) -> &'static str {
         match &self.content {
             TabContent::Web { is_secure, .. } => {
-                if *is_secure { "" } else { "" }
+                if *is_secure {
+                    ""
+                } else {
+                    ""
+                }
             }
             TabContent::File(f) => match f.file_type {
                 FileType::Image | FileType::ImageRaw | FileType::ImagePsd => "",
@@ -166,21 +170,21 @@ impl Tab {
             TabContent::NewTab => "",
             TabContent::Settings => "(settings)",
             TabContent::History => "",
-                TabContent::Bookmarks => "",
+            TabContent::Bookmarks => "",
             TabContent::Downloads => "v",
         }
     }
-    
+
     /// Check if this is a web tab
     pub fn is_web(&self) -> bool {
         matches!(self.content, TabContent::Web { .. })
     }
-    
+
     /// Check if this is a file viewer tab  
     pub fn is_file(&self) -> bool {
         matches!(self.content, TabContent::File(_))
     }
-    
+
     /// Check if loading
     pub fn is_loading(&self) -> bool {
         match &self.content {
@@ -188,7 +192,7 @@ impl Tab {
             _ => false,
         }
     }
-    
+
     /// Update last accessed time
     pub fn touch(&mut self) {
         self.last_accessed = std::time::Instant::now();

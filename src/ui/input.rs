@@ -2,7 +2,6 @@
 //!
 //! All input routing and text editing in one place.
 
-
 use std::time::Instant;
 
 /// Focus state - what element has keyboard input
@@ -10,16 +9,16 @@ use std::time::Instant;
 pub enum Focus {
     None,
     AddressBar,
-    SearchBar,  // Tab tile search
+    SearchBar, // Tab tile search
     PageContent,
-    FormField(u64),  // Element ID
+    FormField(u64), // Element ID
 }
 
 /// Text input state for editable fields
 #[derive(Debug, Clone)]
 pub struct TextInput {
     pub text: String,
-    pub cursor: usize,        // Cursor position (byte offset)
+    pub cursor: usize, // Cursor position (byte offset)
     pub selection_start: Option<usize>,
     pub last_edit: Instant,
 }
@@ -33,7 +32,7 @@ impl TextInput {
             last_edit: Instant::now(),
         }
     }
-    
+
     pub fn with_text(text: &str) -> Self {
         let len = text.len();
         Self {
@@ -43,7 +42,7 @@ impl TextInput {
             last_edit: Instant::now(),
         }
     }
-    
+
     /// Insert character at cursor
     pub fn insert(&mut self, c: char) {
         self.delete_selection();
@@ -51,7 +50,7 @@ impl TextInput {
         self.cursor += c.len_utf8();
         self.last_edit = Instant::now();
     }
-    
+
     /// Insert string at cursor
     pub fn insert_str(&mut self, s: &str) {
         self.delete_selection();
@@ -59,7 +58,7 @@ impl TextInput {
         self.cursor += s.len();
         self.last_edit = Instant::now();
     }
-    
+
     /// Backspace - delete char before cursor
     pub fn backspace(&mut self) {
         if self.delete_selection() {
@@ -77,7 +76,7 @@ impl TextInput {
             self.last_edit = Instant::now();
         }
     }
-    
+
     /// Delete - delete char after cursor
     pub fn delete(&mut self) {
         if self.delete_selection() {
@@ -88,7 +87,7 @@ impl TextInput {
             self.last_edit = Instant::now();
         }
     }
-    
+
     /// Move cursor left
     pub fn move_left(&mut self, select: bool) {
         if select && self.selection_start.is_none() {
@@ -96,7 +95,7 @@ impl TextInput {
         } else if !select {
             self.selection_start = None;
         }
-        
+
         if self.cursor > 0 {
             self.cursor = self.text[..self.cursor]
                 .char_indices()
@@ -105,7 +104,7 @@ impl TextInput {
                 .unwrap_or(0);
         }
     }
-    
+
     /// Move cursor right
     pub fn move_right(&mut self, select: bool) {
         if select && self.selection_start.is_none() {
@@ -113,7 +112,7 @@ impl TextInput {
         } else if !select {
             self.selection_start = None;
         }
-        
+
         if self.cursor < self.text.len() {
             self.cursor = self.text[self.cursor..]
                 .char_indices()
@@ -122,7 +121,7 @@ impl TextInput {
                 .unwrap_or(self.text.len());
         }
     }
-    
+
     /// Move to start
     pub fn home(&mut self, select: bool) {
         if select && self.selection_start.is_none() {
@@ -132,7 +131,7 @@ impl TextInput {
         }
         self.cursor = 0;
     }
-    
+
     /// Move to end
     pub fn end(&mut self, select: bool) {
         if select && self.selection_start.is_none() {
@@ -142,13 +141,13 @@ impl TextInput {
         }
         self.cursor = self.text.len();
     }
-    
+
     /// Select all
     pub fn select_all(&mut self) {
         self.selection_start = Some(0);
         self.cursor = self.text.len();
     }
-    
+
     /// Get selected range
     pub fn selection(&self) -> Option<(usize, usize)> {
         self.selection_start.map(|start| {
@@ -159,12 +158,12 @@ impl TextInput {
             }
         })
     }
-    
+
     /// Get selected text
     pub fn selected_text(&self) -> Option<&str> {
         self.selection().map(|(start, end)| &self.text[start..end])
     }
-    
+
     /// Delete selection, return true if deleted
     fn delete_selection(&mut self) -> bool {
         if let Some((start, end)) = self.selection() {
@@ -177,7 +176,7 @@ impl TextInput {
             false
         }
     }
-    
+
     /// Cut selected text
     pub fn cut(&mut self) -> Option<String> {
         if let Some((start, end)) = self.selection() {
@@ -188,17 +187,17 @@ impl TextInput {
             None
         }
     }
-    
+
     /// Copy selected text
     pub fn copy(&self) -> Option<String> {
         self.selected_text().map(|s| s.to_string())
     }
-    
+
     /// Paste text
     pub fn paste(&mut self, text: &str) {
         self.insert_str(text);
     }
-    
+
     /// Clear all text
     pub fn clear(&mut self) {
         self.text.clear();
@@ -206,7 +205,7 @@ impl TextInput {
         self.selection_start = None;
         self.last_edit = Instant::now();
     }
-    
+
     /// Set text (replacing all)
     pub fn set_text(&mut self, text: &str) {
         self.text = text.to_string();
@@ -228,18 +227,18 @@ pub struct InputManager {
     pub focus: Focus,
     pub address_bar: TextInput,
     pub search_bar: TextInput,
-    
+
     // Modifier keys
     pub ctrl_held: bool,
     pub shift_held: bool,
     pub alt_held: bool,
-    
+
     // Mouse state
     pub mouse_x: i32,
     pub mouse_y: i32,
     pub mouse_pressed: bool,
     pub last_click: Option<Instant>,
-    pub click_count: u32,  // For double/triple click
+    pub click_count: u32, // For double/triple click
 }
 
 impl InputManager {
@@ -258,7 +257,7 @@ impl InputManager {
             click_count: 0,
         }
     }
-    
+
     /// Handle character input
     pub fn char_input(&mut self, c: char) -> InputAction {
         match self.focus {
@@ -270,13 +269,11 @@ impl InputManager {
                 self.search_bar.insert(c);
                 InputAction::SearchChanged
             }
-            Focus::PageContent | Focus::FormField(_) => {
-                InputAction::ForwardToPage(c)
-            }
+            Focus::PageContent | Focus::FormField(_) => InputAction::ForwardToPage(c),
             Focus::None => InputAction::None,
         }
     }
-    
+
     /// Handle key press
     pub fn key_press(&mut self, key: Key) -> InputAction {
         // Global shortcuts first
@@ -300,12 +297,12 @@ impl InputManager {
                 _ => {}
             }
         }
-        
+
         // Alt+Tab for tile view
         if self.alt_held && key == Key::Tab {
             return InputAction::ToggleTileView;
         }
-        
+
         // Focus-specific handling
         match self.focus {
             Focus::AddressBar => self.handle_address_bar_key(key),
@@ -315,7 +312,7 @@ impl InputManager {
             Focus::None => self.handle_unfocused_key(key),
         }
     }
-    
+
     fn handle_address_bar_key(&mut self, key: Key) -> InputAction {
         match key {
             Key::Enter => {
@@ -362,9 +359,7 @@ impl InputManager {
                     InputAction::None
                 }
             }
-            Key::V if self.ctrl_held => {
-                InputAction::RequestPaste
-            }
+            Key::V if self.ctrl_held => InputAction::RequestPaste,
             Key::X if self.ctrl_held => {
                 if let Some(text) = self.address_bar.cut() {
                     InputAction::Cut(text)
@@ -375,7 +370,7 @@ impl InputManager {
             _ => InputAction::None,
         }
     }
-    
+
     fn handle_search_bar_key(&mut self, key: Key) -> InputAction {
         match key {
             Key::Enter => {
@@ -394,7 +389,7 @@ impl InputManager {
             _ => InputAction::None,
         }
     }
-    
+
     fn handle_page_key(&mut self, key: Key) -> InputAction {
         match key {
             Key::Space if !self.shift_held => InputAction::ScrollDown(300),
@@ -410,7 +405,7 @@ impl InputManager {
             _ => InputAction::None,
         }
     }
-    
+
     fn handle_unfocused_key(&mut self, key: Key) -> InputAction {
         match key {
             Key::Tab => {
@@ -420,12 +415,12 @@ impl InputManager {
             _ => InputAction::None,
         }
     }
-    
+
     /// Handle mouse click
     pub fn mouse_click(&mut self, x: i32, y: i32, bounds: &UiBounds) -> InputAction {
         self.mouse_x = x;
         self.mouse_y = y;
-        
+
         // Check for double/triple click
         let now = Instant::now();
         if let Some(last) = self.last_click {
@@ -438,7 +433,7 @@ impl InputManager {
             self.click_count = 1;
         }
         self.last_click = Some(now);
-        
+
         // Determine what was clicked
         if bounds.address_bar.contains(x, y) {
             self.focus = Focus::AddressBar;
@@ -447,15 +442,15 @@ impl InputManager {
             }
             return InputAction::FocusAddressBar;
         }
-        
+
         if bounds.back_button.contains(x, y) {
             return InputAction::GoBack;
         }
-        
+
         if bounds.forward_button.contains(x, y) {
             return InputAction::GoForward;
         }
-        
+
         if bounds.refresh_button.contains(x, y) {
             return InputAction::Reload;
         }
@@ -463,22 +458,19 @@ impl InputManager {
         if bounds.help_button.contains(x, y) {
             return InputAction::ToggleHelpPane;
         }
-        
+
         if bounds.content_area.contains(x, y) {
             self.focus = Focus::PageContent;
-            return InputAction::PageClick(
-                x - bounds.content_area.x,
-                y - bounds.content_area.y,
-            );
+            return InputAction::PageClick(x - bounds.content_area.x, y - bounds.content_area.y);
         }
-        
+
         if bounds.tab_list.contains(x, y) {
             return InputAction::TabListClick(x, y);
         }
-        
+
         InputAction::None
     }
-    
+
     /// Handle mouse scroll
     pub fn mouse_scroll(&mut self, delta_y: f32) -> InputAction {
         if delta_y > 0.0 {
@@ -487,7 +479,7 @@ impl InputManager {
             InputAction::ScrollDown((-delta_y * 50.0) as i32)
         }
     }
-    
+
     /// Handle paste from clipboard
     pub fn paste(&mut self, text: &str) {
         match self.focus {
@@ -496,7 +488,7 @@ impl InputManager {
             _ => {}
         }
     }
-    
+
     /// Set address bar text (e.g., when navigating)
     pub fn set_address(&mut self, url: &str) {
         self.address_bar.set_text(url);
@@ -527,10 +519,44 @@ pub enum Key {
     PageDown,
     Space,
     F5,
-    A, B, C, D, E, F, G, H, I, J, K, L, M,
-    N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-    Num0, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9,
-    Key1, Key2,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
+    Num0,
+    Num1,
+    Num2,
+    Num3,
+    Num4,
+    Num5,
+    Num6,
+    Num7,
+    Num8,
+    Num9,
+    Key1,
+    Key2,
     Unknown,
     Other,
 }
@@ -613,7 +639,7 @@ pub enum InputAction {
     ScrollToTop,
     ScrollToBottom,
     FocusNextElement,
-    PageClick(i32, i32),  // Relative to content area
+    PageClick(i32, i32), // Relative to content area
     TabListClick(i32, i32),
     ForwardToPage(char),
     ForwardKeyToPage(Key),
@@ -693,12 +719,16 @@ pub struct Rect {
 
 impl Rect {
     pub fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
-    
+
     pub fn contains(&self, px: i32, py: i32) -> bool {
-        px >= self.x && px < self.x + self.width &&
-        py >= self.y && py < self.y + self.height
+        px >= self.x && px < self.x + self.width && py >= self.y && py < self.y + self.height
     }
 }
 

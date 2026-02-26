@@ -158,7 +158,7 @@ impl PoisoningEngine {
             fallback_user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
                                  AppleWebKit/537.36 (KHTML, like Gecko) \
                                  Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0"
-                                 .to_string(),
+                .to_string(),
         }
     }
 
@@ -211,12 +211,14 @@ impl PoisoningEngine {
         if let Ok(parsed) = url::Url::parse(url) {
             if let Some(domain) = parsed.host_str() {
                 let now = Instant::now();
-                let entry = self.breakage_cache.entry(domain.to_string())
-                    .or_insert(BreakageRecord {
-                        last_failure: now,
-                        failure_count: 0,
-                        disabled_until: None,
-                    });
+                let entry =
+                    self.breakage_cache
+                        .entry(domain.to_string())
+                        .or_insert(BreakageRecord {
+                            last_failure: now,
+                            failure_count: 0,
+                            disabled_until: None,
+                        });
                 entry.failure_count += 1;
                 entry.last_failure = now;
 
@@ -225,7 +227,9 @@ impl PoisoningEngine {
                     entry.disabled_until = Some(now + Duration::from_secs(86400)); // 24h
                     tracing::warn!(
                         "[POISON] Auto-disabling poisoning for {} (24h) after {} failures: {}",
-                        domain, entry.failure_count, reason
+                        domain,
+                        entry.failure_count,
+                        reason
                     );
                 } else {
                     tracing::info!("[POISON] Breakage recorded for {}: {}", domain, reason);
@@ -242,7 +246,8 @@ impl PoisoningEngine {
     /// Get all domains currently auto-disabled
     pub fn auto_disabled_domains(&self) -> Vec<String> {
         let now = Instant::now();
-        self.breakage_cache.iter()
+        self.breakage_cache
+            .iter()
             .filter(|(_, r)| r.disabled_until.map_or(false, |until| now < until))
             .map(|(d, _)| d.clone())
             .collect()
@@ -280,7 +285,11 @@ impl PoisoningEngine {
     }
 
     /// Convenience: apply all surfaces for the current mode
-    pub fn poison_all_surfaces(&self, js: &mut JsInterpreter, mode: PoisonMode) -> Result<Value, String> {
+    pub fn poison_all_surfaces(
+        &self,
+        js: &mut JsInterpreter,
+        mode: PoisonMode,
+    ) -> Result<Value, String> {
         match mode {
             PoisonMode::Off => self.apply_chrome_edge_spoof(js),
             PoisonMode::Conservative => {

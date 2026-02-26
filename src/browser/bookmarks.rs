@@ -1,8 +1,8 @@
 //! Bookmark management - Store and organize bookmarks
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use anyhow::Result;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,9 +31,10 @@ impl Bookmark {
             tags: Vec::new(),
         }
     }
-    
+
     pub fn domain(&self) -> Option<String> {
-        url::Url::parse(&self.url).ok()
+        url::Url::parse(&self.url)
+            .ok()
             .and_then(|u| u.host_str().map(String::from))
     }
 }
@@ -71,7 +72,7 @@ pub struct BookmarkManager {
     folders: Vec<BookmarkFolder>,
     storage_path: PathBuf,
     modified: bool,
-    
+
     // Special folder IDs
     pub bookmarks_bar_id: Uuid,
     pub other_bookmarks_id: Uuid,
@@ -83,10 +84,10 @@ impl BookmarkManager {
             .unwrap_or_else(|| PathBuf::from("."))
             .join("sassy-browser")
             .join("bookmarks.json");
-        
+
         let bookmarks_bar_id = Uuid::new_v4();
         let other_bookmarks_id = Uuid::new_v4();
-        
+
         let mut manager = Self {
             bookmarks: Vec::new(),
             folders: vec![
@@ -108,73 +109,74 @@ impl BookmarkManager {
             bookmarks_bar_id,
             other_bookmarks_id,
         };
-        
+
         let _ = manager.load();
-        
+
         manager
     }
-    
+
     /// Add a bookmark
     pub fn add(&mut self, url: &str, title: &str, folder_id: Option<Uuid>) -> Uuid {
         let mut bookmark = Bookmark::new(url.to_string(), title.to_string());
         bookmark.folder_id = folder_id.or(Some(self.other_bookmarks_id));
-        
+
         let id = bookmark.id;
         self.bookmarks.push(bookmark);
         self.modified = true;
-        
+
         id
     }
-    
+
     /// Add a bookmark to the bookmarks bar
     pub fn add_to_bar(&mut self, url: &str, title: &str) -> Uuid {
         self.add(url, title, Some(self.bookmarks_bar_id))
     }
-    
+
     /// Check if URL is bookmarked
     pub fn is_bookmarked(&self, url: &str) -> bool {
         self.bookmarks.iter().any(|b| b.url == url)
     }
-    
+
     /// Get bookmark by URL
     pub fn get_by_url(&self, url: &str) -> Option<&Bookmark> {
         self.bookmarks.iter().find(|b| b.url == url)
     }
-    
+
     /// Get bookmark by ID
     pub fn get(&self, id: Uuid) -> Option<&Bookmark> {
         self.bookmarks.iter().find(|b| b.id == id)
     }
-    
+
     /// Remove bookmark by URL
     pub fn remove_by_url(&mut self, url: &str) {
         self.bookmarks.retain(|b| b.url != url);
         self.modified = true;
     }
-    
+
     /// Remove bookmark by ID
     pub fn remove(&mut self, id: Uuid) {
         self.bookmarks.retain(|b| b.id != id);
         self.modified = true;
     }
-    
+
     /// Get all bookmarks
     pub fn all(&self) -> &[Bookmark] {
         &self.bookmarks
     }
-    
+
     /// Get bookmarks in a folder
     pub fn in_folder(&self, folder_id: Uuid) -> Vec<&Bookmark> {
-        self.bookmarks.iter()
+        self.bookmarks
+            .iter()
             .filter(|b| b.folder_id == Some(folder_id))
             .collect()
     }
-    
+
     /// Get bookmarks bar items
     pub fn bookmarks_bar(&self) -> Vec<&Bookmark> {
         self.in_folder(self.bookmarks_bar_id)
     }
-    
+
     /// Create a folder
     pub fn create_folder(&mut self, name: &str, parent_id: Option<Uuid>) -> Uuid {
         let folder = BookmarkFolder::new(name.to_string(), parent_id);
@@ -183,31 +185,35 @@ impl BookmarkManager {
         self.modified = true;
         id
     }
-    
+
     /// Get all folders
     pub fn folders(&self) -> &[BookmarkFolder] {
         &self.folders
     }
-    
+
     /// Get subfolders
     pub fn subfolders(&self, parent_id: Option<Uuid>) -> Vec<&BookmarkFolder> {
-        self.folders.iter()
+        self.folders
+            .iter()
             .filter(|f| f.parent_id == parent_id)
             .collect()
     }
-    
+
     /// Search bookmarks
     pub fn search(&self, query: &str) -> Vec<&Bookmark> {
         let query_lower = crate::fontcase::ascii_lower(query);
-        self.bookmarks.iter()
+        self.bookmarks
+            .iter()
             .filter(|b| {
-                crate::fontcase::ascii_lower(&b.url).contains(&query_lower) ||
-                crate::fontcase::ascii_lower(&b.title).contains(&query_lower) ||
-                b.tags.iter().any(|t| crate::fontcase::ascii_lower(t).contains(&query_lower))
+                crate::fontcase::ascii_lower(&b.url).contains(&query_lower)
+                    || crate::fontcase::ascii_lower(&b.title).contains(&query_lower)
+                    || b.tags
+                        .iter()
+                        .any(|t| crate::fontcase::ascii_lower(t).contains(&query_lower))
             })
             .collect()
     }
-    
+
     /// Update bookmark
     pub fn update(&mut self, id: Uuid, title: Option<&str>, folder_id: Option<Option<Uuid>>) {
         if let Some(bookmark) = self.bookmarks.iter_mut().find(|b| b.id == id) {
@@ -220,41 +226,41 @@ impl BookmarkManager {
             self.modified = true;
         }
     }
-    
+
     /// Save bookmarks to disk
     pub fn save(&mut self) -> Result<()> {
         if !self.modified {
             return Ok(());
         }
-        
+
         if let Some(parent) = self.storage_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         let data = BookmarkData {
             bookmarks: self.bookmarks.clone(),
             folders: self.folders.clone(),
         };
-        
+
         let json = serde_json::to_string_pretty(&data)?;
         std::fs::write(&self.storage_path, json)?;
-        
+
         self.modified = false;
         Ok(())
     }
-    
+
     /// Load bookmarks from disk
     pub fn load(&mut self) -> Result<()> {
         if !self.storage_path.exists() {
             return Ok(());
         }
-        
+
         let json = std::fs::read_to_string(&self.storage_path)?;
         let data: BookmarkData = serde_json::from_str(&json)?;
-        
+
         self.bookmarks = data.bookmarks;
         self.folders = data.folders;
-        
+
         // Ensure special folders exist
         if !self.folders.iter().any(|f| f.name == "Bookmarks Bar") {
             self.folders.push(BookmarkFolder {
@@ -264,11 +270,11 @@ impl BookmarkManager {
                 created_at: 0,
             });
         }
-        
+
         self.modified = false;
         Ok(())
     }
-    
+
     /// Import from HTML bookmark file
     pub fn import_html(&mut self, content: &str) -> Result<usize> {
         // Minimal Netscape-style bookmark import: looks for <A HREF="...">Title</A>
@@ -296,7 +302,7 @@ impl BookmarkManager {
         }
         Ok(imported)
     }
-    
+
     /// Export to HTML bookmark file
     pub fn export_html(&self) -> String {
         let mut html = String::from("<!DOCTYPE NETSCAPE-Bookmark-file-1>\n");
@@ -304,14 +310,14 @@ impl BookmarkManager {
         html.push_str("<TITLE>Bookmarks</TITLE>\n");
         html.push_str("<H1>Bookmarks</H1>\n");
         html.push_str("<DL><p>\n");
-        
+
         for bookmark in &self.bookmarks {
             html.push_str(&format!(
                 "    <DT><A HREF=\"{}\">{}</A>\n",
                 bookmark.url, bookmark.title
             ));
         }
-        
+
         html.push_str("</DL><p>\n");
         html
     }

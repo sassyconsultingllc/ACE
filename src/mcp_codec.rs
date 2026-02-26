@@ -22,7 +22,7 @@
 use bytes::{Buf, BufMut, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::mcp_protocol::{MAGIC, ProtocolError};
+use crate::mcp_protocol::{ProtocolError, MAGIC};
 
 /// Maximum frame size: 16 MB (generous for screenshots + page content)
 pub const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024;
