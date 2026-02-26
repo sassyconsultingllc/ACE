@@ -1,8 +1,8 @@
 // DOM - Document Object Model representation
- 
+
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
-use std::cell::RefCell;
 
 pub type NodeRef = Rc<RefCell<Node>>;
 pub type WeakNodeRef = Weak<RefCell<Node>>;
@@ -84,7 +84,7 @@ impl Node {
         child.borrow_mut().parent = Some(Rc::downgrade(parent));
         parent.borrow_mut().children.push(Rc::clone(child));
     }
-    
+
     /// Find the enclosing form element of a given node
     pub fn find_parent_form(node: &NodeRef) -> Option<NodeRef> {
         let mut current = node.clone();
@@ -95,7 +95,11 @@ impl Node {
                 return Some(current);
             }
             // Get parent
-            let parent = current.borrow().parent.as_ref().and_then(|weak| weak.upgrade());
+            let parent = current
+                .borrow()
+                .parent
+                .as_ref()
+                .and_then(|weak| weak.upgrade());
             match parent {
                 Some(p) => current = p,
                 None => return None,
@@ -184,7 +188,9 @@ impl Node {
     fn serialize_node(node: &Node) -> String {
         match node.node_type {
             NodeType::Text => node.text_content.clone().unwrap_or_default(),
-            NodeType::Comment => format!("<!--{}-->", node.text_content.clone().unwrap_or_default()),
+            NodeType::Comment => {
+                format!("<!--{}-->", node.text_content.clone().unwrap_or_default())
+            }
             NodeType::Element => {
                 let tag = node.tag_name.as_ref().unwrap();
                 let mut attrs = String::new();
@@ -212,8 +218,23 @@ impl Node {
     }
 
     fn is_void_element(tag: &str) -> bool {
-        matches!(tag, "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | 
-                 "input" | "link" | "meta" | "param" | "source" | "track" | "wbr")
+        matches!(
+            tag,
+            "area"
+                | "base"
+                | "br"
+                | "col"
+                | "embed"
+                | "hr"
+                | "img"
+                | "input"
+                | "link"
+                | "meta"
+                | "param"
+                | "source"
+                | "track"
+                | "wbr"
+        )
     }
 }
 
@@ -308,10 +329,10 @@ impl Document {
 
     fn match_selector(node: &NodeRef, selector: &str, results: &mut Vec<NodeRef>) {
         let n = node.borrow();
-        if Self::node_matches_selector(&n, selector)
-            && !results.iter().any(|r| Rc::ptr_eq(r, node)) {
-                results.push(Rc::clone(node));
-            }
+        if Self::node_matches_selector(&n, selector) && !results.iter().any(|r| Rc::ptr_eq(r, node))
+        {
+            results.push(Rc::clone(node));
+        }
         for child in &n.children {
             Self::match_selector(child, selector, results);
         }
@@ -392,37 +413,48 @@ impl FormData {
     pub fn from_form(form_node: &NodeRef) -> Self {
         let form = form_node.borrow();
         let action = form.get_attribute("action").unwrap_or_default();
-        let method = form.get_attribute("method")
+        let method = form
+            .get_attribute("method")
             .map(|m| m.to_uppercase())
             .unwrap_or_else(|| "GET".to_string());
-        let enctype = form.get_attribute("enctype")
+        let enctype = form
+            .get_attribute("enctype")
             .unwrap_or_else(|| "application/x-www-form-urlencoded".to_string());
-        
+
         let mut fields = Vec::new();
         Self::collect_inputs(form_node, &mut fields);
-        
-        FormData { action, method, enctype, fields }
+
+        FormData {
+            action,
+            method,
+            enctype,
+            fields,
+        }
     }
-    
+
     fn collect_inputs(node: &NodeRef, fields: &mut Vec<(String, String)>) {
         let n = node.borrow();
-        
+
         // Check if this is an input, select, or textarea
         if let Some(ref tag) = n.tag_name {
             match tag.as_str() {
                 "input" => {
                     let name = n.get_attribute("name").unwrap_or_default();
-                    if name.is_empty() { return; }
-                    
-                    let input_type = n.get_attribute("type")
+                    if name.is_empty() {
+                        return;
+                    }
+
+                    let input_type = n
+                        .get_attribute("type")
                         .map(|t| crate::fontcase::ascii_lower(&t))
                         .unwrap_or_else(|| "text".to_string());
-                    
+
                     match input_type.as_str() {
                         "checkbox" | "radio" => {
                             // Only include if checked
                             if n.get_attribute("checked").is_some() {
-                                let value = n.get_attribute("value").unwrap_or_else(|| "on".to_string());
+                                let value =
+                                    n.get_attribute("value").unwrap_or_else(|| "on".to_string());
                                 fields.push((name, value));
                             }
                         }
@@ -453,35 +485,38 @@ impl FormData {
                         for child in &n.children {
                             let c = child.borrow();
                             if c.tag_name.as_deref() == Some("option")
-                                && c.get_attribute("selected").is_some() {
-                                    let value = c.get_attribute("value")
-                                        .or_else(|| c.text_content.clone())
-                                        .unwrap_or_default();
-                                    fields.push((name.clone(), value));
-                                    break;
-                                }
+                                && c.get_attribute("selected").is_some()
+                            {
+                                let value = c
+                                    .get_attribute("value")
+                                    .or_else(|| c.text_content.clone())
+                                    .unwrap_or_default();
+                                fields.push((name.clone(), value));
+                                break;
+                            }
                         }
                     }
                 }
                 _ => {}
             }
         }
-        
+
         // Recurse into children
         drop(n);
         for child in &node.borrow().children {
             Self::collect_inputs(child, fields);
         }
     }
-    
+
     /// Encode as application/x-www-form-urlencoded
     pub fn to_urlencoded(&self) -> String {
-        self.fields.iter()
+        self.fields
+            .iter()
             .map(|(k, v)| format!("{}={}", Self::url_encode(k), Self::url_encode(v)))
             .collect::<Vec<_>>()
             .join("&")
     }
-    
+
     fn url_encode(s: &str) -> String {
         let mut result = String::new();
         for c in s.chars() {
@@ -499,11 +534,11 @@ impl FormData {
         }
         result
     }
-    
+
     /// Get the full URL for GET submission (resolves relative to base_url)
     pub fn get_url(&self, base_url: &str) -> String {
         let encoded = self.to_urlencoded();
-        
+
         // Resolve action URL relative to base
         let action = if self.action.is_empty() {
             base_url.to_string()
@@ -528,7 +563,7 @@ impl FormData {
                 format!("{}/{}", base_url, &self.action)
             }
         };
-        
+
         if encoded.is_empty() {
             action
         } else if action.contains('?') {
@@ -591,7 +626,10 @@ mod tests {
         assert_eq!(fd.action, "/submit");
         assert_eq!(fd.method, "POST");
         assert!(!fd.enctype.is_empty());
-        assert!(fd.fields.iter().any(|(k, v)| k == "username" && v == "alice"));
+        assert!(fd
+            .fields
+            .iter()
+            .any(|(k, v)| k == "username" && v == "alice"));
     }
 
     #[test]
@@ -600,7 +638,10 @@ mod tests {
             action: "/search".to_string(),
             method: "GET".to_string(),
             enctype: "application/x-www-form-urlencoded".to_string(),
-            fields: vec![("q".into(), "hello world".into()), ("lang".into(), "en".into())],
+            fields: vec![
+                ("q".into(), "hello world".into()),
+                ("lang".into(), "en".into()),
+            ],
         };
         let encoded = fd.to_urlencoded();
         assert!(encoded.contains("q=hello+world"));

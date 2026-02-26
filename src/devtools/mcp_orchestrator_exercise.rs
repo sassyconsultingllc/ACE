@@ -10,7 +10,12 @@ pub fn exercise_mcp_orchestrator() {
     let mut orchestrator = McpOrchestrator::new();
 
     // Exercise AgentRole variants with their methods.
-    let roles = [AgentRole::Voice, AgentRole::Orchestrator, AgentRole::Coder, AgentRole::Auditor];
+    let roles = [
+        AgentRole::Voice,
+        AgentRole::Orchestrator,
+        AgentRole::Coder,
+        AgentRole::Auditor,
+    ];
     for role in &roles {
         let _n = role.name();
         let _i = role.icon();
@@ -18,7 +23,13 @@ pub fn exercise_mcp_orchestrator() {
     }
 
     // Provider checks.
-    let providers = [Provider::Xai, Provider::Together, Provider::OpenAI, Provider::Ollama, Provider::Custom];
+    let providers = [
+        Provider::Xai,
+        Provider::Together,
+        Provider::OpenAI,
+        Provider::Ollama,
+        Provider::Custom,
+    ];
     for p in &providers {
         let _compat = p.is_openai_compatible();
         let _local = p.is_local();
@@ -26,20 +37,36 @@ pub fn exercise_mcp_orchestrator() {
     }
 
     // TaskStatus and IssueSeverity icons.
-    let statuses = [TaskStatus::Pending, TaskStatus::InProgress, TaskStatus::Review, TaskStatus::Completed, TaskStatus::Failed, TaskStatus::Blocked];
+    let statuses = [
+        TaskStatus::Pending,
+        TaskStatus::InProgress,
+        TaskStatus::Review,
+        TaskStatus::Completed,
+        TaskStatus::Failed,
+        TaskStatus::Blocked,
+    ];
     for s in &statuses {
         let _icon = s.icon();
     }
-    let severities = [IssueSeverity::Info, IssueSeverity::Warning, IssueSeverity::Error, IssueSeverity::Critical];
+    let severities = [
+        IssueSeverity::Info,
+        IssueSeverity::Warning,
+        IssueSeverity::Error,
+        IssueSeverity::Critical,
+    ];
     for sv in &severities {
         let _icon = sv.icon();
     }
 
     // AgentConfig::huggingface with builder methods.
-    let hf_config = AgentConfig::huggingface(AgentRole::Coder, "https://api.hf.space", "codellama/CodeLlama-34b")
-        .with_url("https://custom.endpoint/v1")
-        .with_key("hf_test_key")
-        .with_model("custom-model");
+    let hf_config = AgentConfig::huggingface(
+        AgentRole::Coder,
+        "https://api.hf.space",
+        "codellama/CodeLlama-34b",
+    )
+    .with_url("https://custom.endpoint/v1")
+    .with_key("hf_test_key")
+    .with_model("custom-model");
     orchestrator.configure_agent(hf_config);
 
     // Set API key.
@@ -72,13 +99,27 @@ pub fn exercise_mcp_orchestrator() {
     }
 
     // Format operations.
-    let ops = [EditOperation::Create, EditOperation::Replace, EditOperation::Insert, EditOperation::Delete, EditOperation::Append];
+    let ops = [
+        EditOperation::Create,
+        EditOperation::Replace,
+        EditOperation::Insert,
+        EditOperation::Delete,
+        EditOperation::Append,
+    ];
     for op in &ops {
         let _f = format_operation(op);
     }
 
     // Exercise all IntentType variants via UserIntent and read fields.
-    let intents = [IntentType::Create, IntentType::Fix, IntentType::Refactor, IntentType::Explain, IntentType::Test, IntentType::Document, IntentType::General];
+    let intents = [
+        IntentType::Create,
+        IntentType::Fix,
+        IntentType::Refactor,
+        IntentType::Explain,
+        IntentType::Test,
+        IntentType::Document,
+        IntentType::General,
+    ];
     for it in &intents {
         let ui = UserIntent {
             summary: format!("do {:?}", it),

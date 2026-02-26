@@ -9,9 +9,9 @@
 //! No pairing codes, no tokens, no open ports.
 //! Tailscale's MagicDNS means phone can use "desktop.tailnet" instead of IP.
 
+use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, TcpListener, UdpSocket};
 use std::process::Command;
-use serde::{Deserialize, Serialize};
 
 /// Network binding mode
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -44,7 +44,7 @@ impl TailscaleInfo {
             tailnet: None,
             magic_dns: None,
         };
-        
+
         // Try to get Tailscale IP from CLI
         if let Ok(output) = Command::new("tailscale").args(["ip", "-4"]).output() {
             if output.status.success() {
@@ -59,10 +59,13 @@ impl TailscaleInfo {
                 }
             }
         }
-        
+
         // Get hostname for MagicDNS
         if info.available {
-            if let Ok(output) = Command::new("tailscale").args(["status", "--json"]).output() {
+            if let Ok(output) = Command::new("tailscale")
+                .args(["status", "--json"])
+                .output()
+            {
                 if output.status.success() {
                     if let Ok(json) = String::from_utf8(output.stdout) {
                         // Parse just what we need (simplified)
@@ -72,7 +75,7 @@ impl TailscaleInfo {
                                 if let Some(end) = dns_slice.find('"') {
                                     let dns_name = &dns_slice[..end];
                                     info.magic_dns = Some(dns_name.to_string());
-                                    
+
                                     // Extract hostname and tailnet
                                     let parts: Vec<&str> = dns_name.split('.').collect();
                                     if parts.len() >= 2 {
@@ -86,22 +89,24 @@ impl TailscaleInfo {
                 }
             }
         }
-        
+
         // Fallback: Check for 100.x.x.x interface directly
         if !info.available {
             info.ip = find_tailscale_interface();
             info.available = info.ip.is_some();
         }
-        
+
         info
     }
-    
+
     /// Get the connection URL for phone
     pub fn connection_url(&self, port: u16) -> Option<String> {
         if let Some(ref dns) = self.magic_dns {
             // Use MagicDNS name (works across networks)
             Some(format!("ws://{}:{}", dns.trim_end_matches('.'), port))
-        } else { self.ip.map(|ip| format!("ws://{}:{}", ip, port)) }
+        } else {
+            self.ip.map(|ip| format!("ws://{}:{}", ip, port))
+        }
     }
 }
 
@@ -109,7 +114,7 @@ impl TailscaleInfo {
 fn find_tailscale_interface() -> Option<IpAddr> {
     // Bind to 0.0.0.0 and connect to a Tailscale IP to find our interface
     // This is a common trick to find the local IP for a specific route
-    
+
     // Try connecting to Tailscale's DERP servers or a known Tailscale IP
     if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
         // Try to "connect" to an IP in the Tailscale range
@@ -125,7 +130,7 @@ fn find_tailscale_interface() -> Option<IpAddr> {
             }
         }
     }
-    
+
     None
 }
 
@@ -157,9 +162,7 @@ impl SyncConfig {
     /// Get the bind address based on mode and available interfaces
     pub fn bind_address(&self, tailscale: &TailscaleInfo) -> Result<String, String> {
         match self.bind_mode {
-            BindMode::Localhost => {
-                Ok(format!("127.0.0.1:{}", self.port))
-            }
+            BindMode::Localhost => Ok(format!("127.0.0.1:{}", self.port)),
             BindMode::TailscaleOnly => {
                 if let Some(ip) = tailscale.ip {
                     Ok(format!("{}:{}", ip, self.port))
@@ -195,7 +198,7 @@ impl ConnectedDevice {
             false
         }
     }
-    
+
     /// Get display name for UI
     pub fn display_name(&self) -> String {
         if let Some(ref hostname) = self.tailscale_hostname {
@@ -217,7 +220,7 @@ pub struct SecureSyncServer {
 impl SecureSyncServer {
     pub fn new(config: SyncConfig) -> Self {
         let tailscale = TailscaleInfo::detect();
-        
+
         Self {
             config,
             tailscale,
@@ -225,52 +228,53 @@ impl SecureSyncServer {
             listener: None,
         }
     }
-    
+
     /// Start the secure server
     pub fn start(&mut self) -> Result<(), String> {
         let bind_addr = self.config.bind_address(&self.tailscale)?;
-        
+
         self.listener = Some(
             TcpListener::bind(&bind_addr)
-                .map_err(|e| format!("Failed to bind to {}: {}", bind_addr, e))?
+                .map_err(|e| format!("Failed to bind to {}: {}", bind_addr, e))?,
         );
-        
+
         if let Some(ref listener) = self.listener {
-            listener.set_nonblocking(true)
+            listener
+                .set_nonblocking(true)
                 .map_err(|e| format!("Failed to set nonblocking: {}", e))?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Check if a connection should be allowed
     pub fn should_allow(&self, ip: IpAddr) -> bool {
         // Always allow localhost
         if ip.is_loopback() {
             return true;
         }
-        
+
         // Check if Tailscale IP
         let is_tailscale = if let IpAddr::V4(v4) = ip {
             v4.octets()[0] == 100
         } else {
             false
         };
-        
+
         // If from Tailscale and auto-approve is on, allow
         if is_tailscale && self.config.auto_approve_tailscale {
             return true;
         }
-        
+
         // Check approved list
         if self.config.approved_devices.contains(&ip.to_string()) {
             return true;
         }
-        
+
         // If approval required, deny by default
         !self.config.require_approval
     }
-    
+
     /// Get connection info for display
     pub fn connection_info(&self) -> String {
         if let Some(url) = self.tailscale.connection_url(self.config.port) {
@@ -281,7 +285,10 @@ impl SecureSyncServer {
                      Direct: {}:{}\n\n\
                      Ensure phone is on same Tailscale network.",
                     hostname,
-                    self.tailscale.ip.map(|ip| ip.to_string()).unwrap_or_default(),
+                    self.tailscale
+                        .ip
+                        .map(|ip| ip.to_string())
+                        .unwrap_or_default(),
                     self.config.port
                 )
             } else {
@@ -301,7 +308,7 @@ impl SecureSyncServer {
             }
         }
     }
-    
+
     /// Get QR code data for phone app
     pub fn qr_data(&self) -> Option<String> {
         self.tailscale.connection_url(self.config.port)
@@ -311,7 +318,7 @@ impl SecureSyncServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_tailscale_ip_detection() {
         // Just verify detection doesn't panic
@@ -321,7 +328,7 @@ mod tests {
             println!("Tailscale IP: {}", ip);
         }
     }
-    
+
     #[test]
     fn test_bind_modes() {
         let config = SyncConfig::default();
@@ -332,21 +339,21 @@ mod tests {
             tailnet: Some("tailnet.ts.net".into()),
             magic_dns: Some("mypc.tailnet.ts.net".into()),
         };
-        
+
         let addr = config.bind_address(&ts).unwrap();
         assert!(addr.starts_with("100.64.0.1:"));
     }
-    
+
     #[test]
     fn test_should_allow() {
         let server = SecureSyncServer::new(SyncConfig::default());
-        
+
         // Localhost always allowed
         assert!(server.should_allow(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
-        
+
         // Tailscale IPs allowed with auto_approve
         assert!(server.should_allow(IpAddr::V4(Ipv4Addr::new(100, 64, 0, 5))));
-        
+
         // Random IPs denied
         assert!(!server.should_allow(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 50))));
     }

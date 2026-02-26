@@ -1,7 +1,7 @@
+use super::Stmt;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use super::Stmt;
 
 pub type NativeFunction = fn(Vec<Value>) -> Value;
 
@@ -27,22 +27,24 @@ impl PromiseHandle {
             on_reject: Rc::new(RefCell::new(Vec::new())),
         }
     }
-    
+
     pub fn resolve(&self, value: Value) {
         *self.state.borrow_mut() = PromiseState::Fulfilled(Box::new(value));
     }
-    
+
     pub fn reject(&self, reason: Value) {
         *self.state.borrow_mut() = PromiseState::Rejected(Box::new(reason));
     }
-    
+
     pub fn is_pending(&self) -> bool {
         matches!(*self.state.borrow(), PromiseState::Pending)
     }
 }
 
 impl Default for PromiseHandle {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl std::fmt::Debug for PromiseHandle {
@@ -113,13 +115,13 @@ impl std::fmt::Debug for Value {
             }
             Value::String(s) => write!(f, "{}", s),
             Value::Array(arr) => {
-                let items: Vec<String> = arr.borrow().iter()
-                    .map(|v| format!("{:?}", v))
-                    .collect();
+                let items: Vec<String> = arr.borrow().iter().map(|v| format!("{:?}", v)).collect();
                 write!(f, "[{}]", items.join(","))
             }
             Value::Object(map) => {
-                let items: Vec<String> = map.borrow().iter()
+                let items: Vec<String> = map
+                    .borrow()
+                    .iter()
                     .map(|(k, v)| format!("\"{}\":{:?}", k, v))
                     .collect();
                 write!(f, "{{{}}}", items.join(","))
@@ -144,7 +146,7 @@ impl Value {
             _ => true,
         }
     }
-    
+
     pub fn type_of(&self) -> &'static str {
         match self {
             Value::Undefined => "undefined",
@@ -152,24 +154,34 @@ impl Value {
             Value::Boolean(_) => "boolean",
             Value::Number(_) => "number",
             Value::String(_) => "string",
-            Value::Array(_) | Value::Object(_) | Value::Promise(_) 
-            | Value::DomElement(_) | Value::Event(_) => "object",
-            Value::Function { .. } | Value::NativeFunction(_) 
-            | Value::BoundMethod { .. } => "function",
+            Value::Array(_)
+            | Value::Object(_)
+            | Value::Promise(_)
+            | Value::DomElement(_)
+            | Value::Event(_) => "object",
+            Value::Function { .. } | Value::NativeFunction(_) | Value::BoundMethod { .. } => {
+                "function"
+            }
         }
     }
-    
+
     pub fn to_number(&self) -> f64 {
         match self {
             Value::Undefined => f64::NAN,
             Value::Null => 0.0,
-            Value::Boolean(b) => if *b { 1.0 } else { 0.0 },
+            Value::Boolean(b) => {
+                if *b {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             Value::Number(n) => *n,
             Value::String(s) => s.trim().parse().unwrap_or(f64::NAN),
             _ => f64::NAN,
         }
     }
-    
+
     pub fn to_string_value(&self) -> String {
         match self {
             Value::Undefined => "undefined".to_string(),
@@ -184,9 +196,7 @@ impl Value {
             }
             Value::String(s) => s.clone(),
             Value::Array(arr) => {
-                let items: Vec<String> = arr.borrow().iter()
-                    .map(|v| v.to_string_value())
-                    .collect();
+                let items: Vec<String> = arr.borrow().iter().map(|v| v.to_string_value()).collect();
                 items.join(",")
             }
             Value::Object(_) => "[object Object]".to_string(),
@@ -198,7 +208,7 @@ impl Value {
             Value::Event(_) => "[object Event]".to_string(),
         }
     }
-    
+
     pub fn equals(&self, other: &Value) -> bool {
         match (self, other) {
             (Value::Undefined, Value::Undefined) => true,
@@ -213,7 +223,7 @@ impl Value {
             _ => false,
         }
     }
-    
+
     pub fn strict_equals(&self, other: &Value) -> bool {
         match (self, other) {
             (Value::Undefined, Value::Undefined) => true,

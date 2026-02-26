@@ -1,5 +1,5 @@
 //! Phone sync system - Secure, user-based sessions
-//! 
+//!
 //! Connection model:
 //! 1. Phone connects via Tailscale (encrypted mesh)
 //! 2. Browser shows "Who's browsing?" with user avatars
@@ -16,17 +16,17 @@
 //! - Optional PIN per user
 //! - NO surveillance - we don't track what users browse
 
-pub mod protocol;
-pub mod server;
-pub mod secure;
 pub mod family;
+pub mod protocol;
+pub mod secure;
+pub mod server;
 pub mod users;
 
-pub use protocol::{SyncCommand, SyncEvent};
-pub use server::SyncServer;
-pub use secure::{SecureSyncServer, SyncConfig, TailscaleInfo};
 pub use family::{FamilyConfig, TrustLevel};
-pub use users::{UserManager, UserLoginInfo};
+pub use protocol::{SyncCommand, SyncEvent};
+pub use secure::{SecureSyncServer, SyncConfig, TailscaleInfo};
+pub use server::SyncServer;
+pub use users::{UserLoginInfo, UserManager};
 
 pub type SyncMessage = protocol::SyncMessage;
 pub type BindMode = secure::BindMode;

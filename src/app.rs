@@ -1,85 +1,93 @@
 //! Main application - Browser with egui chrome and wry webview
-//! 
+//!
 //! Architecture:
 //! - tao provides the main window
 //! - egui renders browser chrome (tabs, address bar, bookmarks bar, status bar)
 //! - wry webview handles web content in the content area
 //! - egui viewers handle files (PDF, images, documents, etc.) in the content area
 
-use crate::auth::{AuthManager, FirstRunState, FirstRunStep, DeviceType, TailscaleManager, PhoneSync, SyncType};
-use crate::browser::{BrowserEngine, DownloadState, Tab, TabContent, TabId, HistoryManager};
-use crate::console::{DevConsole, ConsolePanel, LogLevel, ConsoleEntry, NetworkEntry, console_log, console_info, console_warn, console_error, console_debug};
-use crate::file_handler::{FileType, OpenFile};
-use crate::html_renderer::HtmlRenderer;
+use crate::adblock::{
+    AdBlocker, AdBlockerUI, BlockStats, FilterList, FilterRule, ResourceType as AdResourceType,
+};
+use crate::ai::{help_query_for_context, run_help_query, AiRuntime, EasterEggReward, HelpQuery};
+use crate::auth::{
+    AuthManager, DeviceType, FirstRunState, FirstRunStep, PhoneSync, SyncType, TailscaleManager,
+};
+use crate::browser::{BrowserEngine, DownloadState, HistoryManager, Tab, TabContent, TabId};
+use crate::console::{
+    console_debug, console_error, console_info, console_log, console_warn, ConsoleEntry,
+    ConsolePanel, DevConsole, LogLevel, NetworkEntry,
+};
+use crate::detection::DetectionEngine;
 use crate::extensions::ExtensionManager;
+use crate::family_profiles::{Action, Profile, ProfileManager, ProfileType};
+use crate::file_handler::{FileType, OpenFile};
+use crate::hittest::{
+    hit_test, hit_test_all, CursorType, ElementType, HitResult, InteractionQuality,
+    InteractionTracker,
+};
+use crate::html_renderer::HtmlRenderer;
 use crate::icons::Icons;
 use crate::input::FocusManager;
 use crate::json_viewer::JsonViewer;
+use crate::layout::LayoutBox;
 use crate::mcp::{AgentRole, MessageRole};
 use crate::mcp_panel::{
-    McpPanel, PanelMode, PanelRender, RenderElement, AgentStatus,
-    Action as McpAction, ActionStyle, NotificationStyle, McpTheme, QuickCommand,
-    get_quick_commands,
+    get_quick_commands, Action as McpAction, ActionStyle, AgentStatus, McpPanel, McpTheme,
+    NotificationStyle, PanelMode, PanelRender, QuickCommand, RenderElement,
 };
-use crate::network_monitor::{NetworkMonitor, ActivityIndicatorState, ConnectionType, ConnectionState, ConnectionFilter, ConnectionSort, format_bytes, format_speed, format_duration};
-use crate::password_vault::{PasswordVault, Credential, PasswordGeneratorOptions, generate_password};
-use crate::rest_client::RestClient;
-use crate::smart_history::SmartHistory;
-use crate::family_profiles::{ProfileManager, ProfileType, Profile, Action};
-use crate::syntax::SyntaxHighlighter;
-use crate::detection::DetectionEngine;
-use crate::mcp_server_native::{McpNativeServer, NativeServerConfig, McpBridge};
-use crate::mcp_protocol::{McpCommand, McpResponse, ErrorCode};
-use crate::poisoning::{PoisoningEngine, PoisonMode};
-use crate::stealth_victories::StealthVictories;
-use crate::ai::{help_query_for_context, run_help_query, AiRuntime, EasterEggReward, HelpQuery};
-use crate::script_engine::ScriptEngine;
-use crate::adblock::{AdBlocker, AdBlockerUI, BlockStats, FilterList, FilterRule, ResourceType as AdResourceType};
-use crate::voice::{
-    VoiceConfig, VoiceState, VoiceSession, WhisperModel, WhisperEngine,
-    TranscriptResult, TranscriptSegment, AudioFormat, AudioDevice,
-    MicrophoneCapture, VoiceActivityDetector, VoiceInput, VoiceCommandResult,
-    VoiceCommand, CloudProvider, CloudTranscriber, HotkeyConfig, HotkeyModifiers,
-    TriggerMode, list_audio_devices, key_name, default_audio_device,
-    convert_to_whisper_format, convert_raw_pcm, WhisperParams, CaptureConfig,
-};
-use crate::hittest::{HitResult, ElementType, CursorType, InteractionTracker, InteractionQuality, hit_test, hit_test_all};
-use crate::layout::LayoutBox;
-use crate::protocol::{HttpClient, FetchOptions, CredentialsMode, CacheMode, RedirectMode, MultipartFormData, parse_data_url, url_encode, encode_form_data};
+use crate::mcp_protocol::{ErrorCode, McpCommand, McpResponse};
+use crate::mcp_server_native::{McpBridge, McpNativeServer, NativeServerConfig};
 use crate::network::{
-    NetworkState as NetActivityState,
-    NetworkRequest as NetActivityRequest,
-    SharedNetworkMonitor, shared_monitor, shared_monitor_describe,
+    shared_monitor, shared_monitor_describe, NetworkRequest as NetActivityRequest,
+    NetworkState as NetActivityState, SharedNetworkMonitor,
 };
-use crate::rest_client::{Method as RestMethod, ContentType as RestContentType, SavedRequest, RequestCollection};
-use crate::viewers::{
-    archive::ArchiveViewer,
-    audio::AudioViewer,
-    chemical::ChemicalViewer,
-    document::DocumentViewer,
-    ebook::EbookViewer,
-    font::FontViewer,
-    image::ImageViewer,
-    model3d::Model3DViewer,
-    pdf::PdfViewer,
-    spreadsheet::SpreadsheetViewer,
-    text::TextViewer,
-    video::VideoViewer,
+use crate::network_monitor::{
+    format_bytes, format_duration, format_speed, ActivityIndicatorState, ConnectionFilter,
+    ConnectionSort, ConnectionState, ConnectionType, NetworkMonitor,
 };
-use crate::sandbox::{
-    TrustLevel, SecurityContext, ContentType, InteractionType, ViolationSeverity,
+use crate::password_vault::{
+    generate_password, Credential, PasswordGeneratorOptions, PasswordVault,
+};
+use crate::poisoning::{PoisonMode, PoisoningEngine};
+use crate::protocol::{
+    encode_form_data, parse_data_url, url_encode, CacheMode, CredentialsMode, FetchOptions,
+    HttpClient, MultipartFormData, RedirectMode,
+};
+use crate::rest_client::RestClient;
+use crate::rest_client::{
+    ContentType as RestContentType, Method as RestMethod, RequestCollection, SavedRequest,
 };
 use crate::sandbox::page::Interaction;
 use crate::sandbox::popup::PopupRequest;
-use crate::sandbox::quarantine::{QuarantinedFile, WarningLevel, ReleaseStatus};
+use crate::sandbox::quarantine::{QuarantinedFile, ReleaseStatus, WarningLevel};
+use crate::sandbox::{
+    ContentType, InteractionType, SecurityContext, TrustLevel, ViolationSeverity,
+};
+use crate::script_engine::ScriptEngine;
+use crate::smart_history::SmartHistory;
+use crate::stealth_victories::StealthVictories;
+use crate::syntax::SyntaxHighlighter;
+use crate::viewers::{
+    archive::ArchiveViewer, audio::AudioViewer, chemical::ChemicalViewer, document::DocumentViewer,
+    ebook::EbookViewer, font::FontViewer, image::ImageViewer, model3d::Model3DViewer,
+    pdf::PdfViewer, spreadsheet::SpreadsheetViewer, text::TextViewer, video::VideoViewer,
+};
+use crate::voice::{
+    convert_raw_pcm, convert_to_whisper_format, default_audio_device, key_name, list_audio_devices,
+    AudioDevice, AudioFormat, CaptureConfig, CloudProvider, CloudTranscriber, HotkeyConfig,
+    HotkeyModifiers, MicrophoneCapture, TranscriptResult, TranscriptSegment, TriggerMode,
+    VoiceActivityDetector, VoiceCommand, VoiceCommandResult, VoiceConfig, VoiceInput, VoiceSession,
+    VoiceState, WhisperEngine, WhisperModel, WhisperParams,
+};
 use anyhow::Result;
 use eframe::egui::{self, Color32, FontId, Key, RichText, Vec2};
 use eframe::egui::{ColorImage, TextureHandle};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use uuid::Uuid;
 use url::Url;
 use urlencoding::decode;
+use uuid::Uuid;
 
 struct TrackedDownload {
     conn_id: u64,
@@ -104,16 +112,16 @@ pub enum LeftSidebarMode {
 pub struct BrowserApp {
     engine: BrowserEngine,
     extension_manager: ExtensionManager,
-    
+
     // Authentication & licensing
     auth: AuthManager,
     tailscale: TailscaleManager,
     first_run: FirstRunState,
-    
+
     // ==============================================================================
     // DISRUPTOR FEATURES - Kills paid software & Chrome bloat
     // ==============================================================================
-    
+
     // Network Activity Monitor - NO HIDDEN TRAFFIC
     network_monitor: NetworkMonitor,
     activity_indicator: ActivityIndicatorState,
@@ -125,7 +133,7 @@ pub struct BrowserApp {
     phone_sync: PhoneSync,
     network_active_connection: Option<u64>,
     network_last_net_sample: Option<Instant>,
-    
+
     // Password Vault - Replaces LastPass, 1Password, Chrome passwords
     password_vault: PasswordVault,
     vault_search_query: String,
@@ -152,7 +160,7 @@ pub struct BrowserApp {
     vault_export_buffer: String,
     password_generator_opts: PasswordGeneratorOptions,
     generated_password: String,
-    
+
     //  Smart History - 14.7s delay, NSFW detection
     history_manager: HistoryManager,
     smart_history: SmartHistory,
@@ -168,7 +176,7 @@ pub struct BrowserApp {
     history_nsfw_sensitivity: f32,
     history_last_url: Option<String>,
     history_last_title: Option<String>,
-    
+
     // Family Profiles - Parental controls that work
     profile_manager: ProfileManager,
     profiles_panel_visible: bool,
@@ -184,7 +192,7 @@ pub struct BrowserApp {
     profile_search_log_input: String,
     profile_report_output: String,
     profile_request_reason: String,
-    
+
     // Viewers for file types
     image_viewer: ImageViewer,
     pdf_viewer: PdfViewer,
@@ -198,14 +206,14 @@ pub struct BrowserApp {
     audio_viewer: AudioViewer,
     video_viewer: VideoViewer,
     ebook_viewer: EbookViewer,
-    
+
     // HTML/JS renderer for web content
     html_renderer: HtmlRenderer,
     // UI icon textures (loaded at startup from .ico files)
     legacy_icons: std::collections::HashMap<String, TextureHandle>,
     // SVG icon system (replaces all inline Unicode emoji)
     svg_icons: Icons,
-    
+
     // Developer tools
     dev_console: DevConsole,
     pub json_viewer: JsonViewer,
@@ -306,11 +314,11 @@ pub struct BrowserApp {
     left_sidebar_mode: LeftSidebarMode,
     ai_sidebar_visible: bool,
     ai_query_input: String,
-    
+
     // Context menu state
     context_menu_pos: Option<egui::Pos2>,
     context_menu_link: Option<String>,
-    
+
     // Status
     status_message: String,
 
@@ -349,7 +357,9 @@ impl BrowserApp {
             Ok(()) => {
                 self.profile_manager.record_activity();
                 self.profile_manager.record_site_visit(url);
-                let conn_id = self.network_monitor.start_connection(url, ConnectionType::Document);
+                let conn_id = self
+                    .network_monitor
+                    .start_connection(url, ConnectionType::Document);
                 self.network_active_connection = Some(conn_id);
                 self.network_last_net_sample = Some(Instant::now());
                 self.smart_history.visit(url, url, None);
@@ -370,10 +380,8 @@ impl BrowserApp {
 
                 // Set up honeypots for untrusted sites
                 if let Some(tab_id) = self.engine.active_tab_id() {
-                    self.detection_engine.setup_honeypots(
-                        tab_id.0,
-                        crate::sandbox::TrustLevel::Untrusted,
-                    );
+                    self.detection_engine
+                        .setup_honeypots(tab_id.0, crate::sandbox::TrustLevel::Untrusted);
                 }
 
                 self.engine.navigate(url);
@@ -383,7 +391,9 @@ impl BrowserApp {
                 let mut msg = format!("Navigation blocked: {}", reason_text);
                 if let Some(active) = self.profile_manager.active_profile() {
                     if active.is_restricted() {
-                        let req_id = self.profile_manager.request_approval(Action::AccessBlockedSite(url.to_string()));
+                        let req_id = self
+                            .profile_manager
+                            .request_approval(Action::AccessBlockedSite(url.to_string()));
                         msg = format!("{} (approval requested: {})", msg, req_id);
                     }
                 }
@@ -425,7 +435,8 @@ impl BrowserApp {
                                     self.extension_load_path.clear();
                                 }
                                 Err(e) => {
-                                    self.status_message = format!("Failed to load extension: {}", e);
+                                    self.status_message =
+                                        format!("Failed to load extension: {}", e);
                                 }
                             }
                         }
@@ -490,7 +501,8 @@ impl BrowserApp {
             size: size_hint,
         };
 
-        let needs_approval = self.profile_manager
+        let needs_approval = self
+            .profile_manager
             .active_profile()
             .map(|p| p.requires_approval(&action) || p.restrictions.downloads_need_approval)
             .unwrap_or(false);
@@ -499,7 +511,8 @@ impl BrowserApp {
             Ok(_) => {
                 let engine_filename = suggested_filename.unwrap_or(&filename);
                 self.engine.start_download(url, Some(engine_filename));
-                self.profile_manager.record_download(&filename, url, size_hint, true, None);
+                self.profile_manager
+                    .record_download(&filename, url, size_hint, true, None);
                 console_log(&format!("Download started: {}", filename));
                 self.status_message = format!("Download started: {}", filename);
                 true
@@ -509,7 +522,8 @@ impl BrowserApp {
                 if needs_approval {
                     let req_id = self.profile_manager.request_approval(action);
                     msg = format!("{} (approval requested: {})", msg, req_id);
-                    self.profile_manager.record_download(&filename, url, size_hint, false, None);
+                    self.profile_manager
+                        .record_download(&filename, url, size_hint, false, None);
                 }
                 console_warn(&msg);
                 self.status_message = msg;
@@ -540,24 +554,28 @@ impl BrowserApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         configure_fonts(&cc.egui_ctx);
         configure_style(&cc.egui_ctx, true, ThemePreset::SassyRedesign);
-        
+
         let auth = AuthManager::new();
         let mut tailscale = TailscaleManager::new();
         tailscale.check_installation();
-        
+
         let first_run = if auth.is_first_run {
             FirstRunState::default()
         } else {
-            FirstRunState { step: FirstRunStep::Complete, ..Default::default() }
+            FirstRunState {
+                step: FirstRunStep::Complete,
+                ..Default::default()
+            }
         };
-        
+
         // Get config directory for vault
         let config_dir = dirs::config_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join("SassyBrowser");
-        
+
         // Load legacy icon textures from assets/icons (ICO files)
-        let mut legacy_icons: std::collections::HashMap<String, TextureHandle> = std::collections::HashMap::new();
+        let mut legacy_icons: std::collections::HashMap<String, TextureHandle> =
+            std::collections::HashMap::new();
         let ctx = &cc.egui_ctx;
         let icon_files = [
             ("back", "assets/icons/backward.ico"),
@@ -574,7 +592,8 @@ impl BrowserApp {
                     let size = [img.width() as usize, img.height() as usize];
                     let pixels: Vec<u8> = img.into_raw();
                     let color_image = ColorImage::from_rgba_unmultiplied(size, &pixels);
-                    let handle = ctx.load_texture(*path, color_image, egui::TextureOptions::default());
+                    let handle =
+                        ctx.load_texture(*path, color_image, egui::TextureOptions::default());
                     legacy_icons.insert((*key).to_string(), handle);
                 }
             }
@@ -594,7 +613,7 @@ impl BrowserApp {
             auth,
             tailscale,
             first_run,
-            
+
             // Disruptor features
             network_monitor: NetworkMonitor::new(),
             activity_indicator: ActivityIndicatorState::default(),
@@ -659,7 +678,7 @@ impl BrowserApp {
             profile_search_log_input: String::new(),
             profile_report_output: String::new(),
             profile_request_reason: String::new(),
-            
+
             // Viewers
             image_viewer: ImageViewer::new(),
             pdf_viewer: PdfViewer::new(),
@@ -707,7 +726,9 @@ impl BrowserApp {
 
             // Ad blocker - always-on protection
             ad_blocker: std::sync::Arc::new(std::sync::RwLock::new(AdBlocker::new())),
-            ad_blocker_ui: AdBlockerUI::new(std::sync::Arc::new(std::sync::RwLock::new(AdBlocker::new()))),
+            ad_blocker_ui: AdBlockerUI::new(std::sync::Arc::new(std::sync::RwLock::new(
+                AdBlocker::new(),
+            ))),
             adblock_panel_visible: false,
 
             // AI runtime
@@ -815,24 +836,39 @@ impl BrowserApp {
     fn render_toolbar(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
-            
+
             let tab = self.engine.active_tab();
             let (can_back, can_forward, is_loading) = match tab {
-                Some(Tab { content: TabContent::Web { can_go_back, can_go_forward, loading, .. }, .. }) => {
-                    (*can_go_back, *can_go_forward, *loading)
-                }
+                Some(Tab {
+                    content:
+                        TabContent::Web {
+                            can_go_back,
+                            can_go_forward,
+                            loading,
+                            ..
+                        },
+                    ..
+                }) => (*can_go_back, *can_go_forward, *loading),
                 _ => (false, false, false),
             };
-            
+
             // Navigation buttons (SVG icons with text fallback)
             ui.add_enabled_ui(can_back, |ui| {
-                if self.svg_icons.button(ui, "nav-back", "Back (Alt+Left)").clicked() {
+                if self
+                    .svg_icons
+                    .button(ui, "nav-back", "Back (Alt+Left)")
+                    .clicked()
+                {
                     self.engine.go_back();
                 }
             });
 
             ui.add_enabled_ui(can_forward, |ui| {
-                if self.svg_icons.button(ui, "nav-forward", "Forward (Alt+Right)").clicked() {
+                if self
+                    .svg_icons
+                    .button(ui, "nav-forward", "Forward (Alt+Right)")
+                    .clicked()
+                {
                     self.engine.go_forward();
                 }
             });
@@ -848,25 +884,30 @@ impl BrowserApp {
             if self.svg_icons.button(ui, "home", "Home").clicked() {
                 self.engine.go_home();
             }
-            
+
             // Address bar
             let address_width = ui.available_width() - 150.0;
-            
+
             ui.scope(|ui| {
                 ui.set_min_width(address_width);
-                
+
                 let is_secure = match self.engine.active_tab() {
-                    Some(Tab { content: TabContent::Web { is_secure, .. }, .. }) => *is_secure,
+                    Some(Tab {
+                        content: TabContent::Web { is_secure, .. },
+                        ..
+                    }) => *is_secure,
                     _ => false,
                 };
-                
+
                 // Security indicator
                 if is_secure {
                     ui.colored_label(Color32::from_rgb(100, 200, 100), "");
                 }
 
                 let engine_text = self.engine.address_bar_text().to_string();
-                if !self.focus_manager.is_address_bar_focused() && self.focus_manager.address_bar.text != engine_text {
+                if !self.focus_manager.is_address_bar_focused()
+                    && self.focus_manager.address_bar.text != engine_text
+                {
                     self.focus_manager.address_bar.set_text(engine_text);
                 }
 
@@ -874,15 +915,17 @@ impl BrowserApp {
                     egui::TextEdit::singleline(&mut self.focus_manager.address_bar.text)
                         .desired_width(address_width - 40.0)
                         .font(FontId::proportional(14.0))
-                        .hint_text("Search or enter URL")
+                        .hint_text("Search or enter URL"),
                 );
 
                 if response.changed() {
-                    self.engine.set_address_bar_text(self.focus_manager.address_bar.text.clone());
+                    self.engine
+                        .set_address_bar_text(self.focus_manager.address_bar.text.clone());
                 }
 
                 if response.gained_focus() {
-                    self.focus_manager.focus_address_bar(self.engine.address_bar_text());
+                    self.focus_manager
+                        .focus_address_bar(self.engine.address_bar_text());
                     self.engine.set_address_bar_focused(true);
                 }
 
@@ -897,9 +940,13 @@ impl BrowserApp {
                     self.submit_address_bar();
                 }
             });
-            
+
             // Sidebar toggles
-            if self.svg_icons.button(ui, "books", "Toggle Sidebar").clicked() {
+            if self
+                .svg_icons
+                .button(ui, "books", "Toggle Sidebar")
+                .clicked()
+            {
                 self.left_sidebar_visible = !self.left_sidebar_visible;
             }
             if self.svg_icons.button(ui, "robot", "AI Assistant").clicked() {
@@ -909,20 +956,32 @@ impl BrowserApp {
             // Bookmark button (adds/removes on the bookmarks bar)
             let current_url = self.engine.address_bar_text().to_string();
             let is_bookmarked = self.engine.bookmarks.get_by_url(&current_url).is_some();
-            let bookmark_label = if is_bookmarked { "Bookmarked" } else { "Add to Bar" };
-            if ui.button(bookmark_label).on_hover_text("Toggle bookmark on Bookmarks Bar").clicked() {
+            let bookmark_label = if is_bookmarked {
+                "Bookmarked"
+            } else {
+                "Add to Bar"
+            };
+            if ui
+                .button(bookmark_label)
+                .on_hover_text("Toggle bookmark on Bookmarks Bar")
+                .clicked()
+            {
                 if is_bookmarked {
                     self.engine.bookmarks.remove_by_url(&current_url);
                     let _ = self.engine.bookmarks.save();
                     self.status_message = "Removed from Bookmarks Bar".into();
                 } else {
-                    let title = self.engine.active_tab().map(|t| t.title()).unwrap_or_else(|| current_url.clone());
+                    let title = self
+                        .engine
+                        .active_tab()
+                        .map(|t| t.title())
+                        .unwrap_or_else(|| current_url.clone());
                     self.engine.bookmarks.add_to_bar(&current_url, &title);
                     let _ = self.engine.bookmarks.save();
                     self.status_message = "Saved to Bookmarks Bar".into();
                 }
             }
-            
+
             // Menu button
             ui.menu_button("Menu", |ui| {
                 if ui.button("Open File...").clicked() {
@@ -932,9 +991,11 @@ impl BrowserApp {
                 ui.separator();
                 // Bookmarks menu button: prefer image icon if available
                 if let Some(tex) = self.legacy_icons.get("bookmarks") {
-                    if ui.add(egui::ImageButton::new((tex.id(), Vec2::new(18.0,18.0))))
+                    if ui
+                        .add(egui::ImageButton::new((tex.id(), Vec2::new(18.0, 18.0))))
                         .on_hover_text("Bookmarks")
-                        .clicked() {
+                        .clicked()
+                    {
                         self.guarded_navigate("sassy://bookmarks");
                         ui.close_menu();
                     }
@@ -958,7 +1019,8 @@ impl BrowserApp {
                     ui.close_menu();
                 }
                 if ui.button("Downloads").clicked() {
-                    self.engine.set_show_downloads_panel(!self.engine.show_downloads_panel());
+                    self.engine
+                        .set_show_downloads_panel(!self.engine.show_downloads_panel());
                     ui.close_menu();
                 }
                 ui.separator();
@@ -971,7 +1033,10 @@ impl BrowserApp {
                     ui.close_menu();
                 }
                 ui.separator();
-                if ui.checkbox(self.engine.show_bookmarks_bar_mut(), "Show Bookmarks Bar").changed() {
+                if ui
+                    .checkbox(self.engine.show_bookmarks_bar_mut(), "Show Bookmarks Bar")
+                    .changed()
+                {
                     ui.close_menu();
                 }
                 if ui.checkbox(&mut self.dark_mode, "Dark Mode").clicked() {
@@ -1008,11 +1073,23 @@ impl BrowserApp {
         let active = self.network_monitor.active_count();
 
         ui.horizontal(|ui| {
-            let label = format!("Net {} v{} ^{}", active, format_speed(down), format_speed(up));
-            if ui.selectable_label(self.activity_indicator.expanded, label).clicked() {
+            let label = format!(
+                "Net {} v{} ^{}",
+                active,
+                format_speed(down),
+                format_speed(up)
+            );
+            if ui
+                .selectable_label(self.activity_indicator.expanded, label)
+                .clicked()
+            {
                 self.activity_indicator.expanded = !self.activity_indicator.expanded;
             }
-            ui.label(format!("Total v{} ^{}", format_bytes(total_down), format_bytes(total_up)));
+            ui.label(format!(
+                "Total v{} ^{}",
+                format_bytes(total_down),
+                format_bytes(total_up)
+            ));
             if blocked > 0 {
                 ui.label(RichText::new(format!("Blocked {}", blocked)).color(Color32::RED));
             }
@@ -1027,32 +1104,89 @@ impl BrowserApp {
             egui::ComboBox::from_id_salt("net_filter")
                 .selected_text(format!("{:?}", self.activity_indicator.filter))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.activity_indicator.filter, ConnectionFilter::All, "All");
-                    ui.selectable_value(&mut self.activity_indicator.filter, ConnectionFilter::Active, "Active");
-                    ui.selectable_value(&mut self.activity_indicator.filter, ConnectionFilter::Documents, "Docs");
-                    ui.selectable_value(&mut self.activity_indicator.filter, ConnectionFilter::Downloads, "Downloads");
-                    ui.selectable_value(&mut self.activity_indicator.filter, ConnectionFilter::Scripts, "Scripts");
-                    ui.selectable_value(&mut self.activity_indicator.filter, ConnectionFilter::Images, "Images");
-                    ui.selectable_value(&mut self.activity_indicator.filter, ConnectionFilter::Xhr, "XHR");
-                    ui.selectable_value(&mut self.activity_indicator.filter, ConnectionFilter::Blocked, "Blocked");
+                    ui.selectable_value(
+                        &mut self.activity_indicator.filter,
+                        ConnectionFilter::All,
+                        "All",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.filter,
+                        ConnectionFilter::Active,
+                        "Active",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.filter,
+                        ConnectionFilter::Documents,
+                        "Docs",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.filter,
+                        ConnectionFilter::Downloads,
+                        "Downloads",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.filter,
+                        ConnectionFilter::Scripts,
+                        "Scripts",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.filter,
+                        ConnectionFilter::Images,
+                        "Images",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.filter,
+                        ConnectionFilter::Xhr,
+                        "XHR",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.filter,
+                        ConnectionFilter::Blocked,
+                        "Blocked",
+                    );
                 });
 
             ui.label("Sort");
             egui::ComboBox::from_id_salt("net_sort")
                 .selected_text(format!("{:?}", self.activity_indicator.sort_by))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.activity_indicator.sort_by, ConnectionSort::Newest, "Newest");
-                    ui.selectable_value(&mut self.activity_indicator.sort_by, ConnectionSort::Oldest, "Oldest");
-                    ui.selectable_value(&mut self.activity_indicator.sort_by, ConnectionSort::Largest, "Largest");
-                    ui.selectable_value(&mut self.activity_indicator.sort_by, ConnectionSort::Slowest, "Slowest");
-                    ui.selectable_value(&mut self.activity_indicator.sort_by, ConnectionSort::Domain, "Domain");
+                    ui.selectable_value(
+                        &mut self.activity_indicator.sort_by,
+                        ConnectionSort::Newest,
+                        "Newest",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.sort_by,
+                        ConnectionSort::Oldest,
+                        "Oldest",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.sort_by,
+                        ConnectionSort::Largest,
+                        "Largest",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.sort_by,
+                        ConnectionSort::Slowest,
+                        "Slowest",
+                    );
+                    ui.selectable_value(
+                        &mut self.activity_indicator.sort_by,
+                        ConnectionSort::Domain,
+                        "Domain",
+                    );
                 });
         });
 
         let mut conns = self.network_monitor.all_connections();
         conns.retain(|c| match self.activity_indicator.filter {
             ConnectionFilter::All => true,
-            ConnectionFilter::Active => matches!(c.state, ConnectionState::Connecting | ConnectionState::Uploading | ConnectionState::Downloading),
+            ConnectionFilter::Active => matches!(
+                c.state,
+                ConnectionState::Connecting
+                    | ConnectionState::Uploading
+                    | ConnectionState::Downloading
+            ),
             ConnectionFilter::Documents => c.connection_type == ConnectionType::Document,
             ConnectionFilter::Downloads => c.connection_type == ConnectionType::Download,
             ConnectionFilter::Scripts => c.connection_type == ConnectionType::Script,
@@ -1064,29 +1198,35 @@ impl BrowserApp {
         match self.activity_indicator.sort_by {
             ConnectionSort::Newest => conns.sort_by(|a, b| b.started_at.cmp(&a.started_at)),
             ConnectionSort::Oldest => conns.sort_by(|a, b| a.started_at.cmp(&b.started_at)),
-            ConnectionSort::Largest => conns.sort_by(|a, b| (b.bytes_received + b.bytes_sent).cmp(&(a.bytes_received + a.bytes_sent))),
-            ConnectionSort::Slowest => conns.sort_by(|a, b| a.bytes_received.cmp(&b.bytes_received)),
+            ConnectionSort::Largest => conns.sort_by(|a, b| {
+                (b.bytes_received + b.bytes_sent).cmp(&(a.bytes_received + a.bytes_sent))
+            }),
+            ConnectionSort::Slowest => {
+                conns.sort_by(|a, b| a.bytes_received.cmp(&b.bytes_received))
+            }
             ConnectionSort::Domain => conns.sort_by(|a, b| a.domain.cmp(&b.domain)),
         }
 
-        egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
-            for conn in conns {
-                let elapsed = conn.started_at.elapsed();
-                let total = conn.bytes_received + conn.bytes_sent;
-                let icon = conn.connection_type.icon();
-                let state_color = conn.state.color();
-                let color32 = Color32::from_rgb(state_color[0], state_color[1], state_color[2]);
-                ui.horizontal(|ui| {
-                    ui.label(icon);
-                    ui.label(RichText::new(&conn.domain).color(color32));
-                    ui.label(format_bytes(total).to_string());
-                    ui.label(format_duration(elapsed));
-                    if let Some(code) = conn.status_code {
-                        ui.label(format!("{}", code));
-                    }
-                });
-            }
-        });
+        egui::ScrollArea::vertical()
+            .max_height(160.0)
+            .show(ui, |ui| {
+                for conn in conns {
+                    let elapsed = conn.started_at.elapsed();
+                    let total = conn.bytes_received + conn.bytes_sent;
+                    let icon = conn.connection_type.icon();
+                    let state_color = conn.state.color();
+                    let color32 = Color32::from_rgb(state_color[0], state_color[1], state_color[2]);
+                    ui.horizontal(|ui| {
+                        ui.label(icon);
+                        ui.label(RichText::new(&conn.domain).color(color32));
+                        ui.label(format_bytes(total).to_string());
+                        ui.label(format_duration(elapsed));
+                        if let Some(code) = conn.status_code {
+                            ui.label(format!("{}", code));
+                        }
+                    });
+                }
+            });
     }
 
     fn render_vault_autofill(&mut self, ui: &mut egui::Ui) {
@@ -1094,13 +1234,19 @@ impl BrowserApp {
             return;
         }
 
-        let active_url = if let Some(Tab { content: TabContent::Web { url, .. }, .. }) = self.engine.active_tab() {
+        let active_url = if let Some(Tab {
+            content: TabContent::Web { url, .. },
+            ..
+        }) = self.engine.active_tab()
+        {
             url.clone()
         } else {
             return;
         };
 
-        let matches: Vec<Credential> = self.password_vault.find_for_url(&active_url)
+        let matches: Vec<Credential> = self
+            .password_vault
+            .find_for_url(&active_url)
             .into_iter()
             .cloned()
             .collect();
@@ -1123,7 +1269,10 @@ impl BrowserApp {
         ui.horizontal(|ui| {
             ui.label("Vault matches");
             for cred in matches.iter().take(3) {
-                if ui.small_button(format!("{} / {}", cred.title, cred.username)).clicked() {
+                if ui
+                    .small_button(format!("{} / {}", cred.title, cred.username))
+                    .clicked()
+                {
                     ui.output_mut(|o| o.copied_text = cred.password.clone());
                     self.vault_status = format!("Copied password for {}", cred.title);
                 }
@@ -1146,39 +1295,55 @@ impl BrowserApp {
         for download in &downloads {
             active_ids.push(download.id);
 
-            let entry = self.download_connections.entry(download.id).or_insert_with(|| TrackedDownload {
-                conn_id: self.network_monitor.start_connection(&download.url, ConnectionType::Download),
-                last_bytes: 0,
-                completed: false,
-            });
+            let entry = self
+                .download_connections
+                .entry(download.id)
+                .or_insert_with(|| TrackedDownload {
+                    conn_id: self
+                        .network_monitor
+                        .start_connection(&download.url, ConnectionType::Download),
+                    last_bytes: 0,
+                    completed: false,
+                });
 
             if download.downloaded_bytes > entry.last_bytes {
                 let delta = download.downloaded_bytes - entry.last_bytes;
-                self.network_monitor.update_connection(entry.conn_id, delta, 0);
+                self.network_monitor
+                    .update_connection(entry.conn_id, delta, 0);
                 entry.last_bytes = download.downloaded_bytes;
             }
 
             if !entry.completed {
                 match download.state {
                     DownloadState::Completed => {
-                        self.network_monitor.complete_connection(entry.conn_id, 200, download.mime_type.clone());
+                        self.network_monitor.complete_connection(
+                            entry.conn_id,
+                            200,
+                            download.mime_type.clone(),
+                        );
                         entry.completed = true;
                     }
                     DownloadState::Failed => {
-                        let reason = download.error.clone().unwrap_or_else(|| "Download failed".to_string());
+                        let reason = download
+                            .error
+                            .clone()
+                            .unwrap_or_else(|| "Download failed".to_string());
                         self.network_monitor.fail_connection(entry.conn_id, &reason);
                         entry.completed = true;
                     }
                     DownloadState::Cancelled => {
-                        self.network_monitor.fail_connection(entry.conn_id, "Cancelled");
+                        self.network_monitor
+                            .fail_connection(entry.conn_id, "Cancelled");
                         entry.completed = true;
                     }
-                    DownloadState::Paused | DownloadState::Pending | DownloadState::Downloading => {}
+                    DownloadState::Paused | DownloadState::Pending | DownloadState::Downloading => {
+                    }
                 }
             }
         }
 
-        self.download_connections.retain(|id, _| active_ids.contains(id));
+        self.download_connections
+            .retain(|id, _| active_ids.contains(id));
     }
 
     fn render_auth_panel(&mut self, ctx: &egui::Context) {
@@ -1199,7 +1364,10 @@ impl BrowserApp {
                 ui.horizontal(|ui| {
                     ui.heading("License & Devices");
                     if !self.auth_status.is_empty() {
-                        ui.label(RichText::new(&self.auth_status).color(Color32::from_rgb(120, 200, 255)));
+                        ui.label(
+                            RichText::new(&self.auth_status)
+                                .color(Color32::from_rgb(120, 200, 255)),
+                        );
                     }
                 });
 
@@ -1263,7 +1431,10 @@ impl BrowserApp {
                     ui.label("Auth key");
                     ui.text_edit_singleline(&mut self.tailscale_auth_key_input);
                     if ui.small_button("Start with key").clicked() {
-                        match self.tailscale.start_with_auth_key(&self.tailscale_auth_key_input) {
+                        match self
+                            .tailscale
+                            .start_with_auth_key(&self.tailscale_auth_key_input)
+                        {
                             Ok(()) => self.auth_status = "Tailscale started with key".into(),
                             Err(e) => self.auth_status = format!("Auth key failed: {}", e),
                         }
@@ -1283,7 +1454,10 @@ impl BrowserApp {
                             Err(e) => self.auth_status = format!("Receive failed: {}", e),
                         }
                     }
-                    ui.add(egui::TextEdit::singleline(&mut self.tailscale_file_target).hint_text("peer_ip:/path/to/file"));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.tailscale_file_target)
+                            .hint_text("peer_ip:/path/to/file"),
+                    );
                     if ui.small_button("Send test file").clicked() {
                         let parts: Vec<_> = self.tailscale_file_target.splitn(2, ':').collect();
                         if parts.len() == 2 {
@@ -1323,7 +1497,8 @@ impl BrowserApp {
                         }
                     }
                     if ui.small_button("Queue bookmark sync").clicked() {
-                        self.phone_sync.queue_sync(SyncType::Bookmark, b"sample-bookmark".to_vec());
+                        self.phone_sync
+                            .queue_sync(SyncType::Bookmark, b"sample-bookmark".to_vec());
                         self.auth_status = "Queued sync".into();
                     }
                     if ui.small_button("Sync all").clicked() {
@@ -1335,20 +1510,30 @@ impl BrowserApp {
                 });
             });
     }
-    
+
     fn render_tabs(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            let tabs: Vec<(TabId, String, String, bool, bool)> = self.engine.tabs()
+            let tabs: Vec<(TabId, String, String, bool, bool)> = self
+                .engine
+                .tabs()
                 .iter()
-                .map(|t| (t.id, t.icon().to_string(), t.title(), t.is_loading(), t.pinned))
+                .map(|t| {
+                    (
+                        t.id,
+                        t.icon().to_string(),
+                        t.title(),
+                        t.is_loading(),
+                        t.pinned,
+                    )
+                })
                 .collect();
-            
+
             let active_idx = self.engine.active_tab_index();
             let mut close_tab: Option<usize> = None;
-            
+
             for (idx, (id, icon, title, loading, pinned)) in tabs.iter().enumerate() {
                 let is_active = idx == active_idx;
-                
+
                 // Tab styling: use the current visuals/panel fills instead of hardcoded grays
                 let visuals = ui.ctx().style().visuals.clone();
                 let bg_color = if is_active {
@@ -1356,10 +1541,15 @@ impl BrowserApp {
                 } else {
                     visuals.widgets.inactive.bg_fill
                 };
-                
+
                 egui::Frame::none()
                     .fill(bg_color)
-                    .rounding(egui::Rounding { nw: 4.0, ne: 4.0, sw: 0.0, se: 0.0 })
+                    .rounding(egui::Rounding {
+                        nw: 4.0,
+                        ne: 4.0,
+                        sw: 0.0,
+                        se: 0.0,
+                    })
                     .inner_margin(egui::Margin::symmetric(8.0, 4.0))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -1369,33 +1559,35 @@ impl BrowserApp {
                             } else {
                                 ui.label(icon);
                             }
-                            
+
                             // Title (truncated)
                             let max_title_len = if *pinned { 0 } else { 20 };
-                            let display_title = if title.len() > max_title_len && max_title_len > 0 {
+                            let display_title = if title.len() > max_title_len && max_title_len > 0
+                            {
                                 format!("{}...", &title[..max_title_len.min(title.len())])
                             } else if max_title_len == 0 {
                                 String::new()
                             } else {
                                 title.clone()
                             };
-                            
+
                             let tab_response = ui.selectable_label(is_active, &display_title);
-                            
+
                             if tab_response.clicked() {
                                 self.engine.set_active_tab(idx);
                             }
 
                             if tab_response.secondary_clicked() {
                                 self.context_menu_pos = tab_response.interact_pointer_pos();
-                                self.context_menu_link = Some(self.engine.tabs()[idx].content.get_display_url());
+                                self.context_menu_link =
+                                    Some(self.engine.tabs()[idx].content.get_display_url());
                             }
-                            
+
                             // Middle click to close
                             if tab_response.middle_clicked() {
                                 close_tab = Some(idx);
                             }
-                            
+
                             // Context menu
                             tab_response.context_menu(|ui| {
                                 if ui.button("New Tab").clicked() {
@@ -1428,23 +1620,26 @@ impl BrowserApp {
                                     ui.close_menu();
                                 }
                             });
-                            
+
                             // Close button (not for pinned tabs)
-                            if !*pinned
-                                && ui.small_button("x").clicked() {
-                                    close_tab = Some(idx);
-                                }
+                            if !*pinned && ui.small_button("x").clicked() {
+                                close_tab = Some(idx);
+                            }
                         });
                     });
-                
+
                 ui.add_space(2.0);
             }
-            
+
             // New tab button
-            if self.svg_icons.button(ui, "plus", "New Tab (Ctrl+T)").clicked() {
+            if self
+                .svg_icons
+                .button(ui, "plus", "New Tab (Ctrl+T)")
+                .clicked()
+            {
                 self.engine.new_tab();
             }
-            
+
             // Handle tab close
             if let Some(idx) = close_tab {
                 self.engine.close_tab(idx);
@@ -1455,7 +1650,9 @@ impl BrowserApp {
             } else {
                 None
             };
-            self.session_state.tabs = self.engine.tabs()
+            self.session_state.tabs = self
+                .engine
+                .tabs()
                 .iter()
                 .map(|t| crate::data::TabState {
                     id: t.id.0,
@@ -1467,54 +1664,62 @@ impl BrowserApp {
                 .collect();
         });
     }
-    
+
     fn render_bookmarks_bar(&mut self, ui: &mut egui::Ui) {
         if !self.engine.show_bookmarks_bar() {
             return;
         }
-        
+
         ui.horizontal(|ui| {
-            let bookmarks: Vec<_> = self.engine.bookmarks.bookmarks_bar()
+            let bookmarks: Vec<_> = self
+                .engine
+                .bookmarks
+                .bookmarks_bar()
                 .into_iter()
                 .map(|b| (b.url.clone(), b.title.clone()))
                 .collect();
-            
+
             let is_empty = bookmarks.is_empty();
-            
+
             for (url, title) in &bookmarks {
                 let display = if title.len() > 15 {
                     format!("{}...", &title[..15])
                 } else {
                     title.clone()
                 };
-                
+
                 if ui.button(&display).on_hover_text(url).clicked() {
                     self.guarded_navigate(url);
                 }
             }
-            
+
             if is_empty {
-                ui.label(RichText::new("Bookmarks bar is empty").italics().color(Color32::from_rgb(160,160,160)));
+                ui.label(
+                    RichText::new("Bookmarks bar is empty")
+                        .italics()
+                        .color(Color32::from_rgb(160, 160, 160)),
+                );
             }
         });
     }
-    
+
     fn render_find_bar(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         if !self.find_bar_visible {
             return;
         }
-        
+
         ui.horizontal(|ui| {
             ui.label("Find:");
-            
+
             let response = ui.text_edit_singleline(&mut self.find_query);
-            
+
             if response.lost_focus() && ctx.input(|i| i.key_pressed(Key::Escape)) {
                 self.find_bar_visible = false;
             }
-            
-            if ui.button("Find").clicked() ||
-               (response.lost_focus() && ctx.input(|i| i.key_pressed(Key::Enter))) {
+
+            if ui.button("Find").clicked()
+                || (response.lost_focus() && ctx.input(|i| i.key_pressed(Key::Enter)))
+            {
                 self.find_match_count = self.html_renderer.find_text(&self.find_query);
             }
 
@@ -1528,7 +1733,7 @@ impl BrowserApp {
             }
         });
     }
-    
+
     fn render_content(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         // Extract content info first to avoid borrow conflicts
         let content_type = self.engine.active_tab().map(|t| match &t.content {
@@ -1540,7 +1745,7 @@ impl BrowserApp {
             TabContent::Web { url, .. } => ("Web", url.clone()),
             TabContent::File(_) => ("File", String::new()),
         });
-        
+
         match content_type {
             Some(("New Tab", _)) => self.render_new_tab_page(ui),
             Some(("Settings", _)) => self.render_settings_page(ui),
@@ -1625,16 +1830,20 @@ impl BrowserApp {
             }
         }
     }
-    
+
     fn render_new_tab_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(60.0);
-                
+
                 // Logo
                 ui.heading(RichText::new("Sassy Browser").size(48.0));
                 ui.add_space(10.0);
-                ui.label(RichText::new("It's everything you love - from every browser you hate.").size(16.0).color(Color32::GRAY));
+                ui.label(
+                    RichText::new("It's everything you love - from every browser you hate.")
+                        .size(16.0)
+                        .color(Color32::GRAY),
+                );
 
                 ui.add_space(40.0);
 
@@ -1645,7 +1854,7 @@ impl BrowserApp {
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut self.new_tab_search_query)
                             .hint_text("Search with DuckDuckGo or enter URL")
-                            .desired_width(ui.available_width() - quarter)
+                            .desired_width(ui.available_width() - quarter),
                     );
                     if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         if !self.new_tab_search_query.is_empty() {
@@ -1653,9 +1862,11 @@ impl BrowserApp {
                             if query.contains('.') || query.starts_with("http") {
                                 self.guarded_navigate(&query);
                             } else {
-                                let search_url = format!("{}{}",
+                                let search_url = format!(
+                                    "{}{}",
                                     self.engine.search_engine,
-                                    query.replace(' ', "+"));
+                                    query.replace(' ', "+")
+                                );
                                 self.guarded_navigate(&search_url);
                             }
                             self.new_tab_search_query.clear();
@@ -1668,13 +1879,16 @@ impl BrowserApp {
                 // Quick access - Most visited
                 ui.heading("Most Visited");
                 ui.add_space(10.0);
-                
+
                 ui.horizontal_wrapped(|ui| {
-                    let most_visited: Vec<_> = self.engine.history.most_visited(8)
+                    let most_visited: Vec<_> = self
+                        .engine
+                        .history
+                        .most_visited(8)
                         .into_iter()
                         .map(|h| (h.url.clone(), h.title.clone()))
                         .collect();
-                    
+
                     for (url, title) in most_visited {
                         let display = if title.is_empty() {
                             url::Url::parse(&url)
@@ -1686,7 +1900,7 @@ impl BrowserApp {
                         } else {
                             title
                         };
-                        
+
                         if ui.button(RichText::new(&display).size(14.0)).clicked() {
                             self.guarded_navigate(&url);
                         }
@@ -1713,44 +1927,52 @@ impl BrowserApp {
                 // Supported formats info
                 ui.heading("Native File Support - 100+ Formats");
                 ui.add_space(10.0);
-                
+
                 ui.horizontal_wrapped(|ui| {
                     ui.label("Images (PNG, JPG, RAW, PSD, SVG)");
                     ui.label("PDF");
                     ui.label("Office Docs (DOCX, ODT, RTF)");
                     ui.label("Spreadsheets (XLSX, CSV)");
                 });
-                
+
                 ui.add_space(8.0);
-                
+
                 ui.horizontal_wrapped(|ui| {
                     ui.label("Scientific (PDB, MOL, XYZ, CIF)");
                     ui.label("Archive Files (ZIP, 7z, RAR, TAR)");
                     ui.label("3D-Rendered Models (OBJ, STL, GLTF)");
                     ui.label("Fonts (TTF, OTF, WOFF)");
                 });
-                
+
                 ui.add_space(8.0);
-                
+
                 ui.horizontal_wrapped(|ui| {
                     ui.label("Audio (MP3, FLAC, WAV, OGG)");
                     ui.label("Video (MP4, MKV, WebM)");
                     ui.label("eBooks (EPUB, MOBI)");
                     ui.label("Code (100+ languages)");
                 });
-                
+
                 ui.add_space(20.0);
-                ui.label(RichText::new("Drag & drop any file or use File -> Open").italics().color(Color32::GRAY));
+                ui.label(
+                    RichText::new("Drag & drop any file or use File -> Open")
+                        .italics()
+                        .color(Color32::GRAY),
+                );
             });
         });
     }
-    
+
     fn render_web_content(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui, url: &str) {
         let url = url.to_string();
         let available = ui.available_size();
         let accent_warn = Color32::from_rgb(0xf7, 0x8c, 0x1f);
         // Dark/light mode background
-        let bg = if self.dark_mode { Color32::from_gray(25) } else { Color32::WHITE };
+        let bg = if self.dark_mode {
+            Color32::from_gray(25)
+        } else {
+            Color32::WHITE
+        };
         egui::Frame::none()
             .fill(bg)
             .inner_margin(16.0)
@@ -1759,7 +1981,10 @@ impl BrowserApp {
                 // Render HTML with flagged link highlighting
                 let smart_history = &self.smart_history;
                 let profile_manager = &self.profile_manager;
-                let blocklist = profile_manager.active_profile().map(|p| p.restrictions.blocklist.clone()).unwrap_or_default();
+                let blocklist = profile_manager
+                    .active_profile()
+                    .map(|p| p.restrictions.blocklist.clone())
+                    .unwrap_or_default();
                 let link_check = |href: &str| {
                     let domain = crate::family_profiles::extract_domain(href);
                     // Blocklist
@@ -1798,7 +2023,13 @@ impl BrowserApp {
                 }
                 if let Some(doc) = self.html_renderer.cached_doc.clone() {
                     for node in &doc.nodes {
-                        self.html_renderer.render_node_with_link_check(ui, node, &doc.styles, Some(&link_check), accent_warn);
+                        self.html_renderer.render_node_with_link_check(
+                            ui,
+                            node,
+                            &doc.styles,
+                            Some(&link_check),
+                            accent_warn,
+                        );
                     }
                 } else {
                     self.html_renderer.render(ui, &url);
@@ -1824,11 +2055,15 @@ impl BrowserApp {
                     if ui.small_button("Open in system browser").clicked() {
                         let _ = open::that(&url);
                     }
-                    ui.label(RichText::new("for full web experience").small().color(Color32::GRAY));
+                    ui.label(
+                        RichText::new("for full web experience")
+                            .small()
+                            .color(Color32::GRAY),
+                    );
                 });
             });
     }
-    
+
     pub fn render_file_content(&mut self, ui: &mut egui::Ui, file: &OpenFile) {
         let icons = &self.svg_icons;
         match file.file_type {
@@ -1836,9 +2071,16 @@ impl BrowserApp {
                 self.image_viewer.render(ui, file, self.zoom_level, icons)
             }
             FileType::Pdf => self.pdf_viewer.render(ui, file, self.zoom_level, icons),
-            FileType::Document => self.document_viewer.render(ui, file, self.zoom_level, icons),
-            FileType::Spreadsheet => self.spreadsheet_viewer.render(ui, file, self.zoom_level, icons),
-            FileType::Chemical => self.chemical_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Document => self
+                .document_viewer
+                .render(ui, file, self.zoom_level, icons),
+            FileType::Spreadsheet => {
+                self.spreadsheet_viewer
+                    .render(ui, file, self.zoom_level, icons)
+            }
+            FileType::Chemical => self
+                .chemical_viewer
+                .render(ui, file, self.zoom_level, icons),
             FileType::Archive => self.archive_viewer.render(ui, file, self.zoom_level, icons),
             FileType::Model3D => self.model3d_viewer.render(ui, file, self.zoom_level, icons),
             FileType::Font => self.font_viewer.render(ui, file, self.zoom_level, icons),
@@ -1846,17 +2088,19 @@ impl BrowserApp {
             FileType::Video => self.video_viewer.render(ui, file, self.zoom_level, icons),
             FileType::Ebook => self.ebook_viewer.render(ui, file, self.zoom_level, icons),
             FileType::Markdown => self.text_viewer.render(ui, file, self.zoom_level, icons),
-            FileType::Text | FileType::Unknown => self.text_viewer.render(ui, file, self.zoom_level, icons),
+            FileType::Text | FileType::Unknown => {
+                self.text_viewer.render(ui, file, self.zoom_level, icons)
+            }
         }
     }
-    
+
     fn render_settings_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.heading(" Settings");
             ui.separator();
-            
+
             ui.add_space(20.0);
-            
+
             // Appearance
             ui.heading("Appearance");
             ui.checkbox(&mut self.dark_mode, "Dark Mode");
@@ -1871,8 +2115,21 @@ impl BrowserApp {
                 egui::ComboBox::from_id_salt("theme_preset_combo")
                     .selected_text(preset_label)
                     .show_ui(ui, |ui| {
-                        if ui.selectable_value(&mut self.theme_preset, ThemePreset::SassyBrand, "Sassy Brand").changed() ||
-                           ui.selectable_value(&mut self.theme_preset, ThemePreset::SassyRedesign, "Sassy Redesign").changed() {
+                        if ui
+                            .selectable_value(
+                                &mut self.theme_preset,
+                                ThemePreset::SassyBrand,
+                                "Sassy Brand",
+                            )
+                            .changed()
+                            || ui
+                                .selectable_value(
+                                    &mut self.theme_preset,
+                                    ThemePreset::SassyRedesign,
+                                    "Sassy Redesign",
+                                )
+                                .changed()
+                        {
                             // Theme will be applied on next frame via configure_style
                         }
                     });
@@ -1905,7 +2162,8 @@ impl BrowserApp {
                     ("Bing", "https://www.bing.com/search?q="),
                     ("Brave", "https://search.brave.com/search?q="),
                 ];
-                let current_label = search_options.iter()
+                let current_label = search_options
+                    .iter()
                     .find(|(_, url)| *url == self.engine.search_engine.as_str())
                     .map(|(name, _)| *name)
                     .unwrap_or("Custom");
@@ -1913,15 +2171,18 @@ impl BrowserApp {
                     .selected_text(current_label)
                     .show_ui(ui, |ui| {
                         for (name, url) in &search_options {
-                            if ui.selectable_label(self.engine.search_engine == *url, *name).clicked() {
+                            if ui
+                                .selectable_label(self.engine.search_engine == *url, *name)
+                                .clicked()
+                            {
                                 self.engine.set_search_engine(url.to_string());
                             }
                         }
                     });
             });
-            
+
             ui.add_space(20.0);
-            
+
             // Downloads
             ui.heading("Downloads");
             ui.horizontal(|ui| {
@@ -1935,17 +2196,17 @@ impl BrowserApp {
                     self.engine.downloads.set_download_dir(current);
                 }
             });
-            
+
             ui.add_space(20.0);
-            
+
             // Privacy
             ui.heading("Privacy");
             if ui.button("Clear Browsing Data...").clicked() {
                 self.show_clear_data_dialog = true;
             }
-            
+
             ui.add_space(20.0);
-            
+
             // About
             ui.heading("About");
             ui.label("Sassy Browser v2.0.0");
@@ -1954,42 +2215,49 @@ impl BrowserApp {
             ui.hyperlink_to("GitHub", "https://github.com/yourusername/sassy-browser");
         });
     }
-    
+
     fn render_history_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("History");
-                
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("Clear All History").clicked() {
                         self.engine.history.clear();
                     }
                 });
             });
-            
+
             ui.separator();
-            
-            let history: Vec<_> = self.engine.history.recent(100)
+
+            let history: Vec<_> = self
+                .engine
+                .history
+                .recent(100)
                 .into_iter()
                 .map(|h| (h.url.clone(), h.title.clone(), h.visit_count))
                 .collect();
-            
+
             let is_empty = history.is_empty();
-            
+
             for (url, title, visits) in &history {
                 ui.horizontal(|ui| {
                     let display_title = if title.is_empty() { url } else { title };
-                    
+
                     if ui.link(display_title).clicked() {
                         self.guarded_navigate(url);
                     }
-                    
+
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new(format!("{} visits", visits)).small().color(Color32::GRAY));
+                        ui.label(
+                            RichText::new(format!("{} visits", visits))
+                                .small()
+                                .color(Color32::GRAY),
+                        );
                     });
                 });
             }
-            
+
             ui.add_space(16.0);
             ui.heading("Smart History (last 20)");
             let smart_recent: Vec<_> = self.smart_history.recent(20).into_iter().cloned().collect();
@@ -1999,52 +2267,67 @@ impl BrowserApp {
                         self.guarded_navigate(&entry.url);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new(entry.domain.clone()).small().color(Color32::GRAY));
+                        ui.label(
+                            RichText::new(entry.domain.clone())
+                                .small()
+                                .color(Color32::GRAY),
+                        );
                     });
                 });
             }
 
             if is_empty {
-                ui.label(RichText::new("No history yet").italics().color(Color32::GRAY));
+                ui.label(
+                    RichText::new("No history yet")
+                        .italics()
+                        .color(Color32::GRAY),
+                );
             }
         });
     }
-    
+
     fn render_bookmarks_page(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.heading("Bookmarks");
             ui.separator();
-            
-            let bookmarks: Vec<_> = self.engine.bookmarks.all()
+
+            let bookmarks: Vec<_> = self
+                .engine
+                .bookmarks
+                .all()
                 .iter()
                 .map(|b| (b.id, b.url.clone(), b.title.clone()))
                 .collect();
-            
+
             let is_empty = bookmarks.is_empty();
             let mut remove_id = None;
-            
+
             for (id, url, title) in &bookmarks {
                 ui.horizontal(|ui| {
                     if ui.link(title).clicked() {
                         self.guarded_navigate(url);
                     }
-                    
+
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button("x").clicked() {
                             remove_id = Some(*id);
                         }
-                        ui.label(RichText::new(url).color(Color32::from_rgb(150,150,150)));
+                        ui.label(RichText::new(url).color(Color32::from_rgb(150, 150, 150)));
                     });
                 });
             }
-            
+
             // Remove bookmark after iteration
             if let Some(id) = remove_id {
                 self.engine.bookmarks.remove(id);
             }
-            
+
             if is_empty {
-                ui.label(RichText::new("No bookmarks yet").italics().color(Color32::from_rgb(160,160,160)));
+                ui.label(
+                    RichText::new("No bookmarks yet")
+                        .italics()
+                        .color(Color32::from_rgb(160, 160, 160)),
+                );
             }
 
             ui.separator();
@@ -2052,7 +2335,11 @@ impl BrowserApp {
             ui.label("Import HTML (paste Netscape format)");
             ui.text_edit_multiline(&mut self.bookmark_import_buffer);
             if ui.small_button("Import").clicked() {
-                match self.engine.bookmarks.import_html(&self.bookmark_import_buffer) {
+                match self
+                    .engine
+                    .bookmarks
+                    .import_html(&self.bookmark_import_buffer)
+                {
                     Ok(count) => {
                         let _ = self.engine.bookmarks.save();
                         self.status_message = format!("Imported {} bookmarks", count);
@@ -2078,24 +2365,34 @@ impl BrowserApp {
                     let _ = std::fs::create_dir_all(parent);
                 }
                 match std::fs::write(&export_path, &self.bookmark_export_buffer) {
-                    Ok(_) => self.status_message = format!("Saved export to {}", export_path.display()),
+                    Ok(_) => {
+                        self.status_message = format!("Saved export to {}", export_path.display())
+                    }
                     Err(e) => self.status_message = format!("Save failed: {}", e),
                 }
             }
         });
     }
-    
+
     fn render_downloads_page(&mut self, ui: &mut egui::Ui) {
-        use crate::family_profiles::{ApprovalStatus, Action};
+        use crate::family_profiles::{Action, ApprovalStatus};
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("Downloads");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let active = self.engine.downloads.has_active_downloads();
                     if active {
-                        ui.label(RichText::new("Active").small().color(Color32::from_rgb(0x16, 0xf2, 0xd6)));
+                        ui.label(
+                            RichText::new("Active")
+                                .small()
+                                .color(Color32::from_rgb(0x16, 0xf2, 0xd6)),
+                        );
                     }
-                    if ui.button("Clear Completed").on_hover_text("Remove finished downloads from the list").clicked() {
+                    if ui
+                        .button("Clear Completed")
+                        .on_hover_text("Remove finished downloads from the list")
+                        .clicked()
+                    {
                         self.engine.downloads.clear_finished();
                     }
                 });
@@ -2103,8 +2400,14 @@ impl BrowserApp {
 
             ui.horizontal(|ui| {
                 ui.label("URL");
-                ui.text_edit_singleline(&mut self.download_url_input).on_hover_text("Paste a direct download link here");
-                if ui.button("Start").on_hover_text("Request download (may require approval)").clicked() && !self.download_url_input.is_empty() {
+                ui.text_edit_singleline(&mut self.download_url_input)
+                    .on_hover_text("Paste a direct download link here");
+                if ui
+                    .button("Start")
+                    .on_hover_text("Request download (may require approval)")
+                    .clicked()
+                    && !self.download_url_input.is_empty()
+                {
                     let url = self.download_url_input.clone();
                     self.guard_download_request(&url, None);
                     self.download_url_input.clear();
@@ -2113,7 +2416,9 @@ impl BrowserApp {
             ui.separator();
 
             // Show pending/denied/expired approval requests for downloads
-            let approval_requests: Vec<_> = self.profile_manager.all_approval_requests()
+            let approval_requests: Vec<_> = self
+                .profile_manager
+                .all_approval_requests()
                 .iter()
                 .filter(|r| matches!(&r.action, Action::Download { .. }))
                 .cloned()
@@ -2123,24 +2428,48 @@ impl BrowserApp {
                 ui.heading("Download Approvals");
                 for req in &approval_requests {
                     let (status_text, color, tooltip) = match req.status {
-                        ApprovalStatus::Pending => ("Pending", Color32::YELLOW, "Waiting for parent approval"),
-                        ApprovalStatus::Approved => ("Approved", Color32::from_rgb(0x16, 0xf2, 0xd6), "Approved by parent"),
-                        ApprovalStatus::Denied => ("Denied", Color32::RED, req.parent_response.as_deref().unwrap_or("Denied by parent")),
-                        ApprovalStatus::Expired => ("Expired", Color32::GRAY, "Approval request expired"),
+                        ApprovalStatus::Pending => {
+                            ("Pending", Color32::YELLOW, "Waiting for parent approval")
+                        }
+                        ApprovalStatus::Approved => (
+                            "Approved",
+                            Color32::from_rgb(0x16, 0xf2, 0xd6),
+                            "Approved by parent",
+                        ),
+                        ApprovalStatus::Denied => (
+                            "Denied",
+                            Color32::RED,
+                            req.parent_response.as_deref().unwrap_or("Denied by parent"),
+                        ),
+                        ApprovalStatus::Expired => {
+                            ("Expired", Color32::GRAY, "Approval request expired")
+                        }
                     };
                     ui.horizontal(|ui| {
                         if let Action::Download { filename, size, .. } = &req.action {
                             ui.label(RichText::new(filename).strong());
                             ui.label(format!("{:.1} MB", *size as f32 / 1_048_576.0));
-                            ui.label(RichText::new(status_text).color(color)).on_hover_text(tooltip);
-                            if (req.status == ApprovalStatus::Denied || req.status == ApprovalStatus::Expired)
-                                && ui.button("Resubmit").on_hover_text("Request approval again").clicked() {
-                                    let new_id = self.profile_manager.request_approval(req.action.clone());
-                                    self.status_message = format!("Resubmitted approval request: {}", new_id);
-                                }
+                            ui.label(RichText::new(status_text).color(color))
+                                .on_hover_text(tooltip);
+                            if (req.status == ApprovalStatus::Denied
+                                || req.status == ApprovalStatus::Expired)
+                                && ui
+                                    .button("Resubmit")
+                                    .on_hover_text("Request approval again")
+                                    .clicked()
+                            {
+                                let new_id =
+                                    self.profile_manager.request_approval(req.action.clone());
+                                self.status_message =
+                                    format!("Resubmitted approval request: {}", new_id);
+                            }
                             if let Some(resp) = &req.parent_response {
                                 if req.status == ApprovalStatus::Denied {
-                                    ui.label(RichText::new(format!("Reason: {}", resp)).color(Color32::RED)).on_hover_text("Parent's reason for denial");
+                                    ui.label(
+                                        RichText::new(format!("Reason: {}", resp))
+                                            .color(Color32::RED),
+                                    )
+                                    .on_hover_text("Parent's reason for denial");
                                 }
                             }
                         }
@@ -2163,21 +2492,39 @@ impl BrowserApp {
                         crate::browser::DownloadState::Downloading => {
                             ui.add(egui::ProgressBar::new(download.progress()).show_percentage());
                             ui.label(format!("{:.1} KB/s", download.speed_bps() / 1024.0));
-                            if ui.small_button("Cancel").on_hover_text("Cancel this download").clicked() {
+                            if ui
+                                .small_button("Cancel")
+                                .on_hover_text("Cancel this download")
+                                .clicked()
+                            {
                                 self.engine.downloads.cancel_download(download.id);
                             }
                         }
                         crate::browser::DownloadState::Completed => {
-                            ui.label(RichText::new("Complete").color(Color32::from_rgb(0x16, 0xf2, 0xd6)));
-                            if ui.small_button("Open").on_hover_text("Open the downloaded file").clicked() {
+                            ui.label(
+                                RichText::new("Complete")
+                                    .color(Color32::from_rgb(0x16, 0xf2, 0xd6)),
+                            );
+                            if ui
+                                .small_button("Open")
+                                .on_hover_text("Open the downloaded file")
+                                .clicked()
+                            {
                                 let _ = open::that(&download.save_path);
                             }
-                            if ui.small_button("Show in Folder").on_hover_text("Show file in folder").clicked() {
-                                let _ = open::that(download.save_path.parent().unwrap_or(&download.save_path));
+                            if ui
+                                .small_button("Show in Folder")
+                                .on_hover_text("Show file in folder")
+                                .clicked()
+                            {
+                                let _ = open::that(
+                                    download.save_path.parent().unwrap_or(&download.save_path),
+                                );
                             }
                         }
                         crate::browser::DownloadState::Failed => {
-                            ui.label(RichText::new("Failed").color(Color32::RED)).on_hover_text("Download failed");
+                            ui.label(RichText::new("Failed").color(Color32::RED))
+                                .on_hover_text("Download failed");
                         }
                         _ => {
                             ui.label(format!("{:?}", download.state));
@@ -2190,31 +2537,31 @@ impl BrowserApp {
             }
         });
     }
-    
+
     fn render_downloads_panel(&mut self, ctx: &egui::Context) {
         if !self.engine.show_downloads_panel() {
             return;
         }
-        
+
         egui::TopBottomPanel::bottom("downloads_panel")
             .resizable(true)
             .default_height(150.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.heading("Downloads");
-                    
+
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button("x").clicked() {
                             self.engine.set_show_downloads_panel(false);
                         }
                     });
                 });
-                
+
                 ui.separator();
-                
+
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     let downloads = self.engine.downloads.downloads();
-                    
+
                     for download in &downloads {
                         ui.horizontal(|ui| {
                             ui.label(&download.filename);
@@ -2223,21 +2570,31 @@ impl BrowserApp {
                             }
                             match download.state {
                                 crate::browser::DownloadState::Downloading => {
-                                    ui.add(egui::ProgressBar::new(download.progress())
-                                        .desired_width(200.0)
-                                        .show_percentage());
+                                    ui.add(
+                                        egui::ProgressBar::new(download.progress())
+                                            .desired_width(200.0)
+                                            .show_percentage(),
+                                    );
                                     ui.label(format!("{:.1} KB/s", download.speed_bps() / 1024.0));
                                     if ui.small_button("Cancel").clicked() {
                                         self.engine.downloads.cancel_download(download.id);
                                     }
                                 }
                                 crate::browser::DownloadState::Completed => {
-                                    ui.label(RichText::new("Complete").color(Color32::from_rgb(0x16, 0xf2, 0xd6)));
+                                    ui.label(
+                                        RichText::new("Complete")
+                                            .color(Color32::from_rgb(0x16, 0xf2, 0xd6)),
+                                    );
                                     if ui.small_button("Open").clicked() {
                                         let _ = open::that(&download.save_path);
                                     }
                                     if ui.small_button("Show in Folder").clicked() {
-                                        let _ = open::that(download.save_path.parent().unwrap_or(&download.save_path));
+                                        let _ = open::that(
+                                            download
+                                                .save_path
+                                                .parent()
+                                                .unwrap_or(&download.save_path),
+                                        );
                                     }
                                 }
                                 crate::browser::DownloadState::Failed => {
@@ -2250,7 +2607,7 @@ impl BrowserApp {
                 });
             });
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // MCP COMMAND HANDLER — Processes commands from native MCP server
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2261,22 +2618,30 @@ impl BrowserApp {
 
             McpCommand::Navigate { url, .. } => {
                 self.guarded_navigate(&url);
-                McpResponse::Ok { message: format!("Navigating to {}", url) }
+                McpResponse::Ok {
+                    message: format!("Navigating to {}", url),
+                }
             }
 
             McpCommand::GoBack => {
                 self.engine.go_back();
-                McpResponse::Ok { message: "Navigated back".into() }
+                McpResponse::Ok {
+                    message: "Navigated back".into(),
+                }
             }
 
             McpCommand::GoForward => {
                 self.engine.go_forward();
-                McpResponse::Ok { message: "Navigated forward".into() }
+                McpResponse::Ok {
+                    message: "Navigated forward".into(),
+                }
             }
 
             McpCommand::Reload => {
                 self.engine.reload();
-                McpResponse::Ok { message: "Reloading".into() }
+                McpResponse::Ok {
+                    message: "Reloading".into(),
+                }
             }
 
             McpCommand::ReadPage => {
@@ -2327,7 +2692,9 @@ impl BrowserApp {
             }
 
             McpCommand::GetDetectionAlerts => {
-                let alerts: Vec<_> = self.detection_engine.recent_alerts(20)
+                let alerts: Vec<_> = self
+                    .detection_engine
+                    .recent_alerts(20)
                     .iter()
                     .map(|a| crate::mcp_protocol::DetectionAlertWire {
                         rule_name: a.rule_name.clone(),
@@ -2349,11 +2716,15 @@ impl BrowserApp {
 
             McpCommand::ClearDetectionAlerts => {
                 self.detection_engine.clear();
-                McpResponse::Ok { message: "Detection alerts cleared".into() }
+                McpResponse::Ok {
+                    message: "Detection alerts cleared".into(),
+                }
             }
 
             McpCommand::ListTabs => {
-                let tabs: Vec<_> = self.engine.tabs()
+                let tabs: Vec<_> = self
+                    .engine
+                    .tabs()
                     .iter()
                     .enumerate()
                     .map(|(i, t)| crate::mcp_protocol::TabInfo {
@@ -2368,7 +2739,10 @@ impl BrowserApp {
                     })
                     .collect();
                 let active = self.engine.active_tab_index();
-                McpResponse::TabList { tabs, active_index: active }
+                McpResponse::TabList {
+                    tabs,
+                    active_index: active,
+                }
             }
 
             McpCommand::NewTab { url } => {
@@ -2376,28 +2750,28 @@ impl BrowserApp {
                 if let Some(u) = url {
                     self.guarded_navigate(&u);
                 }
-                McpResponse::Ok { message: "New tab created".into() }
-            }
-
-            McpCommand::GetBrowserInfo => {
-                McpResponse::BrowserInfo {
-                    name: "Sassy Browser".into(),
-                    version: "2.1.0".into(),
-                    engine: "SassyEngine (Rust)".into(),
-                    features: vec![
-                        "fingerprint-poisoning".into(),
-                        "honeypot-detection".into(),
-                        "mcp-native-binary".into(),
-                        "4-layer-sandbox".into(),
-                        "password-vault".into(),
-                        "family-profiles".into(),
-                    ],
+                McpResponse::Ok {
+                    message: "New tab created".into(),
                 }
             }
 
-            McpCommand::Goodbye => {
-                McpResponse::Ok { message: "Goodbye".into() }
-            }
+            McpCommand::GetBrowserInfo => McpResponse::BrowserInfo {
+                name: "Sassy Browser".into(),
+                version: "2.1.0".into(),
+                engine: "SassyEngine (Rust)".into(),
+                features: vec![
+                    "fingerprint-poisoning".into(),
+                    "honeypot-detection".into(),
+                    "mcp-native-binary".into(),
+                    "4-layer-sandbox".into(),
+                    "password-vault".into(),
+                    "family-profiles".into(),
+                ],
+            },
+
+            McpCommand::Goodbye => McpResponse::Ok {
+                message: "Goodbye".into(),
+            },
 
             // Commands not yet fully implemented
             _ => McpResponse::Error {
@@ -2418,15 +2792,13 @@ impl BrowserApp {
             PoisonMode::Aggressive => ("FP: Aggressive", Color32::from_rgb(255, 140, 60)),
         };
 
-        let badge = egui::Button::new(
-            RichText::new(badge_text).small().color(badge_color)
-        ).frame(false);
+        let badge =
+            egui::Button::new(RichText::new(badge_text).small().color(badge_color)).frame(false);
 
-        let response = ui.add(badge)
-            .on_hover_text(format!(
-                "Fingerprint Poisoning: {}\nClick to change mode",
-                self.poison_engine.mode_description()
-            ));
+        let response = ui.add(badge).on_hover_text(format!(
+            "Fingerprint Poisoning: {}\nClick to change mode",
+            self.poison_engine.mode_description()
+        ));
 
         if response.clicked() {
             self.show_poisoning_popover = !self.show_poisoning_popover;
@@ -2443,24 +2815,46 @@ impl BrowserApp {
                         ui.label(RichText::new("Fingerprint Poisoning").strong());
                         ui.separator();
 
-                        if ui.radio(self.poison_engine.mode == PoisonMode::Off, "Off — Chrome spoof only").clicked() {
+                        if ui
+                            .radio(
+                                self.poison_engine.mode == PoisonMode::Off,
+                                "Off — Chrome spoof only",
+                            )
+                            .clicked()
+                        {
                             self.poison_engine.mode = PoisonMode::Off;
                             self.poison_last_applied_url = None; // Force re-apply
                             self.show_poisoning_popover = false;
                         }
-                        if ui.radio(self.poison_engine.mode == PoisonMode::Conservative, "Conservative — Light noise").clicked() {
+                        if ui
+                            .radio(
+                                self.poison_engine.mode == PoisonMode::Conservative,
+                                "Conservative — Light noise",
+                            )
+                            .clicked()
+                        {
                             self.poison_engine.mode = PoisonMode::Conservative;
                             self.poison_last_applied_url = None;
                             self.show_poisoning_popover = false;
                         }
-                        if ui.radio(self.poison_engine.mode == PoisonMode::Aggressive, "Aggressive — Maximum unlinkability").clicked() {
+                        if ui
+                            .radio(
+                                self.poison_engine.mode == PoisonMode::Aggressive,
+                                "Aggressive — Maximum unlinkability",
+                            )
+                            .clicked()
+                        {
                             self.poison_engine.mode = PoisonMode::Aggressive;
                             self.poison_last_applied_url = None;
                             self.show_poisoning_popover = false;
                         }
 
                         ui.separator();
-                        ui.label(RichText::new(self.poison_engine.mode_description()).small().color(Color32::GRAY));
+                        ui.label(
+                            RichText::new(self.poison_engine.mode_description())
+                                .small()
+                                .color(Color32::GRAY),
+                        );
                     });
                 });
         }
@@ -2475,13 +2869,14 @@ impl BrowserApp {
         let _has_alerts = self.detection_engine.render_alert_banner(ui);
     }
 
-
     // =========================================================================
     // DEVELOPER CONSOLE - Full-featured DevTools panel (F12)
     // =========================================================================
 
     fn render_dev_console(&mut self, ctx: &egui::Context) {
-        if !self.show_dev_tools { return; }
+        if !self.show_dev_tools {
+            return;
+        }
         let mut open = self.show_dev_tools;
         egui::Window::new("Developer Tools")
             .open(&mut open)
@@ -2502,7 +2897,11 @@ impl BrowserApp {
                         if ui.small_button("Toggle").clicked() {
                             self.dev_console.toggle();
                         }
-                        ui.label(RichText::new(format!("h:{}", self.dev_console.height)).small().color(Color32::GRAY));
+                        ui.label(
+                            RichText::new(format!("h:{}", self.dev_console.height))
+                                .small()
+                                .color(Color32::GRAY),
+                        );
                     });
                 });
                 ui.separator();
@@ -2514,66 +2913,148 @@ impl BrowserApp {
                     ConsolePanel::Application => self.render_dev_application_tab(ui),
                 }
             });
-        if !open { self.show_dev_tools = false; }
+        if !open {
+            self.show_dev_tools = false;
+        }
     }
 
     fn render_dev_console_tab(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label(RichText::new("Levels:").small());
-            if ui.selectable_label(self.dev_console.show_log, "Log").clicked() { self.dev_console.show_log = !self.dev_console.show_log; }
-            if ui.selectable_label(self.dev_console.show_info, "Info").clicked() { self.dev_console.show_info = !self.dev_console.show_info; }
-            if ui.selectable_label(self.dev_console.show_warn, "Warn").clicked() { self.dev_console.show_warn = !self.dev_console.show_warn; }
-            if ui.selectable_label(self.dev_console.show_error, "Error").clicked() { self.dev_console.show_error = !self.dev_console.show_error; }
+            if ui
+                .selectable_label(self.dev_console.show_log, "Log")
+                .clicked()
+            {
+                self.dev_console.show_log = !self.dev_console.show_log;
+            }
+            if ui
+                .selectable_label(self.dev_console.show_info, "Info")
+                .clicked()
+            {
+                self.dev_console.show_info = !self.dev_console.show_info;
+            }
+            if ui
+                .selectable_label(self.dev_console.show_warn, "Warn")
+                .clicked()
+            {
+                self.dev_console.show_warn = !self.dev_console.show_warn;
+            }
+            if ui
+                .selectable_label(self.dev_console.show_error, "Error")
+                .clicked()
+            {
+                self.dev_console.show_error = !self.dev_console.show_error;
+            }
             ui.separator();
-            if ui.small_button("Clear").clicked() { self.dev_console.clear(); }
+            if ui.small_button("Clear").clicked() {
+                self.dev_console.clear();
+            }
             ui.separator();
             ui.label(RichText::new("Filter:").small());
             ui.text_edit_singleline(&mut self.dev_console.console_filter);
         });
         ui.separator();
-        let filtered: Vec<ConsoleEntry> = self.dev_console.filtered_console_entries().into_iter().cloned().collect();
+        let filtered: Vec<ConsoleEntry> = self
+            .dev_console
+            .filtered_console_entries()
+            .into_iter()
+            .cloned()
+            .collect();
         let entry_count = filtered.len();
         let total_count = self.dev_console.console_entries.len();
-        egui::ScrollArea::vertical().max_height(ui.available_height() - 40.0).stick_to_bottom(true).show(ui, |ui| {
-            if filtered.is_empty() {
-                ui.label(RichText::new(format!("No console output ({} total, all filtered)", total_count)).italics().color(Color32::GRAY));
-            } else {
-                ui.label(RichText::new(format!("Showing {} of {} entries", entry_count, total_count)).small().color(Color32::GRAY));
-                for entry in &filtered {
-                    let c = entry.level.color();
-                    let color = egui::Color32::from_rgba_premultiplied(c.r, c.g, c.b, c.a);
-                    let prefix = entry.level.prefix();
-                    let _level_desc = entry.level.describe();
-                    let ts = entry.timestamp.format("%H:%M:%S%.3f").to_string();
-                    let source_str = entry.source.as_deref().unwrap_or("");
-                    let stack_str = entry.stack_trace.as_deref().unwrap_or("");
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(&ts).monospace().size(10.0).color(Color32::GRAY));
-                        ui.label(RichText::new(format!("{}{}", prefix, &entry.message)).monospace().size(11.0).color(color));
-                        if !source_str.is_empty() {
-                            ui.label(RichText::new(format!("@ {}", source_str)).monospace().size(10.0).color(Color32::GRAY));
+        egui::ScrollArea::vertical()
+            .max_height(ui.available_height() - 40.0)
+            .stick_to_bottom(true)
+            .show(ui, |ui| {
+                if filtered.is_empty() {
+                    ui.label(
+                        RichText::new(format!(
+                            "No console output ({} total, all filtered)",
+                            total_count
+                        ))
+                        .italics()
+                        .color(Color32::GRAY),
+                    );
+                } else {
+                    ui.label(
+                        RichText::new(format!(
+                            "Showing {} of {} entries",
+                            entry_count, total_count
+                        ))
+                        .small()
+                        .color(Color32::GRAY),
+                    );
+                    for entry in &filtered {
+                        let c = entry.level.color();
+                        let color = egui::Color32::from_rgba_premultiplied(c.r, c.g, c.b, c.a);
+                        let prefix = entry.level.prefix();
+                        let _level_desc = entry.level.describe();
+                        let ts = entry.timestamp.format("%H:%M:%S%.3f").to_string();
+                        let source_str = entry.source.as_deref().unwrap_or("");
+                        let stack_str = entry.stack_trace.as_deref().unwrap_or("");
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(&ts)
+                                    .monospace()
+                                    .size(10.0)
+                                    .color(Color32::GRAY),
+                            );
+                            ui.label(
+                                RichText::new(format!("{}{}", prefix, &entry.message))
+                                    .monospace()
+                                    .size(11.0)
+                                    .color(color),
+                            );
+                            if !source_str.is_empty() {
+                                ui.label(
+                                    RichText::new(format!("@ {}", source_str))
+                                        .monospace()
+                                        .size(10.0)
+                                        .color(Color32::GRAY),
+                                );
+                            }
+                        });
+                        let full_desc = entry.describe();
+                        if !stack_str.is_empty() {
+                            ui.label(
+                                RichText::new(stack_str)
+                                    .monospace()
+                                    .size(10.0)
+                                    .color(Color32::from_rgb(180, 180, 180)),
+                            );
                         }
-                    });
-                    let full_desc = entry.describe();
-                    if !stack_str.is_empty() {
-                        ui.label(RichText::new(stack_str).monospace().size(10.0).color(Color32::from_rgb(180, 180, 180)));
-                    }
-                    if ui.small_button("...").on_hover_text(&full_desc).clicked() {
-                        self.status_message = full_desc;
+                        if ui.small_button("...").on_hover_text(&full_desc).clicked() {
+                            self.status_message = full_desc;
+                        }
                     }
                 }
-            }
-        });
+            });
         ui.separator();
         ui.horizontal(|ui| {
-            ui.label(RichText::new(">").monospace().color(Color32::from_rgb(100, 180, 255)));
+            ui.label(
+                RichText::new(">")
+                    .monospace()
+                    .color(Color32::from_rgb(100, 180, 255)),
+            );
             let response = ui.text_edit_singleline(&mut self.dev_console.input_buffer);
             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 self.dev_console.handle_key("Enter", false);
             }
-            ui.label(RichText::new(format!("cur:{} hist:{}", self.dev_console.input_cursor, self.dev_console.command_history.len())).small().color(Color32::GRAY));
+            ui.label(
+                RichText::new(format!(
+                    "cur:{} hist:{}",
+                    self.dev_console.input_cursor,
+                    self.dev_console.command_history.len()
+                ))
+                .small()
+                .color(Color32::GRAY),
+            );
             if let Some(idx) = self.dev_console.history_index {
-                ui.label(RichText::new(format!("[{}]", idx)).small().color(Color32::YELLOW));
+                ui.label(
+                    RichText::new(format!("[{}]", idx))
+                        .small()
+                        .color(Color32::YELLOW),
+                );
             }
         });
     }
@@ -2583,148 +3064,337 @@ impl BrowserApp {
             ui.label(RichText::new("Filter:").small());
             ui.text_edit_singleline(&mut self.dev_console.network_filter);
             ui.separator();
-            if ui.small_button("Clear Network").clicked() { self.dev_console.network_entries.clear(); self.dev_console.selected_network_entry = None; }
-            ui.label(RichText::new(format!("next_id:{}", self.dev_console.next_request_id)).small().color(Color32::GRAY));
+            if ui.small_button("Clear Network").clicked() {
+                self.dev_console.network_entries.clear();
+                self.dev_console.selected_network_entry = None;
+            }
+            ui.label(
+                RichText::new(format!("next_id:{}", self.dev_console.next_request_id))
+                    .small()
+                    .color(Color32::GRAY),
+            );
         });
         ui.separator();
-        let filtered: Vec<NetworkEntry> = self.dev_console.filtered_network_entries().into_iter().cloned().collect();
+        let filtered: Vec<NetworkEntry> = self
+            .dev_console
+            .filtered_network_entries()
+            .into_iter()
+            .cloned()
+            .collect();
         let total = self.dev_console.network_entries.len();
         let max = self.dev_console.max_network_entries;
-        egui::ScrollArea::vertical().max_height(ui.available_height() - 10.0).show(ui, |ui| {
-            if filtered.is_empty() {
-                ui.label(RichText::new(format!("No network requests ({}/{})", total, max)).italics().color(Color32::GRAY));
-            } else {
-                ui.label(RichText::new(format!("Showing {} of {}/{} requests", filtered.len(), total, max)).small().color(Color32::GRAY));
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("ID").monospace().size(10.0).strong());
-                    ui.add_space(10.0);
-                    ui.label(RichText::new("Method").monospace().size(10.0).strong());
-                    ui.add_space(10.0);
-                    ui.label(RichText::new("Status").monospace().size(10.0).strong());
-                    ui.add_space(10.0);
-                    ui.label(RichText::new("URL").monospace().size(10.0).strong());
-                    ui.add_space(10.0);
-                    ui.label(RichText::new("Duration").monospace().size(10.0).strong());
-                    ui.add_space(10.0);
-                    ui.label(RichText::new("Type").monospace().size(10.0).strong());
-                });
-                ui.separator();
-                for entry in &filtered {
-                    let sc = entry.status_color();
-                    let status_color = Color32::from_rgb(sc.r, sc.g, sc.b);
-                    let is_selected = self.dev_console.selected_network_entry == Some(entry.id);
-                    let row = ui.horizontal(|ui| {
-                        ui.label(RichText::new(format!("{}", entry.id)).monospace().size(10.0));
+        egui::ScrollArea::vertical()
+            .max_height(ui.available_height() - 10.0)
+            .show(ui, |ui| {
+                if filtered.is_empty() {
+                    ui.label(
+                        RichText::new(format!("No network requests ({}/{})", total, max))
+                            .italics()
+                            .color(Color32::GRAY),
+                    );
+                } else {
+                    ui.label(
+                        RichText::new(format!(
+                            "Showing {} of {}/{} requests",
+                            filtered.len(),
+                            total,
+                            max
+                        ))
+                        .small()
+                        .color(Color32::GRAY),
+                    );
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("ID").monospace().size(10.0).strong());
                         ui.add_space(10.0);
-                        ui.label(RichText::new(&entry.method).monospace().size(10.0).color(Color32::from_rgb(100, 180, 255)));
+                        ui.label(RichText::new("Method").monospace().size(10.0).strong());
                         ui.add_space(10.0);
-                        let status_str = match (&entry.status, &entry.status_text) {
-                            (Some(s), Some(t)) => format!("{} {}", s, t),
-                            (Some(s), None) => format!("{}", s),
-                            _ => "pending".to_string(),
-                        };
-                        ui.label(RichText::new(&status_str).monospace().size(10.0).color(status_color));
+                        ui.label(RichText::new("Status").monospace().size(10.0).strong());
                         ui.add_space(10.0);
-                        let url_display = if entry.url.len() > 60 { format!("{}...", &entry.url[..57]) } else { entry.url.clone() };
-                        ui.label(RichText::new(&url_display).monospace().size(10.0));
+                        ui.label(RichText::new("URL").monospace().size(10.0).strong());
                         ui.add_space(10.0);
-                        let dur = entry.duration_ms.map_or("--".to_string(), |d| format!("{}ms", d));
-                        ui.label(RichText::new(&dur).monospace().size(10.0));
+                        ui.label(RichText::new("Duration").monospace().size(10.0).strong());
                         ui.add_space(10.0);
-                        let ct = entry.content_type.as_deref().unwrap_or("--");
-                        ui.label(RichText::new(ct).monospace().size(10.0).color(Color32::GRAY));
+                        ui.label(RichText::new("Type").monospace().size(10.0).strong());
                     });
-                    if row.response.interact(egui::Sense::click()).clicked() {
-                        if is_selected { self.dev_console.selected_network_entry = None; } else { self.dev_console.selected_network_entry = Some(entry.id); }
-                    }
-                    if is_selected {
-                        ui.indent("net_detail", |ui| {
-                            ui.add_space(4.0);
-                            let desc = entry.describe();
-                            ui.label(RichText::new(&desc).monospace().size(10.0).color(Color32::from_rgb(200, 200, 200)));
-                            ui.add_space(4.0);
-                            ui.label(RichText::new("Waterfall:").small().strong());
-                            let wf_desc = entry.waterfall.describe();
-                            ui.label(RichText::new(&wf_desc).monospace().size(10.0).color(Color32::from_rgb(180, 180, 220)));
-                            let total_wf = entry.waterfall.total_ms();
-                            if total_wf > 0.0 {
-                                let segments = entry.waterfall.segments();
-                                ui.horizontal(|ui| {
-                                    for (name, _start, dur, wf_color) in &segments {
-                                        let frac = (*dur / total_wf).clamp(0.0, 1.0) as f32;
-                                        let bar_width = (frac * 200.0).max(4.0);
-                                        let bar_color = Color32::from_rgb(wf_color.r, wf_color.g, wf_color.b);
-                                        let (rect, _) = ui.allocate_exact_size(Vec2::new(bar_width, 12.0), egui::Sense::hover());
-                                        ui.painter().rect_filled(rect, 0.0, bar_color);
-                                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, name, FontId::monospace(8.0), Color32::WHITE);
-                                    }
-                                });
-                            }
-                            if !entry.request_headers.is_empty() {
-                                ui.collapsing("Request Headers", |ui| { for (k, v) in &entry.request_headers { ui.label(RichText::new(format!("{}: {}", k, v)).monospace().size(10.0)); } });
-                            }
-                            if !entry.response_headers.is_empty() {
-                                ui.collapsing("Response Headers", |ui| { for (k, v) in &entry.response_headers { ui.label(RichText::new(format!("{}: {}", k, v)).monospace().size(10.0)); } });
-                            }
-                            if let Some(body) = &entry.request_body {
-                                ui.collapsing("Request Body", |ui| { ui.label(RichText::new(body).monospace().size(10.0)); });
-                            }
-                            if let Some(body) = &entry.response_body {
-                                ui.collapsing("Response Body", |ui| {
-                                    let is_json = entry.content_type.as_ref().map_or(false, |ct| ct.contains("json"));
-                                    if is_json {
-                                        let tokens = self.dev_console.highlight_js(body);
-                                        for line_tokens in &tokens {
-                                            ui.horizontal(|ui| {
-                                                for tok in line_tokens {
-                                                    ui.label(RichText::new(&tok.text).monospace().size(10.0).color(Color32::from_rgb(tok.color.r, tok.color.g, tok.color.b)));
-                                                }
-                                            });
-                                        }
-                                    } else {
-                                        ui.label(RichText::new(body).monospace().size(10.0));
-                                    }
-                                });
-                            }
-                            if let Some(cl) = entry.content_length { ui.label(RichText::new(format!("Content-Length: {} bytes", cl)).monospace().size(10.0).color(Color32::GRAY)); }
-                            if let Some(err) = &entry.error { ui.label(RichText::new(format!("Error: {}", err)).monospace().size(10.0).color(Color32::from_rgb(255, 100, 100))); }
-                            ui.label(RichText::new(format!("Started: {}", entry.start_time.format("%H:%M:%S%.3f"))).monospace().size(10.0).color(Color32::GRAY));
-                            if let Some(end) = &entry.end_time { ui.label(RichText::new(format!("Ended: {}", end.format("%H:%M:%S%.3f"))).monospace().size(10.0).color(Color32::GRAY)); }
-                            ui.add_space(4.0);
+                    ui.separator();
+                    for entry in &filtered {
+                        let sc = entry.status_color();
+                        let status_color = Color32::from_rgb(sc.r, sc.g, sc.b);
+                        let is_selected = self.dev_console.selected_network_entry == Some(entry.id);
+                        let row = ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(format!("{}", entry.id))
+                                    .monospace()
+                                    .size(10.0),
+                            );
+                            ui.add_space(10.0);
+                            ui.label(
+                                RichText::new(&entry.method)
+                                    .monospace()
+                                    .size(10.0)
+                                    .color(Color32::from_rgb(100, 180, 255)),
+                            );
+                            ui.add_space(10.0);
+                            let status_str = match (&entry.status, &entry.status_text) {
+                                (Some(s), Some(t)) => format!("{} {}", s, t),
+                                (Some(s), None) => format!("{}", s),
+                                _ => "pending".to_string(),
+                            };
+                            ui.label(
+                                RichText::new(&status_str)
+                                    .monospace()
+                                    .size(10.0)
+                                    .color(status_color),
+                            );
+                            ui.add_space(10.0);
+                            let url_display = if entry.url.len() > 60 {
+                                format!("{}...", &entry.url[..57])
+                            } else {
+                                entry.url.clone()
+                            };
+                            ui.label(RichText::new(&url_display).monospace().size(10.0));
+                            ui.add_space(10.0);
+                            let dur = entry
+                                .duration_ms
+                                .map_or("--".to_string(), |d| format!("{}ms", d));
+                            ui.label(RichText::new(&dur).monospace().size(10.0));
+                            ui.add_space(10.0);
+                            let ct = entry.content_type.as_deref().unwrap_or("--");
+                            ui.label(
+                                RichText::new(ct)
+                                    .monospace()
+                                    .size(10.0)
+                                    .color(Color32::GRAY),
+                            );
                         });
+                        if row.response.interact(egui::Sense::click()).clicked() {
+                            if is_selected {
+                                self.dev_console.selected_network_entry = None;
+                            } else {
+                                self.dev_console.selected_network_entry = Some(entry.id);
+                            }
+                        }
+                        if is_selected {
+                            ui.indent("net_detail", |ui| {
+                                ui.add_space(4.0);
+                                let desc = entry.describe();
+                                ui.label(
+                                    RichText::new(&desc)
+                                        .monospace()
+                                        .size(10.0)
+                                        .color(Color32::from_rgb(200, 200, 200)),
+                                );
+                                ui.add_space(4.0);
+                                ui.label(RichText::new("Waterfall:").small().strong());
+                                let wf_desc = entry.waterfall.describe();
+                                ui.label(
+                                    RichText::new(&wf_desc)
+                                        .monospace()
+                                        .size(10.0)
+                                        .color(Color32::from_rgb(180, 180, 220)),
+                                );
+                                let total_wf = entry.waterfall.total_ms();
+                                if total_wf > 0.0 {
+                                    let segments = entry.waterfall.segments();
+                                    ui.horizontal(|ui| {
+                                        for (name, _start, dur, wf_color) in &segments {
+                                            let frac = (*dur / total_wf).clamp(0.0, 1.0) as f32;
+                                            let bar_width = (frac * 200.0).max(4.0);
+                                            let bar_color = Color32::from_rgb(
+                                                wf_color.r, wf_color.g, wf_color.b,
+                                            );
+                                            let (rect, _) = ui.allocate_exact_size(
+                                                Vec2::new(bar_width, 12.0),
+                                                egui::Sense::hover(),
+                                            );
+                                            ui.painter().rect_filled(rect, 0.0, bar_color);
+                                            ui.painter().text(
+                                                rect.center(),
+                                                egui::Align2::CENTER_CENTER,
+                                                name,
+                                                FontId::monospace(8.0),
+                                                Color32::WHITE,
+                                            );
+                                        }
+                                    });
+                                }
+                                if !entry.request_headers.is_empty() {
+                                    ui.collapsing("Request Headers", |ui| {
+                                        for (k, v) in &entry.request_headers {
+                                            ui.label(
+                                                RichText::new(format!("{}: {}", k, v))
+                                                    .monospace()
+                                                    .size(10.0),
+                                            );
+                                        }
+                                    });
+                                }
+                                if !entry.response_headers.is_empty() {
+                                    ui.collapsing("Response Headers", |ui| {
+                                        for (k, v) in &entry.response_headers {
+                                            ui.label(
+                                                RichText::new(format!("{}: {}", k, v))
+                                                    .monospace()
+                                                    .size(10.0),
+                                            );
+                                        }
+                                    });
+                                }
+                                if let Some(body) = &entry.request_body {
+                                    ui.collapsing("Request Body", |ui| {
+                                        ui.label(RichText::new(body).monospace().size(10.0));
+                                    });
+                                }
+                                if let Some(body) = &entry.response_body {
+                                    ui.collapsing("Response Body", |ui| {
+                                        let is_json = entry
+                                            .content_type
+                                            .as_ref()
+                                            .map_or(false, |ct| ct.contains("json"));
+                                        if is_json {
+                                            let tokens = self.dev_console.highlight_js(body);
+                                            for line_tokens in &tokens {
+                                                ui.horizontal(|ui| {
+                                                    for tok in line_tokens {
+                                                        ui.label(
+                                                            RichText::new(&tok.text)
+                                                                .monospace()
+                                                                .size(10.0)
+                                                                .color(Color32::from_rgb(
+                                                                    tok.color.r,
+                                                                    tok.color.g,
+                                                                    tok.color.b,
+                                                                )),
+                                                        );
+                                                    }
+                                                });
+                                            }
+                                        } else {
+                                            ui.label(RichText::new(body).monospace().size(10.0));
+                                        }
+                                    });
+                                }
+                                if let Some(cl) = entry.content_length {
+                                    ui.label(
+                                        RichText::new(format!("Content-Length: {} bytes", cl))
+                                            .monospace()
+                                            .size(10.0)
+                                            .color(Color32::GRAY),
+                                    );
+                                }
+                                if let Some(err) = &entry.error {
+                                    ui.label(
+                                        RichText::new(format!("Error: {}", err))
+                                            .monospace()
+                                            .size(10.0)
+                                            .color(Color32::from_rgb(255, 100, 100)),
+                                    );
+                                }
+                                ui.label(
+                                    RichText::new(format!(
+                                        "Started: {}",
+                                        entry.start_time.format("%H:%M:%S%.3f")
+                                    ))
+                                    .monospace()
+                                    .size(10.0)
+                                    .color(Color32::GRAY),
+                                );
+                                if let Some(end) = &entry.end_time {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "Ended: {}",
+                                            end.format("%H:%M:%S%.3f")
+                                        ))
+                                        .monospace()
+                                        .size(10.0)
+                                        .color(Color32::GRAY),
+                                    );
+                                }
+                                ui.add_space(4.0);
+                            });
+                        }
                     }
                 }
-            }
-        });
+            });
     }
 
     fn render_dev_elements_tab(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            let pick_label = if self.dev_console.inspector.pick_mode { "Picking (click element)" } else { "Pick Element" };
-            if ui.selectable_label(self.dev_console.inspector.pick_mode, pick_label).clicked() { self.dev_console.inspector.toggle_pick_mode(); }
-            if ui.small_button("Clear Inspector").clicked() { self.dev_console.inspector.clear(); }
-            if ui.small_button("Select Root").clicked() { self.dev_console.inspector.select_element(vec![0]); }
-            if ui.small_button("Reset Styles").clicked() { let ds = crate::style::ComputedStyle::default(); self.dev_console.inspector.update_from_computed(&ds); }
-            if ui.small_button("Set Content 100x100").clicked() { self.dev_console.inspector.set_content_size(100.0, 100.0); }
+            let pick_label = if self.dev_console.inspector.pick_mode {
+                "Picking (click element)"
+            } else {
+                "Pick Element"
+            };
+            if ui
+                .selectable_label(self.dev_console.inspector.pick_mode, pick_label)
+                .clicked()
+            {
+                self.dev_console.inspector.toggle_pick_mode();
+            }
+            if ui.small_button("Clear Inspector").clicked() {
+                self.dev_console.inspector.clear();
+            }
+            if ui.small_button("Select Root").clicked() {
+                self.dev_console.inspector.select_element(vec![0]);
+            }
+            if ui.small_button("Reset Styles").clicked() {
+                let ds = crate::style::ComputedStyle::default();
+                self.dev_console.inspector.update_from_computed(&ds);
+            }
+            if ui.small_button("Set Content 100x100").clicked() {
+                self.dev_console.inspector.set_content_size(100.0, 100.0);
+            }
         });
         ui.separator();
         let inspector_desc = self.dev_console.inspector.describe();
-        ui.label(RichText::new(&inspector_desc).monospace().size(10.0).color(Color32::from_rgb(180, 200, 220)));
+        ui.label(
+            RichText::new(&inspector_desc)
+                .monospace()
+                .size(10.0)
+                .color(Color32::from_rgb(180, 200, 220)),
+        );
         ui.separator();
         egui::ScrollArea::vertical().show(ui, |ui| {
             if !self.dev_console.inspector.selected_path.is_empty() {
-                let path_str: Vec<String> = self.dev_console.inspector.selected_path.iter().map(|i| i.to_string()).collect();
-                ui.label(RichText::new(format!("Selected: /{}", path_str.join("/"))).monospace().size(11.0).color(Color32::from_rgb(100, 180, 255)));
+                let path_str: Vec<String> = self
+                    .dev_console
+                    .inspector
+                    .selected_path
+                    .iter()
+                    .map(|i| i.to_string())
+                    .collect();
+                ui.label(
+                    RichText::new(format!("Selected: /{}", path_str.join("/")))
+                        .monospace()
+                        .size(11.0)
+                        .color(Color32::from_rgb(100, 180, 255)),
+                );
                 if !self.dev_console.inspector.hovered_path.is_empty() {
-                    let hover_str: Vec<String> = self.dev_console.inspector.hovered_path.iter().map(|i| i.to_string()).collect();
-                    ui.label(RichText::new(format!("Hovered: /{}", hover_str.join("/"))).monospace().size(10.0).color(Color32::GRAY));
+                    let hover_str: Vec<String> = self
+                        .dev_console
+                        .inspector
+                        .hovered_path
+                        .iter()
+                        .map(|i| i.to_string())
+                        .collect();
+                    ui.label(
+                        RichText::new(format!("Hovered: /{}", hover_str.join("/")))
+                            .monospace()
+                            .size(10.0)
+                            .color(Color32::GRAY),
+                    );
                 }
                 ui.add_space(8.0);
                 if !self.dev_console.inspector.computed_styles.is_empty() {
                     ui.collapsing("Computed Styles", |ui| {
                         for (prop, val) in &self.dev_console.inspector.computed_styles {
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new(format!("{}:", prop)).monospace().size(10.0).color(Color32::from_rgb(200, 150, 255)));
+                                ui.label(
+                                    RichText::new(format!("{}:", prop))
+                                        .monospace()
+                                        .size(10.0)
+                                        .color(Color32::from_rgb(200, 150, 255)),
+                                );
                                 ui.label(RichText::new(val).monospace().size(10.0));
                             });
                         }
@@ -2734,10 +3404,29 @@ impl BrowserApp {
                     ui.collapsing("Matched Rules", |ui| {
                         for rule in &self.dev_console.inspector.matched_rules {
                             let rule_desc = rule.describe();
-                            ui.label(RichText::new(&rule_desc).monospace().size(10.0).color(Color32::from_rgb(180, 200, 160)));
+                            ui.label(
+                                RichText::new(&rule_desc)
+                                    .monospace()
+                                    .size(10.0)
+                                    .color(Color32::from_rgb(180, 200, 160)),
+                            );
                             for (name, val, overridden) in &rule.properties {
-                                let color = if *overridden { Color32::from_rgb(128, 128, 128) } else { Color32::from_rgb(220, 220, 220) };
-                                ui.label(RichText::new(format!("  {}: {}{}", name, val, if *overridden { " (overridden)" } else { "" })).monospace().size(10.0).color(color));
+                                let color = if *overridden {
+                                    Color32::from_rgb(128, 128, 128)
+                                } else {
+                                    Color32::from_rgb(220, 220, 220)
+                                };
+                                ui.label(
+                                    RichText::new(format!(
+                                        "  {}: {}{}",
+                                        name,
+                                        val,
+                                        if *overridden { " (overridden)" } else { "" }
+                                    ))
+                                    .monospace()
+                                    .size(10.0)
+                                    .color(color),
+                                );
                             }
                         }
                     });
@@ -2747,13 +3436,35 @@ impl BrowserApp {
                     let bm_desc = bm.describe();
                     ui.label(RichText::new(&bm_desc).monospace().size(10.0));
                     ui.add_space(4.0);
-                    ui.label(RichText::new(format!("Margin:  {}", bm.margin.describe())).monospace().size(10.0));
-                    ui.label(RichText::new(format!("Border:  {}", bm.border.describe())).monospace().size(10.0));
-                    ui.label(RichText::new(format!("Padding: {}", bm.padding.describe())).monospace().size(10.0));
-                    ui.label(RichText::new(format!("Content: {}", bm.content.describe())).monospace().size(10.0));
+                    ui.label(
+                        RichText::new(format!("Margin:  {}", bm.margin.describe()))
+                            .monospace()
+                            .size(10.0),
+                    );
+                    ui.label(
+                        RichText::new(format!("Border:  {}", bm.border.describe()))
+                            .monospace()
+                            .size(10.0),
+                    );
+                    ui.label(
+                        RichText::new(format!("Padding: {}", bm.padding.describe()))
+                            .monospace()
+                            .size(10.0),
+                    );
+                    ui.label(
+                        RichText::new(format!("Content: {}", bm.content.describe()))
+                            .monospace()
+                            .size(10.0),
+                    );
                 });
             } else {
-                ui.label(RichText::new("No element selected. Click 'Pick Element' then click on the page.").italics().color(Color32::GRAY));
+                ui.label(
+                    RichText::new(
+                        "No element selected. Click 'Pick Element' then click on the page.",
+                    )
+                    .italics()
+                    .color(Color32::GRAY),
+                );
             }
         });
     }
@@ -2761,13 +3472,29 @@ impl BrowserApp {
     fn render_dev_sources_tab(&mut self, ui: &mut egui::Ui) {
         ui.label(RichText::new("Sources").strong());
         ui.separator();
-        let code = if self.dev_console.input_buffer.is_empty() { "// Enter JavaScript in the Console tab\nvar x = 1;\nconsole.log(x);" } else { &self.dev_console.input_buffer };
+        let code = if self.dev_console.input_buffer.is_empty() {
+            "// Enter JavaScript in the Console tab\nvar x = 1;\nconsole.log(x);"
+        } else {
+            &self.dev_console.input_buffer
+        };
         let tokens = self.dev_console.highlight_js(code);
         egui::ScrollArea::vertical().show(ui, |ui| {
             for (line_num, line_tokens) in tokens.iter().enumerate() {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("{:4}", line_num + 1)).monospace().size(10.0).color(Color32::from_rgb(100, 100, 100)));
-                    for tok in line_tokens { ui.label(RichText::new(&tok.text).monospace().size(11.0).color(Color32::from_rgb(tok.color.r, tok.color.g, tok.color.b))); }
+                    ui.label(
+                        RichText::new(format!("{:4}", line_num + 1))
+                            .monospace()
+                            .size(10.0)
+                            .color(Color32::from_rgb(100, 100, 100)),
+                    );
+                    for tok in line_tokens {
+                        ui.label(
+                            RichText::new(&tok.text)
+                                .monospace()
+                                .size(11.0)
+                                .color(Color32::from_rgb(tok.color.r, tok.color.g, tok.color.b)),
+                        );
+                    }
                 });
             }
         });
@@ -2778,28 +3505,45 @@ impl BrowserApp {
         ui.separator();
         ui.horizontal(|ui| {
             if ui.small_button("Log Test Message").clicked() {
-                self.dev_console.log(LogLevel::Info, "Test info message".to_string());
-                self.dev_console.log(LogLevel::Warn, "Test warning".to_string());
-                self.dev_console.log(LogLevel::Error, "Test error".to_string());
-                self.dev_console.log(LogLevel::Debug, "Test debug".to_string());
-                self.dev_console.log_with_source(LogLevel::Log, "Message with source".to_string(), "app.rs:42".to_string());
+                self.dev_console
+                    .log(LogLevel::Info, "Test info message".to_string());
+                self.dev_console
+                    .log(LogLevel::Warn, "Test warning".to_string());
+                self.dev_console
+                    .log(LogLevel::Error, "Test error".to_string());
+                self.dev_console
+                    .log(LogLevel::Debug, "Test debug".to_string());
+                self.dev_console.log_with_source(
+                    LogLevel::Log,
+                    "Message with source".to_string(),
+                    "app.rs:42".to_string(),
+                );
             }
             if ui.small_button("Start Test Request").clicked() {
-                let id = self.dev_console.start_request("GET", "https://example.com/api/test");
+                let id = self
+                    .dev_console
+                    .start_request("GET", "https://example.com/api/test");
                 self.dev_console.complete_request(id, 200, "OK");
             }
             if ui.small_button("Start Failed Request").clicked() {
-                let id = self.dev_console.start_request("POST", "https://example.com/api/fail");
+                let id = self
+                    .dev_console
+                    .start_request("POST", "https://example.com/api/fail");
                 self.dev_console.fail_request(id, "Connection refused");
             }
-            if ui.small_button("Clear All").clicked() { self.dev_console.clear(); self.dev_console.inspector.clear(); }
+            if ui.small_button("Clear All").clicked() {
+                self.dev_console.clear();
+                self.dev_console.inspector.clear();
+            }
         });
         ui.separator();
         egui::ScrollArea::vertical().show(ui, |ui| {
             self.dev_console.render(ui);
             ui.add_space(8.0);
             let status = self.dev_console.status();
-            for line in status.lines() { ui.label(RichText::new(line).monospace().size(10.0)); }
+            for line in status.lines() {
+                ui.label(RichText::new(line).monospace().size(10.0));
+            }
         });
     }
 
@@ -2815,9 +3559,13 @@ impl BrowserApp {
                     if alert_count > 0 {
                         ui.separator();
                         ui.label(
-                            RichText::new(format!("{} alert{}", alert_count, if alert_count == 1 { "" } else { "s" }))
-                                .color(Color32::from_rgb(255, 100, 100))
-                                .small()
+                            RichText::new(format!(
+                                "{} alert{}",
+                                alert_count,
+                                if alert_count == 1 { "" } else { "s" }
+                            ))
+                            .color(Color32::from_rgb(255, 100, 100))
+                            .small(),
                         );
                     }
 
@@ -2825,7 +3573,10 @@ impl BrowserApp {
                     if let Some(profile) = self.profile_manager.active_profile() {
                         if profile.is_restricted() {
                             if let Some(mins) = self.profile_manager.remaining_time_minutes() {
-                                ui.label(RichText::new(format!("Time left: {} min", mins)).color(Color32::YELLOW));
+                                ui.label(
+                                    RichText::new(format!("Time left: {} min", mins))
+                                        .color(Color32::YELLOW),
+                                );
                             }
                         }
                     }
@@ -2838,13 +3589,13 @@ impl BrowserApp {
                         let privacy_resp = ui.label(
                             RichText::new("\u{1f6e1} Private")
                                 .small()
-                                .color(Color32::from_rgb(60, 200, 80))
+                                .color(Color32::from_rgb(60, 200, 80)),
                         );
                         privacy_resp.on_hover_text(
                             "All data stored locally \u{2022} Zero telemetry\n\
                              No crash reports \u{2022} No tracking\n\
                              Settings encrypted alongside passwords\n\n\
-                             Your browser. Your data. Always."
+                             Your browser. Your data. Always.",
                         );
                         ui.separator();
                         // Poisoning mode indicator in status bar
@@ -2861,23 +3612,35 @@ impl BrowserApp {
                         ui.label(RichText::new(poison_label).small().color(poison_color));
                         ui.separator();
                         // MCP server status
-                        if self.mcp_bridge.running.load(std::sync::atomic::Ordering::Relaxed) {
-                            ui.label(RichText::new("MCP").small().color(Color32::from_rgb(100, 200, 100)));
+                        if self
+                            .mcp_bridge
+                            .running
+                            .load(std::sync::atomic::Ordering::Relaxed)
+                        {
+                            ui.label(
+                                RichText::new("MCP")
+                                    .small()
+                                    .color(Color32::from_rgb(100, 200, 100)),
+                            );
                         }
                         // Stealth victories counter
                         ui.separator();
                         // Ad/tracker blocker stats
-                                                let blocked = self.network_monitor.blocked_count();
-                                                if blocked > 0 {
-                                                    ui.label(RichText::new(format!("Blocked: {}", blocked))
-                                                        .small()
-                                                        .color(Color32::from_rgb(255, 100, 100)));
-                                                }
+                        let blocked = self.network_monitor.blocked_count();
+                        if blocked > 0 {
+                            ui.label(
+                                RichText::new(format!("Blocked: {}", blocked))
+                                    .small()
+                                    .color(Color32::from_rgb(255, 100, 100)),
+                            );
+                        }
                         let poisoned = self.stealth_victories.poisoned_count();
                         if poisoned > 0 {
-                            ui.label(RichText::new(format!("Sites poisoned: {}", poisoned))
-                                .small()
-                                .color(Color32::from_rgb(200, 100, 255)));
+                            ui.label(
+                                RichText::new(format!("Sites poisoned: {}", poisoned))
+                                    .small()
+                                    .color(Color32::from_rgb(200, 100, 255)),
+                            );
                         }
                         ui.separator();
                         ui.label(format!("Zoom: {:.0}%", self.zoom_level * 100.0));
@@ -2887,7 +3650,7 @@ impl BrowserApp {
                 });
             });
     }
-    
+
     fn handle_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
         ctx.input(|i| {
             // Ctrl shortcuts
@@ -2917,7 +3680,8 @@ impl BrowserApp {
                     self.guarded_navigate("sassy://history");
                 }
                 if i.key_pressed(Key::J) {
-                    self.engine.set_show_downloads_panel(!self.engine.show_downloads_panel());
+                    self.engine
+                        .set_show_downloads_panel(!self.engine.show_downloads_panel());
                 }
                 if i.key_pressed(Key::O) {
                     self.open_file_dialog();
@@ -2934,10 +3698,22 @@ impl BrowserApp {
                 if i.key_pressed(Key::Num0) {
                     self.zoom_level = 1.0;
                 }
-                
+
                 // Tab switching with Ctrl+1-9
-                for (idx, key) in [Key::Num1, Key::Num2, Key::Num3, Key::Num4, 
-                                   Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9].iter().enumerate() {
+                for (idx, key) in [
+                    Key::Num1,
+                    Key::Num2,
+                    Key::Num3,
+                    Key::Num4,
+                    Key::Num5,
+                    Key::Num6,
+                    Key::Num7,
+                    Key::Num8,
+                    Key::Num9,
+                ]
+                .iter()
+                .enumerate()
+                {
                     if i.key_pressed(*key) {
                         if idx == 8 {
                             // Ctrl+9 goes to last tab
@@ -2947,19 +3723,23 @@ impl BrowserApp {
                         }
                     }
                 }
-                
+
                 // Ctrl+Tab / Ctrl+Shift+Tab for tab navigation
                 if i.key_pressed(Key::Tab) {
                     let current = self.engine.active_tab_index();
                     let count = self.engine.tab_count();
                     if i.modifiers.shift {
-                        self.engine.set_active_tab(if current == 0 { count - 1 } else { current - 1 });
+                        self.engine.set_active_tab(if current == 0 {
+                            count - 1
+                        } else {
+                            current - 1
+                        });
                     } else {
                         self.engine.set_active_tab((current + 1) % count);
                     }
                 }
             }
-            
+
             // Alt shortcuts
             if i.modifiers.alt {
                 if i.key_pressed(Key::ArrowLeft) {
@@ -2972,7 +3752,7 @@ impl BrowserApp {
                     self.engine.go_home();
                 }
             }
-            
+
             // Function keys
             if i.key_pressed(Key::F5) {
                 self.engine.reload();
@@ -2989,7 +3769,7 @@ impl BrowserApp {
                     console_debug("Developer Tools closed");
                 }
             }
-            
+
             // Escape
             if i.key_pressed(Key::Escape) {
                 self.find_bar_visible = false;
@@ -3017,7 +3797,10 @@ impl BrowserApp {
                 ui.horizontal(|ui| {
                     ui.heading("Vault");
                     if !self.vault_status.is_empty() {
-                        ui.label(RichText::new(&self.vault_status).color(Color32::from_rgb(120, 200, 255)));
+                        ui.label(
+                            RichText::new(&self.vault_status)
+                                .color(Color32::from_rgb(120, 200, 255)),
+                        );
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button("Lock").clicked() {
@@ -3033,7 +3816,9 @@ impl BrowserApp {
                     ui.label("Set a PIN to initialize the vault");
                     ui.horizontal(|ui| {
                         ui.label("PIN:");
-                        ui.add(egui::TextEdit::singleline(&mut self.vault_pin_input).password(true));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.vault_pin_input).password(true),
+                        );
                         if ui.button("Set PIN").clicked() {
                             match self.password_vault.setup(&self.vault_pin_input) {
                                 Ok(_) => {
@@ -3051,7 +3836,9 @@ impl BrowserApp {
                     ui.label("Vault locked. Enter PIN to unlock.");
                     ui.horizontal(|ui| {
                         ui.label("PIN:");
-                        ui.add(egui::TextEdit::singleline(&mut self.vault_pin_input).password(true));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.vault_pin_input).password(true),
+                        );
                         if ui.button("Unlock").clicked() {
                             match self.password_vault.unlock(&self.vault_pin_input) {
                                 Ok(_) => {
@@ -3100,7 +3887,10 @@ impl BrowserApp {
                 ui.horizontal(|ui| {
                     ui.label("Auto-lock (secs)");
                     let mut auto_lock = self.password_vault.auto_lock_seconds() as f32;
-                    if ui.add(egui::Slider::new(&mut auto_lock, 30.0..=86400.0).logarithmic(true)).changed() {
+                    if ui
+                        .add(egui::Slider::new(&mut auto_lock, 30.0..=86400.0).logarithmic(true))
+                        .changed()
+                    {
                         let secs = auto_lock.round() as u64;
                         match self.password_vault.set_auto_lock_seconds(secs) {
                             Ok(_) => self.vault_status = format!("Auto-lock set to {}s", secs),
@@ -3208,7 +3998,9 @@ impl BrowserApp {
                                             self.vault_status = "Updated".into();
                                             self.vault_editing_id = None;
                                         }
-                                        Err(e) => self.vault_status = format!("Update failed: {}", e),
+                                        Err(e) => {
+                                            self.vault_status = format!("Update failed: {}", e)
+                                        }
                                     }
                                 } else {
                                     self.vault_status = "Credential not found".into();
@@ -3229,14 +4021,31 @@ impl BrowserApp {
                     if ui.button("Clear").clicked() {
                         self.vault_search_query.clear();
                     }
-                    if ui.checkbox(&mut self.vault_autofill_enabled, "Inline autofill suggestions").clicked() {
-                        self.vault_status = if self.vault_autofill_enabled { "Autofill suggestions on".into() } else { "Autofill suggestions off".into() };
+                    if ui
+                        .checkbox(
+                            &mut self.vault_autofill_enabled,
+                            "Inline autofill suggestions",
+                        )
+                        .clicked()
+                    {
+                        self.vault_status = if self.vault_autofill_enabled {
+                            "Autofill suggestions on".into()
+                        } else {
+                            "Autofill suggestions off".into()
+                        };
                     }
                     ui.label("Folder");
                     egui::ComboBox::from_label("")
-                        .selected_text(if self.vault_folder_filter.is_empty() { "All" } else { self.vault_folder_filter.as_str() })
+                        .selected_text(if self.vault_folder_filter.is_empty() {
+                            "All"
+                        } else {
+                            self.vault_folder_filter.as_str()
+                        })
                         .show_ui(ui, |ui| {
-                            if ui.selectable_label(self.vault_folder_filter.is_empty(), "All").clicked() {
+                            if ui
+                                .selectable_label(self.vault_folder_filter.is_empty(), "All")
+                                .clicked()
+                            {
                                 self.vault_folder_filter.clear();
                             }
                             for folder in self.password_vault.folders() {
@@ -3254,21 +4063,46 @@ impl BrowserApp {
                 let mut search_results: Vec<Credential> = if self.vault_search_query.is_empty() {
                     all_creds.clone()
                 } else {
-                    self.password_vault.search(&self.vault_search_query).into_iter().cloned().collect()
+                    self.password_vault
+                        .search(&self.vault_search_query)
+                        .into_iter()
+                        .cloned()
+                        .collect()
                 };
                 if !folder_filter.is_empty() {
                     search_results.retain(|c| c.folder.as_deref() == Some(folder_filter.as_str()));
                 }
-                let favorites: Vec<Credential> = self.password_vault.favorites().into_iter().cloned().collect();
-                let weak: Vec<Credential> = self.password_vault.weak_passwords().into_iter().cloned().collect();
-                let recent: Vec<Credential> = self.password_vault.recently_used(6).into_iter().cloned().collect();
+                let favorites: Vec<Credential> = self
+                    .password_vault
+                    .favorites()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                let weak: Vec<Credential> = self
+                    .password_vault
+                    .weak_passwords()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                let recent: Vec<Credential> = self
+                    .password_vault
+                    .recently_used(6)
+                    .into_iter()
+                    .cloned()
+                    .collect();
                 let by_url_matches: Vec<Credential> = if let Some(tab) = self.engine.active_tab() {
                     if let TabContent::Web { url, .. } = &tab.content {
-                        self.password_vault.find_for_url(url).into_iter().cloned().collect()
+                        self.password_vault
+                            .find_for_url(url)
+                            .into_iter()
+                            .cloned()
+                            .collect()
                     } else {
                         Vec::new()
                     }
-                } else { Vec::new() };
+                } else {
+                    Vec::new()
+                };
 
                 ui.collapsing("Matches Current Site", |ui| {
                     if by_url_matches.is_empty() {
@@ -3277,7 +4111,10 @@ impl BrowserApp {
                         for cred in &by_url_matches {
                             ui.horizontal(|ui| {
                                 ui.label(&cred.title);
-                                ui.label(RichText::new(&cred.username).color(Color32::from_rgb(150, 200, 255)));
+                                ui.label(
+                                    RichText::new(&cred.username)
+                                        .color(Color32::from_rgb(150, 200, 255)),
+                                );
                                 if ui.small_button("Copy User").clicked() {
                                     ui.output_mut(|o| o.copied_text = cred.username.clone());
                                     let _ = self.password_vault.mark_used(&cred.id);
@@ -3326,9 +4163,12 @@ impl BrowserApp {
                                     Err(e) => self.vault_status = format!("Delete failed: {}", e),
                                 }
                             }
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                ui.label(cred.domain());
-                            });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(cred.domain());
+                                },
+                            );
                         });
                     }
                 });
@@ -3341,7 +4181,10 @@ impl BrowserApp {
                         ui.horizontal(|ui| {
                             ui.label(&cred.title);
                             if let Some(ts) = cred.last_used {
-                                ui.label(RichText::new(format!("Last used: {}", ts)).color(Color32::GRAY));
+                                ui.label(
+                                    RichText::new(format!("Last used: {}", ts))
+                                        .color(Color32::GRAY),
+                                );
                             }
                         });
                     }
@@ -3382,12 +4225,12 @@ impl BrowserApp {
                     }
                 });
 
-                let reused_owned: std::collections::HashMap<String, Vec<Credential>> =
-                    self.password_vault
-                        .reused_passwords()
-                        .into_iter()
-                        .map(|(hash, creds)| (hash, creds.into_iter().cloned().collect()))
-                        .collect();
+                let reused_owned: std::collections::HashMap<String, Vec<Credential>> = self
+                    .password_vault
+                    .reused_passwords()
+                    .into_iter()
+                    .map(|(hash, creds)| (hash, creds.into_iter().cloned().collect()))
+                    .collect();
 
                 ui.collapsing("Reused Passwords", |ui| {
                     if reused_owned.is_empty() {
@@ -3404,11 +4247,15 @@ impl BrowserApp {
                 });
 
                 ui.collapsing("CSV Export", |ui| {
-                    ui.add(egui::TextEdit::multiline(&mut self.vault_export_buffer).desired_rows(4));
+                    ui.add(
+                        egui::TextEdit::multiline(&mut self.vault_export_buffer).desired_rows(4),
+                    );
                 });
 
                 ui.collapsing("CSV Import", |ui| {
-                    ui.add(egui::TextEdit::multiline(&mut self.vault_import_buffer).desired_rows(4));
+                    ui.add(
+                        egui::TextEdit::multiline(&mut self.vault_import_buffer).desired_rows(4),
+                    );
                 });
             });
     }
@@ -3784,26 +4631,65 @@ impl BrowserApp {
         let pending_count = self.smart_history.pending_count();
         let total_count = self.smart_history.total_count();
         let recent_entries: Vec<_> = self.smart_history.recent(10).into_iter().cloned().collect();
-        let most_visited: Vec<_> = self.smart_history.most_visited(6).into_iter().cloned().collect();
+        let most_visited: Vec<_> = self
+            .smart_history
+            .most_visited(6)
+            .into_iter()
+            .cloned()
+            .collect();
         let search_results: Vec<_> = if self.history_search_query.is_empty() {
             Vec::new()
         } else {
-            self.smart_history.search(&self.history_search_query).into_iter().cloned().collect()
+            self.smart_history
+                .search(&self.history_search_query)
+                .into_iter()
+                .cloned()
+                .collect()
         };
-        let nsfw_entries: Vec<_> = self.smart_history.nsfw_entries().into_iter().cloned().collect();
+        let nsfw_entries: Vec<_> = self
+            .smart_history
+            .nsfw_entries()
+            .into_iter()
+            .cloned()
+            .collect();
         let syncable_count = self.smart_history.syncable().len();
-        let abandoned: Vec<String> = self.smart_history.recent_abandoned(60).into_iter().map(|s| s.to_string()).collect();
+        let abandoned: Vec<String> = self
+            .smart_history
+            .recent_abandoned(60)
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
 
-        let hm_recent: Vec<_> = self.history_manager.recent(10).into_iter().cloned().collect();
+        let hm_recent: Vec<_> = self
+            .history_manager
+            .recent(10)
+            .into_iter()
+            .cloned()
+            .collect();
         let hm_search: Vec<_> = if self.history_search_query.is_empty() {
             Vec::new()
         } else {
-            self.history_manager.search(&self.history_search_query).into_iter().cloned().collect()
+            self.history_manager
+                .search(&self.history_search_query)
+                .into_iter()
+                .cloned()
+                .collect()
         };
-        let hm_most: Vec<_> = self.history_manager.most_visited(6).into_iter().cloned().collect();
+        let hm_most: Vec<_> = self
+            .history_manager
+            .most_visited(6)
+            .into_iter()
+            .cloned()
+            .collect();
         let hm_day_results: Vec<_> = if !self.history_day_query.is_empty() {
             parse_ymd(&self.history_day_query)
-                .map(|(y, m, d)| self.history_manager.for_date(y, m, d).into_iter().cloned().collect())
+                .map(|(y, m, d)| {
+                    self.history_manager
+                        .for_date(y, m, d)
+                        .into_iter()
+                        .cloned()
+                        .collect()
+                })
                 .unwrap_or_default()
         } else {
             Vec::new()
@@ -3817,7 +4703,10 @@ impl BrowserApp {
                 ui.horizontal(|ui| {
                     ui.heading("History & Activity");
                     if !self.history_status.is_empty() {
-                        ui.label(RichText::new(&self.history_status).color(Color32::from_rgb(150, 200, 255)));
+                        ui.label(
+                            RichText::new(&self.history_status)
+                                .color(Color32::from_rgb(150, 200, 255)),
+                        );
                     }
                 });
 
@@ -3826,32 +4715,53 @@ impl BrowserApp {
                 // Controls
                 ui.horizontal(|ui| {
                     let mut incognito = self.smart_history.is_incognito();
-                    if ui.checkbox(&mut incognito, "Incognito (don't track)").changed() {
+                    if ui
+                        .checkbox(&mut incognito, "Incognito (don't track)")
+                        .changed()
+                    {
                         self.smart_history.set_incognito(incognito);
                     }
 
                     let mut intent_delay = self.smart_history.intent_delay_secs();
-                    if ui.add(egui::Slider::new(&mut intent_delay, 0.0..=30.0).text("Intent delay (s)")).changed() {
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut intent_delay, 0.0..=30.0)
+                                .text("Intent delay (s)"),
+                        )
+                        .changed()
+                    {
                         self.smart_history.set_intent_delay(intent_delay);
                     }
 
-                    if ui.checkbox(&mut self.history_auto_exclude, "Auto-exclude NSFW").changed() {
-                        self.smart_history.set_auto_exclude_nsfw(self.history_auto_exclude);
+                    if ui
+                        .checkbox(&mut self.history_auto_exclude, "Auto-exclude NSFW")
+                        .changed()
+                    {
+                        self.smart_history
+                            .set_auto_exclude_nsfw(self.history_auto_exclude);
                     }
                 });
 
                 ui.horizontal(|ui| {
                     ui.label("NSFW sensitivity");
                     let mut sensitivity = self.history_nsfw_sensitivity;
-                    if ui.add(egui::Slider::new(&mut sensitivity, 0.1..=1.0)).changed() {
+                    if ui
+                        .add(egui::Slider::new(&mut sensitivity, 0.1..=1.0))
+                        .changed()
+                    {
                         self.history_nsfw_sensitivity = sensitivity;
-                        self.smart_history.nsfw_detector().set_sensitivity(sensitivity);
+                        self.smart_history
+                            .nsfw_detector()
+                            .set_sensitivity(sensitivity);
                     }
 
                     ui.label("Block domain");
                     ui.text_edit_singleline(&mut self.history_domain_filter);
-                    if ui.small_button("Delete domain").clicked() && !self.history_domain_filter.is_empty() {
-                        self.smart_history.delete_for_domain(&self.history_domain_filter);
+                    if ui.small_button("Delete domain").clicked()
+                        && !self.history_domain_filter.is_empty()
+                    {
+                        self.smart_history
+                            .delete_for_domain(&self.history_domain_filter);
                         self.history_status = "Domain removed from history".into();
                     }
                 });
@@ -3862,7 +4772,10 @@ impl BrowserApp {
                     ui.label("End");
                     ui.text_edit_singleline(&mut self.history_date_end);
                     if ui.small_button("Delete range").clicked() {
-                        if let (Ok(start), Ok(end)) = (self.history_date_start.parse::<u64>(), self.history_date_end.parse::<u64>()) {
+                        if let (Ok(start), Ok(end)) = (
+                            self.history_date_start.parse::<u64>(),
+                            self.history_date_end.parse::<u64>(),
+                        ) {
                             self.smart_history.delete_range(start, end);
                             self.history_status = "Range deleted".into();
                         }
@@ -3889,8 +4802,17 @@ impl BrowserApp {
                 });
 
                 ui.horizontal(|ui| {
-                    ui.label(format!("Smart: total {} | pending {} | syncable {} | NSFW {}", total_count, pending_count, syncable_count, nsfw_entries.len()));
-                    ui.label(format!("Intent delay {:.1}s", self.smart_history.intent_delay_secs()));
+                    ui.label(format!(
+                        "Smart: total {} | pending {} | syncable {} | NSFW {}",
+                        total_count,
+                        pending_count,
+                        syncable_count,
+                        nsfw_entries.len()
+                    ));
+                    ui.label(format!(
+                        "Intent delay {:.1}s",
+                        self.smart_history.intent_delay_secs()
+                    ));
                     ui.label(format!("Visits tracked: {}", stats.total_visits));
                 });
 
@@ -3898,7 +4820,11 @@ impl BrowserApp {
                     if let TabContent::Web { url, title, .. } = &tab.content {
                         let url_clone = url.clone();
                         let raw_title = title.clone();
-                        let history_title = if raw_title.is_empty() { tab.title() } else { raw_title.clone() };
+                        let history_title = if raw_title.is_empty() {
+                            tab.title()
+                        } else {
+                            raw_title.clone()
+                        };
 
                         ui.horizontal(|ui| {
                             ui.label("Active page controls");
@@ -3928,21 +4854,29 @@ impl BrowserApp {
                     let right = &mut right_slice[0];
 
                     left.heading("Smart History");
-                    left.label(format!("Unique domains: {} | Pruned: {}", stats.unique_domains, stats.entries_pruned));
+                    left.label(format!(
+                        "Unique domains: {} | Pruned: {}",
+                        stats.unique_domains, stats.entries_pruned
+                    ));
 
                     left.collapsing("Recent (intent-committed)", |ui| {
-                        egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
-                            for entry in &recent_entries {
-                                ui.horizontal(|ui| {
-                                    ui.label(entry.title.clone());
-                                    ui.label(RichText::new(&entry.domain).color(Color32::from_rgb(150, 150, 180)));
-                                    ui.label(format!("{}s", entry.duration_secs.unwrap_or(0)));
-                                });
-                            }
-                            if recent_entries.is_empty() {
-                                ui.label("No committed entries yet");
-                            }
-                        });
+                        egui::ScrollArea::vertical()
+                            .max_height(160.0)
+                            .show(ui, |ui| {
+                                for entry in &recent_entries {
+                                    ui.horizontal(|ui| {
+                                        ui.label(entry.title.clone());
+                                        ui.label(
+                                            RichText::new(&entry.domain)
+                                                .color(Color32::from_rgb(150, 150, 180)),
+                                        );
+                                        ui.label(format!("{}s", entry.duration_secs.unwrap_or(0)));
+                                    });
+                                }
+                                if recent_entries.is_empty() {
+                                    ui.label("No committed entries yet");
+                                }
+                            });
                     });
 
                     left.collapsing("Most visited", |ui| {
@@ -3975,7 +4909,10 @@ impl BrowserApp {
                     left.collapsing("NSFW flagged", |ui| {
                         for entry in &nsfw_entries {
                             ui.horizontal(|ui| {
-                                ui.label(format!("{} ({:.2})", entry.domain, entry.nsfw_confidence));
+                                ui.label(format!(
+                                    "{} ({:.2})",
+                                    entry.domain, entry.nsfw_confidence
+                                ));
                                 if ui.small_button("Exclude").clicked() {
                                     self.smart_history.exclude_domain(&entry.domain);
                                     self.history_status = format!("Excluded {}", entry.domain);
@@ -3991,7 +4928,10 @@ impl BrowserApp {
                         }
                     });
 
-                    let right_stats_label = format!("HistoryManager entries: {}", self.history_manager.all().len());
+                    let right_stats_label = format!(
+                        "HistoryManager entries: {}",
+                        self.history_manager.all().len()
+                    );
                     right.heading("Classic History");
                     right.label(right_stats_label);
 
@@ -4033,7 +4973,7 @@ impl BrowserApp {
                 });
             });
     }
-    
+
     fn handle_dropped_files(&mut self, ctx: &egui::Context) {
         ctx.input(|i| {
             for file in &i.raw.dropped_files {
@@ -4045,44 +4985,47 @@ impl BrowserApp {
             }
         });
     }
-    
+
     fn open_file_dialog(&mut self) {
         if let Some(path) = native_dialog::FileDialog::new()
             .set_title("Open File")
-            .add_filter("All Supported", &[
-                // Images
-                "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ico", "tiff", "tif",
-                "tga", "hdr", "exr", "pnm", "qoi", "dds", "psd", "xcf",
-                // RAW camera
-                "cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw",
-                // Documents
-                "pdf",
-                "docx", "doc", "odt", "rtf", "wpd",
-                "xlsx", "xls", "ods", "csv", "tsv",
-                // Chemical/Scientific
-                "pdb", "mol", "sdf", "xyz", "cif", "mol2", "mmcif",
-                // Archives
-                "zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar", "zst",
-                // 3D Models
-                "obj", "stl", "gltf", "glb", "ply", "fbx", "dae", "3ds",
-                // Fonts
-                "ttf", "otf", "woff", "woff2", "eot", "fon",
-                // Audio
-                "mp3", "flac", "wav", "ogg", "m4a", "aac", "wma", "opus", "aiff",
-                // Video
-                "mp4", "mkv", "webm", "avi", "mov", "wmv", "flv", "m4v", "ogv",
-                // eBooks
-                "epub", "mobi", "azw", "azw3", "fb2",
-                // Code/Text
-                "txt", "md", "rs", "py", "js", "ts", "html", "css", "json", "xml", "yaml", "yml",
-                "c", "cpp", "h", "hpp", "java", "go", "rb", "php", "swift", "kt", "lua", "sh",
-                "bat", "ps1", "sql", "toml", "ini", "cfg", "log", "tex", "bib",
-            ])
-            .add_filter("Images", &[
-                "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ico", "tiff", 
-                "psd", "cr2", "nef", "arw", "dng",
-            ])
-            .add_filter("Documents", &["pdf", "docx", "doc", "odt", "rtf", "xlsx", "xls", "csv"])
+            .add_filter(
+                "All Supported",
+                &[
+                    // Images
+                    "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ico", "tiff", "tif",
+                    "tga", "hdr", "exr", "pnm", "qoi", "dds", "psd", "xcf",
+                    // RAW camera
+                    "cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw",
+                    // Documents
+                    "pdf", "docx", "doc", "odt", "rtf", "wpd", "xlsx", "xls", "ods", "csv", "tsv",
+                    // Chemical/Scientific
+                    "pdb", "mol", "sdf", "xyz", "cif", "mol2", "mmcif", // Archives
+                    "zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar", "zst",
+                    // 3D Models
+                    "obj", "stl", "gltf", "glb", "ply", "fbx", "dae", "3ds", // Fonts
+                    "ttf", "otf", "woff", "woff2", "eot", "fon", // Audio
+                    "mp3", "flac", "wav", "ogg", "m4a", "aac", "wma", "opus", "aiff",
+                    // Video
+                    "mp4", "mkv", "webm", "avi", "mov", "wmv", "flv", "m4v", "ogv",
+                    // eBooks
+                    "epub", "mobi", "azw", "azw3", "fb2", // Code/Text
+                    "txt", "md", "rs", "py", "js", "ts", "html", "css", "json", "xml", "yaml",
+                    "yml", "c", "cpp", "h", "hpp", "java", "go", "rb", "php", "swift", "kt", "lua",
+                    "sh", "bat", "ps1", "sql", "toml", "ini", "cfg", "log", "tex", "bib",
+                ],
+            )
+            .add_filter(
+                "Images",
+                &[
+                    "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ico", "tiff",
+                    "psd", "cr2", "nef", "arw", "dng",
+                ],
+            )
+            .add_filter(
+                "Documents",
+                &["pdf", "docx", "doc", "odt", "rtf", "xlsx", "xls", "csv"],
+            )
             .add_filter("Archives", &["zip", "tar", "gz", "7z", "rar"])
             .add_filter("3D Models", &["obj", "stl", "gltf", "glb", "ply"])
             .add_filter("Audio", &["mp3", "flac", "wav", "ogg", "m4a", "aac"])
@@ -4099,7 +5042,7 @@ impl BrowserApp {
             }
         }
     }
-    
+
     fn print_current(&mut self) {
         // Get text content from the active tab for printing
         let content = if let Some(tab) = self.engine.active_tab() {
@@ -4114,11 +5057,16 @@ impl BrowserApp {
                                     out.push_str(t);
                                     out.push(' ');
                                 }
-                                crate::html_renderer::HtmlNode::Element { children, tag, .. } => {
+                                crate::html_renderer::HtmlNode::Element {
+                                    children, tag, ..
+                                } => {
                                     for child in children {
                                         extract_text(child, out);
                                     }
-                                    if matches!(tag.as_str(), "p" | "div" | "br" | "h1" | "h2" | "h3" | "h4" | "li") {
+                                    if matches!(
+                                        tag.as_str(),
+                                        "p" | "div" | "br" | "h1" | "h2" | "h3" | "h4" | "li"
+                                    ) {
                                         out.push('\n');
                                     }
                                 }
@@ -4150,25 +5098,40 @@ impl BrowserApp {
             Err(e) => self.status_message = format!("Print failed: {}", e),
         }
     }
-    
+
     // ==============================================================================
     // FIRST RUN WIZARD
     // ==============================================================================
-    
+
     fn render_first_run_wizard(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(50.0);
-                
+
                 // Header
-                ui.heading(RichText::new("Sassy Browser").size(48.0).color(Color32::from_rgb(255, 140, 0)));
+                ui.heading(
+                    RichText::new("Sassy Browser")
+                        .size(48.0)
+                        .color(Color32::from_rgb(255, 140, 0)),
+                );
                 ui.add_space(10.0);
-                ui.label(RichText::new("Pure Rust * No Chrome * No Google * No Tracking").size(16.0).color(Color32::GRAY));
+                ui.label(
+                    RichText::new("Pure Rust * No Chrome * No Google * No Tracking")
+                        .size(16.0)
+                        .color(Color32::GRAY),
+                );
                 ui.add_space(40.0);
-                
+
                 // Progress indicator
                 ui.horizontal(|ui| {
-                    let steps = ["Welcome", "Security", "Device", "Tailscale", "Phone", "Done"];
+                    let steps = [
+                        "Welcome",
+                        "Security",
+                        "Device",
+                        "Tailscale",
+                        "Phone",
+                        "Done",
+                    ];
                     let current = match self.first_run.step {
                         FirstRunStep::Welcome => 0,
                         FirstRunStep::EntropyCollection => 1,
@@ -4177,27 +5140,27 @@ impl BrowserApp {
                         FirstRunStep::PhonePairing => 4,
                         FirstRunStep::Complete => 5,
                     };
-                    
+
                     for (i, step) in steps.iter().enumerate() {
                         let color = if i < current {
                             Color32::from_rgb(0, 200, 100) // Completed
                         } else if i == current {
-                            Color32::from_rgb(255, 140, 0)  // Current
+                            Color32::from_rgb(255, 140, 0) // Current
                         } else {
-                            Color32::GRAY                   // Future
+                            Color32::GRAY // Future
                         };
-                        
+
                         ui.label(RichText::new(format!("{}. {}", i + 1, step)).color(color));
                         if i < steps.len() - 1 {
                             ui.label(RichText::new(" -> ").color(Color32::DARK_GRAY));
                         }
                     }
                 });
-                
+
                 ui.add_space(40.0);
                 ui.separator();
                 ui.add_space(30.0);
-                
+
                 // Step content
                 match self.first_run.step {
                     FirstRunStep::Welcome => self.render_wizard_welcome(ui),
@@ -4210,26 +5173,42 @@ impl BrowserApp {
             });
         });
     }
-    
+
     fn render_wizard_welcome(&mut self, ui: &mut egui::Ui) {
         ui.heading("Welcome to Sassy Browser");
         ui.add_space(20.0);
-        
+
         ui.label("This browser is different. Here's why:");
         ui.add_space(10.0);
-        
+
         egui::Frame::dark_canvas(ui.style()).show(ui, |ui| {
             ui.set_min_width(600.0);
             ui.vertical(|ui| {
                 ui.add_space(10.0);
                 let features = [
-                    ("", "100% Pure Rust", "No Chrome, no WebKit, no Google telemetry"),
-                    ("", "200+ File Formats", "PDF, PDB, RAW photos, CAD files - all built-in"),
-                    ("", "Kills Paid Software", "Adobe Suite ($504/yr), AutoCAD ($2K/yr) - FREE"),
-                    ("", "Tailscale Mesh", "Sync across all your devices securely"),
+                    (
+                        "",
+                        "100% Pure Rust",
+                        "No Chrome, no WebKit, no Google telemetry",
+                    ),
+                    (
+                        "",
+                        "200+ File Formats",
+                        "PDF, PDB, RAW photos, CAD files - all built-in",
+                    ),
+                    (
+                        "",
+                        "Kills Paid Software",
+                        "Adobe Suite ($504/yr), AutoCAD ($2K/yr) - FREE",
+                    ),
+                    (
+                        "",
+                        "Tailscale Mesh",
+                        "Sync across all your devices securely",
+                    ),
                     ("", "Phone App", "Pair your phone for seamless sync"),
                 ];
-                
+
                 for (icon, title, desc) in features {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(icon).size(24.0));
@@ -4244,14 +5223,18 @@ impl BrowserApp {
                 ui.add_space(10.0);
             });
         });
-        
+
         ui.add_space(30.0);
-        
-        if self.svg_icons.text_button(ui, "arrow-right", "Get Started", "Begin setup").clicked() {
+
+        if self
+            .svg_icons
+            .text_button(ui, "arrow-right", "Get Started", "Begin setup")
+            .clicked()
+        {
             self.first_run.next_step();
         }
     }
-    
+
     fn render_wizard_entropy(&mut self, ui: &mut egui::Ui) {
         if !self.first_run.entropy_seeded {
             self.auth.seed_entropy(&self.first_run.entropy_seed_label);
@@ -4261,18 +5244,20 @@ impl BrowserApp {
             self.first_run.entropy_started_at = Some(Instant::now());
         }
 
-        let elapsed = self.first_run
+        let elapsed = self
+            .first_run
             .entropy_started_at
             .map(|t| t.elapsed())
             .unwrap_or_default();
-        let remaining = self.first_run
+        let remaining = self
+            .first_run
             .entropy_min_seconds
             .saturating_sub(elapsed.as_secs());
         let timer_done = elapsed.as_secs_f32() >= self.first_run.entropy_min_seconds as f32;
 
         ui.heading("Creating Your Security Key");
         ui.add_space(20.0);
-        
+
         ui.label("Move your mouse around to generate cryptographic entropy.");
         ui.label("This creates a unique 256-bit key that stays on YOUR device.");
         ui.label(format!(
@@ -4280,7 +5265,7 @@ impl BrowserApp {
             self.first_run.entropy_seed_label
         ));
         ui.add_space(20.0);
-        
+
         // Progress bar
         let progress = self.auth.entropy_progress();
         let progress_bar = egui::ProgressBar::new(progress)
@@ -4288,9 +5273,9 @@ impl BrowserApp {
             .show_percentage()
             .animate(true);
         ui.add(progress_bar);
-        
+
         ui.add_space(10.0);
-        
+
         let bits = (progress * 256.0) as u32;
         let color = if bits >= 256 {
             Color32::from_rgb(0, 200, 100)
@@ -4299,18 +5284,24 @@ impl BrowserApp {
         } else {
             Color32::from_rgb(255, 140, 0)
         };
-        
+
         ui.label(RichText::new(format!("Entropy: {} / 256 bits", bits)).color(color));
 
         ui.add_space(8.0);
         if timer_done {
-            ui.label(RichText::new("Timer: done (30s minimum reached)").color(Color32::from_rgb(0, 200, 100)));
+            ui.label(
+                RichText::new("Timer: done (30s minimum reached)")
+                    .color(Color32::from_rgb(0, 200, 100)),
+            );
         } else {
-            ui.label(RichText::new(format!("Timer: {}s remaining to harden the key", remaining)).color(Color32::YELLOW));
+            ui.label(
+                RichText::new(format!("Timer: {}s remaining to harden the key", remaining))
+                    .color(Color32::YELLOW),
+            );
         }
-        
+
         ui.add_space(20.0);
-        
+
         // Manual entropy input
         ui.add_space(10.0);
         ui.label("Optional: Type random characters to add more entropy (keyboard mashing helps)");
@@ -4327,38 +5318,44 @@ impl BrowserApp {
         // Visual entropy display
         egui::Frame::dark_canvas(ui.style()).show(ui, |ui| {
             ui.set_min_size(Vec2::new(400.0, 100.0));
-                    // Show seed and backup options if ready
-                    let ready = self.auth.is_entropy_ready();
-                    let can_continue = ready && timer_done;
-                    if can_continue {
-                        ui.separator();
-                        ui.label(RichText::new("Backup your key seed!").strong().color(Color32::YELLOW));
-                        if let Some(seed) = self.auth.get_master_key() {
-                            let seed_hex = hex::encode(seed);
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new(&seed_hex).monospace());
-                                if ui.small_button("Copy").clicked() {
-                                    ui.output_mut(|o| o.copied_text = seed_hex.clone());
-                                }
-                                if ui.small_button("Show QR").clicked() {
-                                    self.first_run.error_message = Some(seed_hex.clone()); // Use error_message as temp QR trigger
-                                }
-                            });
-                            // Show QR code if requested
-                            if let Some(ref qr) = self.first_run.error_message {
-                                if qr == &seed_hex {
-                                    if let Ok(code) = qrcode::QrCode::new(seed) {
-                                        let image = code.render::<qrcode::render::svg::Color>()
-                                            .min_dimensions(200, 200)
-                                            .build();
-                                        // Render SVG as text (egui can't natively render SVG, so show as text for now)
-                                        ui.label(RichText::new(image).monospace().size(8.0));
-                                    }
-                                }
+            // Show seed and backup options if ready
+            let ready = self.auth.is_entropy_ready();
+            let can_continue = ready && timer_done;
+            if can_continue {
+                ui.separator();
+                ui.label(
+                    RichText::new("Backup your key seed!")
+                        .strong()
+                        .color(Color32::YELLOW),
+                );
+                if let Some(seed) = self.auth.get_master_key() {
+                    let seed_hex = hex::encode(seed);
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(&seed_hex).monospace());
+                        if ui.small_button("Copy").clicked() {
+                            ui.output_mut(|o| o.copied_text = seed_hex.clone());
+                        }
+                        if ui.small_button("Show QR").clicked() {
+                            self.first_run.error_message = Some(seed_hex.clone());
+                            // Use error_message as temp QR trigger
+                        }
+                    });
+                    // Show QR code if requested
+                    if let Some(ref qr) = self.first_run.error_message {
+                        if qr == &seed_hex {
+                            if let Ok(code) = qrcode::QrCode::new(seed) {
+                                let image = code
+                                    .render::<qrcode::render::svg::Color>()
+                                    .min_dimensions(200, 200)
+                                    .build();
+                                // Render SVG as text (egui can't natively render SVG, so show as text for now)
+                                ui.label(RichText::new(image).monospace().size(8.0));
                             }
                         }
                     }
-            
+                }
+            }
+
             // Show some "randomness" visualization
             ui.horizontal_wrapped(|ui| {
                 let hash_preview = format!("{:016x}", (progress * 1e16) as u64);
@@ -4368,48 +5365,63 @@ impl BrowserApp {
                     } else {
                         Color32::from_rgb(255, 200, 100)
                     };
-                    ui.label(RichText::new(c.to_string()).monospace().color(char_color).size(20.0));
+                    ui.label(
+                        RichText::new(c.to_string())
+                            .monospace()
+                            .color(char_color)
+                            .size(20.0),
+                    );
                 }
             });
         });
-        
+
         ui.add_space(30.0);
-        
+
         ui.horizontal(|ui| {
-            if self.svg_icons.text_button(ui, "arrow-left", "Back", "Go back").clicked() {
+            if self
+                .svg_icons
+                .text_button(ui, "arrow-left", "Back", "Go back")
+                .clicked()
+            {
                 self.first_run.prev_step();
             }
-            
+
             ui.add_space(20.0);
-            
+
             let ready = self.auth.is_entropy_ready();
             let can_continue = ready && timer_done;
-            if ui.add_enabled(can_continue, egui::Button::new("Continue")).on_hover_text("Continue setup").clicked() {
+            if ui
+                .add_enabled(can_continue, egui::Button::new("Continue"))
+                .on_hover_text("Continue setup")
+                .clicked()
+            {
                 self.first_run.next_step();
             }
-            
+
             if !ready {
                 ui.label(RichText::new("Keep moving your mouse!").color(Color32::YELLOW));
             } else if !timer_done {
-                ui.label(RichText::new("Timer still running for stronger key").color(Color32::YELLOW));
+                ui.label(
+                    RichText::new("Timer still running for stronger key").color(Color32::YELLOW),
+                );
             }
         });
     }
-    
+
     fn render_wizard_device(&mut self, ui: &mut egui::Ui) {
         ui.heading("Name This Device");
         ui.add_space(20.0);
-        
+
         ui.label("Give this device a name so you can identify it in your network.");
         ui.add_space(20.0);
-        
+
         ui.horizontal(|ui| {
             ui.label("Device Name:");
             ui.text_edit_singleline(&mut self.first_run.device_name);
         });
-        
+
         ui.add_space(20.0);
-        
+
         ui.label("Device Type:");
         ui.horizontal(|ui| {
             let types = [
@@ -4417,37 +5429,50 @@ impl BrowserApp {
                 (DeviceType::Laptop, "Laptop"),
                 (DeviceType::Server, "Server"),
             ];
-            
+
             for (dtype, label) in types {
-                if ui.selectable_label(self.first_run.device_type == dtype, label).clicked() {
+                if ui
+                    .selectable_label(self.first_run.device_type == dtype, label)
+                    .clicked()
+                {
                     self.first_run.device_type = dtype;
                 }
             }
         });
-        
+
         ui.add_space(20.0);
-        
-        ui.checkbox(&mut self.first_run.enable_tailscale, "Enable Tailscale mesh networking");
+
+        ui.checkbox(
+            &mut self.first_run.enable_tailscale,
+            "Enable Tailscale mesh networking",
+        );
         ui.checkbox(&mut self.first_run.enable_phone_sync, "Set up phone sync");
-        
+
         if let Some(ref err) = self.first_run.error_message {
             ui.add_space(10.0);
             ui.label(RichText::new(err).color(Color32::RED));
         }
-        
+
         ui.add_space(30.0);
-        
+
         ui.horizontal(|ui| {
-            if self.svg_icons.text_button(ui, "arrow-left", "Back", "Go back").clicked() {
+            if self
+                .svg_icons
+                .text_button(ui, "arrow-left", "Back", "Go back")
+                .clicked()
+            {
                 self.first_run.prev_step();
             }
-            
+
             ui.add_space(20.0);
-            
-            if ui.button(RichText::new("Create Device Key ->").size(18.0)).clicked() {
+
+            if ui
+                .button(RichText::new("Create Device Key ->").size(18.0))
+                .clicked()
+            {
                 match self.auth.complete_first_run(
                     &self.first_run.device_name,
-                    self.first_run.device_type.clone()
+                    self.first_run.device_type.clone(),
                 ) {
                     Ok(device_id) => {
                         self.first_run.error_message = None;
@@ -4461,24 +5486,24 @@ impl BrowserApp {
             }
         });
     }
-    
+
     fn render_wizard_tailscale(&mut self, ui: &mut egui::Ui) {
         ui.heading("Tailscale Setup");
         ui.add_space(20.0);
-        
+
         match self.tailscale.status {
             crate::auth::TailscaleStatus::NotInstalled => {
                 ui.label("Tailscale is not installed on this system.");
                 ui.add_space(10.0);
                 ui.label("Install Tailscale to sync across your devices:");
                 ui.add_space(10.0);
-                
+
                 if ui.link("https://tailscale.com/download").clicked() {
                     let _ = open::that("https://tailscale.com/download");
                 }
-                
+
                 ui.add_space(20.0);
-                
+
                 if ui.button("Check Again").clicked() {
                     self.tailscale.check_installation();
                 }
@@ -4486,7 +5511,7 @@ impl BrowserApp {
             crate::auth::TailscaleStatus::Stopped => {
                 ui.label("Tailscale is installed but not running.");
                 ui.add_space(20.0);
-                
+
                 if ui.button("Start Tailscale").clicked() {
                     if let Err(e) = self.tailscale.start() {
                         self.first_run.error_message = Some(e);
@@ -4498,114 +5523,133 @@ impl BrowserApp {
                 ui.add_space(10.0);
                 ui.label("Run this command in your terminal:");
                 ui.add_space(10.0);
-                
+
                 egui::Frame::dark_canvas(ui.style()).show(ui, |ui| {
                     ui.label(RichText::new("tailscale login").monospace().size(16.0));
                 });
-                
+
                 ui.add_space(20.0);
-                
+
                 if ui.button("Check Status").clicked() {
                     self.tailscale.get_status();
                 }
             }
             crate::auth::TailscaleStatus::Running => {
-                ui.label(RichText::new("[ok] Tailscale is connected!").color(Color32::from_rgb(0, 200, 100)));
+                ui.label(
+                    RichText::new("[ok] Tailscale is connected!")
+                        .color(Color32::from_rgb(0, 200, 100)),
+                );
                 ui.add_space(10.0);
-                
+
                 if let Some(ref ip) = self.tailscale.ip_address {
                     ui.label(format!("Your Tailscale IP: {}", ip));
                 }
                 if let Some(ref hostname) = self.tailscale.hostname {
                     ui.label(format!("Hostname: {}", hostname));
                 }
-                
+
                 ui.add_space(20.0);
-                
+
                 // Show peers
                 let peers = self.tailscale.get_peers();
                 if !peers.is_empty() {
                     ui.label(RichText::new("Devices on your network:").strong());
                     for peer in peers {
                         let status = if peer.online { "" } else { "( )" };
-                        ui.label(format!("{} {} ({})", status, peer.hostname, peer.ip_address));
+                        ui.label(format!(
+                            "{} {} ({})",
+                            status, peer.hostname, peer.ip_address
+                        ));
                     }
                 }
             }
             crate::auth::TailscaleStatus::Error(ref e) => {
                 ui.label(RichText::new(format!("Error: {}", e)).color(Color32::RED));
-                
+
                 if ui.button("Retry").clicked() {
                     self.tailscale.get_status();
                 }
             }
         }
-        
+
         if let Some(ref err) = self.first_run.error_message {
             ui.add_space(10.0);
             ui.label(RichText::new(err).color(Color32::RED));
         }
-        
+
         ui.add_space(30.0);
-        
+
         ui.horizontal(|ui| {
-            if self.svg_icons.text_button(ui, "arrow-left", "Back", "Go back").clicked() {
+            if self
+                .svg_icons
+                .text_button(ui, "arrow-left", "Back", "Go back")
+                .clicked()
+            {
                 self.first_run.prev_step();
             }
-            
+
             ui.add_space(20.0);
-            
+
             let label = if self.first_run.enable_phone_sync {
                 "Continue to Phone Setup ->"
             } else {
                 "Finish Setup ->"
             };
-            
+
             if ui.button(RichText::new(label).size(18.0)).clicked() {
                 self.first_run.next_step();
             }
-            
+
             ui.add_space(20.0);
-            
+
             if ui.small_button("Skip").clicked() {
                 self.first_run.enable_tailscale = false;
                 self.first_run.next_step();
             }
         });
     }
-    
+
     fn render_wizard_phone(&mut self, ui: &mut egui::Ui) {
         ui.heading("Phone App Pairing");
         ui.add_space(20.0);
-        
+
         // Generate pairing code if not already done
         if self.first_run.pairing_code.is_none() {
             self.first_run.pairing_code = Some(self.auth.generate_pairing_code());
         }
-        
+
         ui.label("Scan this QR code with the Sassy Browser phone app:");
         ui.add_space(20.0);
-        
+
         // QR code placeholder (actual QR rendering would need qrcode crate integration)
         egui::Frame::dark_canvas(ui.style()).show(ui, |ui| {
             ui.set_min_size(Vec2::new(200.0, 200.0));
             ui.centered_and_justified(|ui| {
                 let code = self.first_run.pairing_code.as_deref().unwrap_or("000000");
-                ui.label(RichText::new(format!("Pairing Code:\n\n{}", code)).size(32.0).monospace());
+                ui.label(
+                    RichText::new(format!("Pairing Code:\n\n{}", code))
+                        .size(32.0)
+                        .monospace(),
+                );
             });
         });
-        
+
         ui.add_space(20.0);
-        
+
         ui.label("Or enter this code manually in the phone app:");
         ui.add_space(10.0);
-        
+
         if let Some(ref code) = self.first_run.pairing_code {
-            ui.label(RichText::new(code).size(48.0).monospace().color(Color32::from_rgb(255, 140, 0)));
+            ui.label(
+                RichText::new(code)
+                    .size(48.0)
+                    .monospace()
+                    .color(Color32::from_rgb(255, 140, 0)),
+            );
         }
-        
+
         ui.add_space(10.0);
-        
+
         ui.label(RichText::new("Download the app:").color(Color32::GRAY));
         ui.horizontal(|ui| {
             if ui.link("iOS App Store").clicked() {
@@ -4613,29 +5657,37 @@ impl BrowserApp {
             }
             ui.label(" | ");
             if ui.link("Google Play").clicked() {
-                let _ = open::that("https://play.google.com/store/apps/details?id=com.sassybrowser");
+                let _ =
+                    open::that("https://play.google.com/store/apps/details?id=com.sassybrowser");
             }
             ui.label(" | ");
             if ui.link("F-Droid").clicked() {
                 let _ = open::that("https://f-droid.org/packages/com.sassybrowser");
             }
         });
-        
+
         ui.add_space(30.0);
-        
+
         ui.horizontal(|ui| {
-            if self.svg_icons.text_button(ui, "arrow-left", "Back", "Go back").clicked() {
+            if self
+                .svg_icons
+                .text_button(ui, "arrow-left", "Back", "Go back")
+                .clicked()
+            {
                 self.first_run.prev_step();
             }
-            
+
             ui.add_space(20.0);
-            
-            if ui.button(RichText::new("Finish Setup ->").size(18.0)).clicked() {
+
+            if ui
+                .button(RichText::new("Finish Setup ->").size(18.0))
+                .clicked()
+            {
                 self.first_run.next_step();
             }
-            
+
             ui.add_space(20.0);
-            
+
             if ui.small_button("Skip for now").clicked() {
                 self.first_run.enable_phone_sync = false;
                 self.first_run.next_step();
@@ -4644,7 +5696,9 @@ impl BrowserApp {
     }
 
     fn render_left_sidebar(&mut self, ctx: &egui::Context) {
-        if !self.left_sidebar_visible { return; }
+        if !self.left_sidebar_visible {
+            return;
+        }
 
         egui::SidePanel::left("left_sidebar")
             .resizable(true)
@@ -4652,54 +5706,76 @@ impl BrowserApp {
             .min_width(150.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if ui.selectable_label(
-                        self.left_sidebar_mode == LeftSidebarMode::Bookmarks, "Bookmarks"
-                    ).clicked() {
+                    if ui
+                        .selectable_label(
+                            self.left_sidebar_mode == LeftSidebarMode::Bookmarks,
+                            "Bookmarks",
+                        )
+                        .clicked()
+                    {
                         self.left_sidebar_mode = LeftSidebarMode::Bookmarks;
                     }
-                    if ui.selectable_label(
-                        self.left_sidebar_mode == LeftSidebarMode::History, "History"
-                    ).clicked() {
+                    if ui
+                        .selectable_label(
+                            self.left_sidebar_mode == LeftSidebarMode::History,
+                            "History",
+                        )
+                        .clicked()
+                    {
                         self.left_sidebar_mode = LeftSidebarMode::History;
                     }
-                    if ui.selectable_label(
-                        self.left_sidebar_mode == LeftSidebarMode::Protection, "\u{1f6e1} Protect"
-                    ).clicked() {
+                    if ui
+                        .selectable_label(
+                            self.left_sidebar_mode == LeftSidebarMode::Protection,
+                            "\u{1f6e1} Protect",
+                        )
+                        .clicked()
+                    {
                         self.left_sidebar_mode = LeftSidebarMode::Protection;
                     }
                 });
                 ui.separator();
 
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    match self.left_sidebar_mode {
-                        LeftSidebarMode::Bookmarks => {
-                            let bookmarks: Vec<(String, String)> = self.engine.bookmarks.all()
-                                .iter()
-                                .map(|b| (b.url.clone(), b.title.clone()))
-                                .collect();
-                            for (url, title) in bookmarks {
-                                let display = if title.is_empty() { &url } else { &title };
-                                if ui.add(egui::Label::new(display).sense(egui::Sense::click())).clicked() {
-                                    self.guarded_navigate(&url);
-                                }
+                egui::ScrollArea::vertical().show(ui, |ui| match self.left_sidebar_mode {
+                    LeftSidebarMode::Bookmarks => {
+                        let bookmarks: Vec<(String, String)> = self
+                            .engine
+                            .bookmarks
+                            .all()
+                            .iter()
+                            .map(|b| (b.url.clone(), b.title.clone()))
+                            .collect();
+                        for (url, title) in bookmarks {
+                            let display = if title.is_empty() { &url } else { &title };
+                            if ui
+                                .add(egui::Label::new(display).sense(egui::Sense::click()))
+                                .clicked()
+                            {
+                                self.guarded_navigate(&url);
                             }
                         }
-                        LeftSidebarMode::History => {
-                            let entries: Vec<(String, String)> = self.engine.history.all()
-                                .iter()
-                                .take(50)
-                                .map(|e| (e.url.clone(), e.title.clone()))
-                                .collect();
-                            for (url, title) in entries {
-                                let display = if title.is_empty() { &url } else { &title };
-                                if ui.add(egui::Label::new(display).sense(egui::Sense::click())).clicked() {
-                                    self.guarded_navigate(&url);
-                                }
+                    }
+                    LeftSidebarMode::History => {
+                        let entries: Vec<(String, String)> = self
+                            .engine
+                            .history
+                            .all()
+                            .iter()
+                            .take(50)
+                            .map(|e| (e.url.clone(), e.title.clone()))
+                            .collect();
+                        for (url, title) in entries {
+                            let display = if title.is_empty() { &url } else { &title };
+                            if ui
+                                .add(egui::Label::new(display).sense(egui::Sense::click()))
+                                .clicked()
+                            {
+                                self.guarded_navigate(&url);
                             }
                         }
-                        LeftSidebarMode::Protection => {
-                            self.render_threat_protection_panel(ui);
-                        }
+                    }
+                    LeftSidebarMode::Protection => {
+                        self.render_threat_protection_panel(ui);
                     }
                 });
             });
@@ -4715,14 +5791,21 @@ impl BrowserApp {
     fn render_threat_protection_panel(&mut self, ui: &mut egui::Ui) {
         // ── Protection Status Header ──
         let detection_on = self.detection_engine.enabled;
-        let ad_on = self.ad_blocker.read().map(|b| b.is_enabled()).unwrap_or(false);
+        let ad_on = self
+            .ad_blocker
+            .read()
+            .map(|b| b.is_enabled())
+            .unwrap_or(false);
         let poison_mode = self.poison_engine.mode;
         let all_active = detection_on && ad_on && poison_mode != PoisonMode::Off;
 
         let (status_text, status_color) = if all_active {
             ("\u{2714} Protection Active", Color32::from_rgb(60, 200, 80))
         } else if detection_on || ad_on {
-            ("\u{26a0} Partial Protection", Color32::from_rgb(220, 180, 40))
+            (
+                "\u{26a0} Partial Protection",
+                Color32::from_rgb(220, 180, 40),
+            )
         } else {
             ("\u{2716} Protection Off", Color32::from_rgb(200, 60, 60))
         };
@@ -4741,7 +5824,10 @@ impl BrowserApp {
         // Ad blocker
         let (ads_stat, tracker_stat) = if let Ok(b) = self.ad_blocker.read() {
             let s = b.get_stats();
-            (format!("{}", s.total_blocked), format!("{}", s.blocked_by_domain.len()))
+            (
+                format!("{}", s.total_blocked),
+                format!("{}", s.blocked_by_domain.len()),
+            )
         } else {
             ("?".into(), "?".into())
         };
@@ -4751,8 +5837,10 @@ impl BrowserApp {
         // Detection engine
         let alert_count = self.detection_engine.recent_alerts(100).len();
         if alert_count > 0 {
-            ui.colored_label(Color32::from_rgb(255, 160, 0),
-                format!("\u{26a0}\u{fe0f} Threats detected: {}", alert_count));
+            ui.colored_label(
+                Color32::from_rgb(255, 160, 0),
+                format!("\u{26a0}\u{fe0f} Threats detected: {}", alert_count),
+            );
         } else {
             ui.label("\u{2705} No threats detected");
         }
@@ -4762,38 +5850,58 @@ impl BrowserApp {
         ui.label(format!("\u{1f9ea} Fingerprints poisoned: {}", poisoned));
         let top = self.stealth_victories.top_poisoned_domains(3);
         for (domain, count) in &top {
-            ui.label(RichText::new(format!("   \u{2022} {} ({})", domain, count))
-                .small().color(Color32::GRAY));
+            ui.label(
+                RichText::new(format!("   \u{2022} {} ({})", domain, count))
+                    .small()
+                    .color(Color32::GRAY),
+            );
         }
 
         // Poisoning mode
-        ui.label(format!("\u{1f3ad} Mode: {}", self.poison_engine.mode_description()));
+        ui.label(format!(
+            "\u{1f3ad} Mode: {}",
+            self.poison_engine.mode_description()
+        ));
 
         // 4-layer sandbox
         ui.add_space(2.0);
         ui.label("\u{1f512} Sandbox: 4-layer isolation active");
-        ui.label(RichText::new("   Network \u{2192} Page \u{2192} Popup \u{2192} Download")
-            .small().color(Color32::GRAY));
+        ui.label(
+            RichText::new("   Network \u{2192} Page \u{2192} Popup \u{2192} Download")
+                .small()
+                .color(Color32::GRAY),
+        );
 
         // ── Privacy Guarantee ──
         ui.add_space(8.0);
         ui.separator();
-        ui.label(RichText::new("\u{1f512} Privacy Guarantee").strong()
-            .color(Color32::from_rgb(100, 180, 255)));
+        ui.label(
+            RichText::new("\u{1f512} Privacy Guarantee")
+                .strong()
+                .color(Color32::from_rgb(100, 180, 255)),
+        );
         ui.add_space(2.0);
         ui.label(RichText::new("\u{2714} All data stored locally on YOUR device").small());
-        ui.label(RichText::new("\u{2714} Zero telemetry \u{2014} no usage data ever leaves").small());
+        ui.label(
+            RichText::new("\u{2714} Zero telemetry \u{2014} no usage data ever leaves").small(),
+        );
         ui.label(RichText::new("\u{2714} No crash reports sent externally").small());
         ui.label(RichText::new("\u{2714} Settings encrypted alongside passwords").small());
         ui.label(RichText::new("\u{2714} History stays in your encrypted profile").small());
         ui.label(RichText::new("\u{2714} No accounts required \u{2014} works offline").small());
         ui.add_space(4.0);
-        ui.label(RichText::new("Your browser. Your data. Always.")
-            .small().strong().color(Color32::from_rgb(100, 180, 255)));
+        ui.label(
+            RichText::new("Your browser. Your data. Always.")
+                .small()
+                .strong()
+                .color(Color32::from_rgb(100, 180, 255)),
+        );
     }
 
     fn render_ai_sidebar(&mut self, ctx: &egui::Context) {
-        if !self.ai_sidebar_visible { return; }
+        if !self.ai_sidebar_visible {
+            return;
+        }
 
         egui::SidePanel::right("ai_sidebar")
             .resizable(true)
@@ -4805,13 +5913,17 @@ impl BrowserApp {
                 ui.label("How can I help you today?");
                 ui.add_space(10.0);
 
-                ui.add(egui::TextEdit::multiline(&mut self.ai_query_input)
-                    .hint_text("Ask me anything...")
-                    .desired_rows(3)
-                    .desired_width(f32::INFINITY));
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.ai_query_input)
+                        .hint_text("Ask me anything...")
+                        .desired_rows(3)
+                        .desired_width(f32::INFINITY),
+                );
 
                 if ui.button("Ask AI").clicked() && !self.ai_query_input.is_empty() {
-                    let active_url = self.engine.active_tab()
+                    let active_url = self
+                        .engine
+                        .active_tab()
                         .map(|t| t.content.get_display_url())
                         .unwrap_or_default();
                     let query = help_query_for_context(&self.ai_query_input, &active_url);
@@ -4853,13 +5965,20 @@ impl BrowserApp {
                 ui.add_space(8.0);
 
                 // Show recent history entries
-                let recent: Vec<(String, String)> = self.engine.history.all()
+                let recent: Vec<(String, String)> = self
+                    .engine
+                    .history
+                    .all()
                     .iter()
                     .take(5)
                     .map(|e| (e.url.clone(), e.title.clone()))
                     .collect();
                 for (_url, title) in recent {
-                    let label = if title.is_empty() { "(untitled)".to_string() } else { title };
+                    let label = if title.is_empty() {
+                        "(untitled)".to_string()
+                    } else {
+                        title
+                    };
                     ui.label(format!("- {}", label));
                 }
             });
@@ -5225,10 +6344,22 @@ example.com#@#.approved-ad\n\
                 // ── InteractionTracker diagnostics ──
                 ui.label(RichText::new("Interaction Tracker").strong());
                 ui.label(self.interaction_tracker.describe());
-                ui.label(format!("Total actions: {}", self.interaction_tracker.total_actions));
-                ui.label(format!("Keystrokes: {}", self.interaction_tracker.keystroke_count));
-                ui.label(format!("Edited fields: {}", self.interaction_tracker.edited_fields.len()));
-                ui.label(format!("Quality score: {:.2}", self.interaction_tracker.get_quality_score()));
+                ui.label(format!(
+                    "Total actions: {}",
+                    self.interaction_tracker.total_actions
+                ));
+                ui.label(format!(
+                    "Keystrokes: {}",
+                    self.interaction_tracker.keystroke_count
+                ));
+                ui.label(format!(
+                    "Edited fields: {}",
+                    self.interaction_tracker.edited_fields.len()
+                ));
+                ui.label(format!(
+                    "Quality score: {:.2}",
+                    self.interaction_tracker.get_quality_score()
+                ));
 
                 ui.add_space(4.0);
                 ui.separator();
@@ -5242,8 +6373,14 @@ example.com#@#.approved-ad\n\
                 let quality_robotic = InteractionQuality::Robotic;
 
                 let quality_labels = [
-                    (quality_meaningful, "Meaningful - genuine user engagement (>3 chars)"),
-                    (quality_superficial, "Superficial - minimal interaction (1-3 chars)"),
+                    (
+                        quality_meaningful,
+                        "Meaningful - genuine user engagement (>3 chars)",
+                    ),
+                    (
+                        quality_superficial,
+                        "Superficial - minimal interaction (1-3 chars)",
+                    ),
                     (quality_robotic, "Robotic - zero-length or automated input"),
                 ];
                 for (q, desc) in &quality_labels {
@@ -5291,17 +6428,24 @@ example.com#@#.approved-ad\n\
                 ui.label(RichText::new("Hit Test Functions").strong());
                 let test_layout = LayoutBox::default();
                 let hit_result = hit_test(&test_layout, 5.0, 5.0);
-                ui.label(format!("hit_test on empty layout: {}",
-                    hit_result.as_ref().map(|h| h.describe()).unwrap_or_else(|| "None (expected)".into())));
+                ui.label(format!(
+                    "hit_test on empty layout: {}",
+                    hit_result
+                        .as_ref()
+                        .map(|h| h.describe())
+                        .unwrap_or_else(|| "None (expected)".into())
+                ));
 
                 let all_hits = hit_test_all(&test_layout, 5.0, 5.0);
-                ui.label(format!("hit_test_all on empty layout: {} results", all_hits.len()));
+                ui.label(format!(
+                    "hit_test_all on empty layout: {} results",
+                    all_hits.len()
+                ));
                 for (i, h) in all_hits.iter().enumerate().take(5) {
                     ui.label(format!("  [{}] {}", i, h.describe()));
                 }
             });
     }
-
 
     fn render_voice_panel(&mut self, ctx: &egui::Context) {
         if !self.voice_panel_visible {
@@ -5336,7 +6480,8 @@ example.com#@#.approved-ad\n\
         let _cap_rate = capture_cfg.sample_rate;
         let _cap_bufsize = capture_cfg.buffer_size;
         let _cap_channels = capture_cfg.channels;
-        let mic = MicrophoneCapture::with_capture_config(voice_cfg.clone(), CaptureConfig::default());
+        let mic =
+            MicrophoneCapture::with_capture_config(voice_cfg.clone(), CaptureConfig::default());
         let _mic_recording = mic.is_recording();
         let _mic_duration = mic.duration_secs();
         let _mic_level = mic.current_level();
@@ -5358,7 +6503,8 @@ example.com#@#.approved-ad\n\
         let _stopped_samples = mic.stop();
 
         // Wire up VoiceActivityDetector for VAD threshold display
-        let mut vad = VoiceActivityDetector::new(voice_cfg.vad_threshold, voice_cfg.silence_duration, 16000);
+        let mut vad =
+            VoiceActivityDetector::new(voice_cfg.vad_threshold, voice_cfg.silence_duration, 16000);
         let _vad_speech = vad.process(&[0.0; 160]);
         let _vad_timeout = vad.is_silence_timeout();
         vad.reset();
@@ -5438,10 +6584,16 @@ example.com#@#.approved-ad\n\
         let device_names: Vec<String> = if devices.is_empty() {
             vec!["No devices found".to_string()]
         } else {
-            devices.iter().map(|d| {
-                let default_tag = if d.is_default { " (default)" } else { "" };
-                format!("{}{} - {}ch {}Hz", d.name, default_tag, d.channels, d.max_sample_rate)
-            }).collect()
+            devices
+                .iter()
+                .map(|d| {
+                    let default_tag = if d.is_default { " (default)" } else { "" };
+                    format!(
+                        "{}{} - {}ch {}Hz",
+                        d.name, default_tag, d.channels, d.max_sample_rate
+                    )
+                })
+                .collect()
         };
 
         // Whisper model options
@@ -5577,10 +6729,17 @@ example.com#@#.approved-ad\n\
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let state_label = match &current_state {
                             VoiceState::Idle => RichText::new("Idle").color(Color32::GRAY),
-                            VoiceState::Listening => RichText::new("Listening...").color(Color32::YELLOW),
-                            VoiceState::Recording => RichText::new("Recording").color(Color32::from_rgb(255, 80, 80)),
-                            VoiceState::Transcribing => RichText::new("Transcribing...").color(Color32::from_rgb(100, 200, 255)),
-                            VoiceState::Error(msg) => RichText::new(format!("Error: {}", msg)).color(Color32::RED),
+                            VoiceState::Listening => {
+                                RichText::new("Listening...").color(Color32::YELLOW)
+                            }
+                            VoiceState::Recording => {
+                                RichText::new("Recording").color(Color32::from_rgb(255, 80, 80))
+                            }
+                            VoiceState::Transcribing => RichText::new("Transcribing...")
+                                .color(Color32::from_rgb(100, 200, 255)),
+                            VoiceState::Error(msg) => {
+                                RichText::new(format!("Error: {}", msg)).color(Color32::RED)
+                            }
                         };
                         ui.label(state_label);
                     });
@@ -5591,7 +6750,13 @@ example.com#@#.approved-ad\n\
                 // Recording controls
                 ui.horizontal(|ui| {
                     if recording_active {
-                        if ui.button(RichText::new("Stop Recording").color(Color32::from_rgb(255, 80, 80))).clicked() {
+                        if ui
+                            .button(
+                                RichText::new("Stop Recording")
+                                    .color(Color32::from_rgb(255, 80, 80)),
+                            )
+                            .clicked()
+                        {
                             recording_active = false;
                             status_text = "Recording stopped. Processing...".into();
                         }
@@ -5610,7 +6775,11 @@ example.com#@#.approved-ad\n\
                 });
 
                 if !status_text.is_empty() {
-                    ui.label(RichText::new(&status_text).small().color(Color32::from_rgb(160, 160, 200)));
+                    ui.label(
+                        RichText::new(&status_text)
+                            .small()
+                            .color(Color32::from_rgb(160, 160, 200)),
+                    );
                 }
 
                 ui.add_space(4.0);
@@ -5619,34 +6788,55 @@ example.com#@#.approved-ad\n\
                 ui.group(|ui| {
                     ui.label(RichText::new("Transcript").strong());
                     if sample_transcript.text.is_empty() {
-                        ui.label(RichText::new("No transcript yet. Press 'Start Recording' and speak.").italics().color(Color32::GRAY));
+                        ui.label(
+                            RichText::new("No transcript yet. Press 'Start Recording' and speak.")
+                                .italics()
+                                .color(Color32::GRAY),
+                        );
                     } else {
                         ui.label(&sample_transcript.text);
                         ui.add_space(2.0);
-                        ui.label(RichText::new(format!(
-                            "Language: {} | Duration: {}ms | Segments: {}",
-                            sample_transcript.language,
-                            sample_transcript.duration_ms,
-                            sample_transcript.segments.len()
-                        )).small().color(Color32::GRAY));
+                        ui.label(
+                            RichText::new(format!(
+                                "Language: {} | Duration: {}ms | Segments: {}",
+                                sample_transcript.language,
+                                sample_transcript.duration_ms,
+                                sample_transcript.segments.len()
+                            ))
+                            .small()
+                            .color(Color32::GRAY),
+                        );
 
                         // Show individual segments
                         if !sample_transcript.segments.is_empty() {
                             ui.collapsing("Segments", |ui| {
                                 for seg in &sample_transcript.segments {
                                     ui.horizontal(|ui| {
-                                        ui.label(RichText::new(format!(
-                                            "[{} - {}ms]",
-                                            seg.start_ms, seg.end_ms
-                                        )).small().monospace());
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "[{} - {}ms]",
+                                                seg.start_ms, seg.end_ms
+                                            ))
+                                            .small()
+                                            .monospace(),
+                                        );
                                         ui.label(&seg.text);
-                                        ui.label(RichText::new(format!(
-                                            "{:.0}%", seg.confidence * 100.0
-                                        )).small().color(
-                                            if seg.confidence > 0.8 { Color32::GREEN }
-                                            else if seg.confidence > 0.5 { Color32::YELLOW }
-                                            else { Color32::RED }
-                                        ));
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "{:.0}%",
+                                                seg.confidence * 100.0
+                                            ))
+                                            .small()
+                                            .color(
+                                                if seg.confidence > 0.8 {
+                                                    Color32::GREEN
+                                                } else if seg.confidence > 0.5 {
+                                                    Color32::YELLOW
+                                                } else {
+                                                    Color32::RED
+                                                },
+                                            ),
+                                        );
                                     });
                                 }
                             });
@@ -5659,9 +6849,16 @@ example.com#@#.approved-ad\n\
                         let parsed = VoiceCommand::parse(&last_transcript);
                         ui.horizontal(|ui| {
                             ui.label(RichText::new("Parsed command:").small());
-                            ui.label(RichText::new(parsed.description()).color(Color32::from_rgb(100, 200, 255)));
+                            ui.label(
+                                RichText::new(parsed.description())
+                                    .color(Color32::from_rgb(100, 200, 255)),
+                            );
                             if !parsed.content().is_empty() {
-                                ui.label(RichText::new(format!("\"{}\"", parsed.content())).small().italics());
+                                ui.label(
+                                    RichText::new(format!("\"{}\"", parsed.content()))
+                                        .small()
+                                        .italics(),
+                                );
                             }
                             if parsed.is_local() {
                                 ui.label(RichText::new("(local)").small().color(Color32::GREEN));
@@ -5694,7 +6891,12 @@ example.com#@#.approved-ad\n\
                                 VoiceCommand::Confirm => "\"Yes\" / \"Confirm\"",
                                 VoiceCommand::Unknown => "(unrecognized input)",
                             };
-                            ui.label(RichText::new(example).small().italics().color(Color32::GRAY));
+                            ui.label(
+                                RichText::new(example)
+                                    .small()
+                                    .italics()
+                                    .color(Color32::GRAY),
+                            );
                             if cmd.is_local() {
                                 ui.label(RichText::new("[local]").small().color(Color32::GREEN));
                             }
@@ -5717,7 +6919,10 @@ example.com#@#.approved-ad\n\
                         ui.label("Input device:");
                         egui::ComboBox::from_id_salt("voice_device_combo")
                             .selected_text(
-                                device_names.get(selected_device).cloned().unwrap_or_else(|| "Select...".into())
+                                device_names
+                                    .get(selected_device)
+                                    .cloned()
+                                    .unwrap_or_else(|| "Select...".into()),
                             )
                             .show_ui(ui, |ui| {
                                 for (i, name) in device_names.iter().enumerate() {
@@ -5728,10 +6933,14 @@ example.com#@#.approved-ad\n\
                         // Show device details if we have a valid selection
                         if let Some(dev) = devices.get(selected_device) {
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new(format!(
-                                    "ID: {} | Channels: {} | Max rate: {}Hz",
-                                    dev.id, dev.channels, dev.max_sample_rate
-                                )).small().color(Color32::GRAY));
+                                ui.label(
+                                    RichText::new(format!(
+                                        "ID: {} | Channels: {} | Max rate: {}Hz",
+                                        dev.id, dev.channels, dev.max_sample_rate
+                                    ))
+                                    .small()
+                                    .color(Color32::GRAY),
+                                );
                             });
                         }
 
@@ -5766,43 +6975,62 @@ example.com#@#.approved-ad\n\
                                     RichText::new(whisper_model_names[i])
                                 };
                                 ui.label(label);
-                                ui.label(RichText::new(format!(
-                                    "File: {} | Path: {}",
-                                    model.filename(),
-                                    model.model_path()
-                                )).small().color(Color32::GRAY));
+                                ui.label(
+                                    RichText::new(format!(
+                                        "File: {} | Path: {}",
+                                        model.filename(),
+                                        model.model_path()
+                                    ))
+                                    .small()
+                                    .color(Color32::GRAY),
+                                );
                             });
                         }
 
                         ui.add_space(4.0);
                         // Show engine info
                         let engine = WhisperEngine::new(display_config.clone());
-                        ui.label(RichText::new(format!(
-                            "Model loaded: {} | Exists on disk: {} | Size: {} MB",
-                            engine.is_loaded(),
-                            engine.model_exists(),
-                            engine.model_size_bytes() / 1_000_000
-                        )).small());
+                        ui.label(
+                            RichText::new(format!(
+                                "Model loaded: {} | Exists on disk: {} | Size: {} MB",
+                                engine.is_loaded(),
+                                engine.model_exists(),
+                                engine.model_size_bytes() / 1_000_000
+                            ))
+                            .small(),
+                        );
                     });
 
                     // Voice Configuration
                     ui.collapsing("Voice Configuration", |ui| {
                         ui.checkbox(&mut display_config.enabled, "Enable voice input");
                         ui.checkbox(&mut display_config.use_gpu, "Use GPU acceleration");
-                        ui.checkbox(&mut display_config.live_preview, "Show live transcription preview");
+                        ui.checkbox(
+                            &mut display_config.live_preview,
+                            "Show live transcription preview",
+                        );
 
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
                             ui.label("VAD threshold:");
-                            ui.add(egui::Slider::new(&mut display_config.vad_threshold, 0.0..=1.0).text("sensitivity"));
+                            ui.add(
+                                egui::Slider::new(&mut display_config.vad_threshold, 0.0..=1.0)
+                                    .text("sensitivity"),
+                            );
                         });
                         ui.horizontal(|ui| {
                             ui.label("Silence timeout:");
-                            ui.add(egui::Slider::new(&mut display_config.silence_duration, 0.5..=5.0).text("seconds"));
+                            ui.add(
+                                egui::Slider::new(&mut display_config.silence_duration, 0.5..=5.0)
+                                    .text("seconds"),
+                            );
                         });
                         ui.horizontal(|ui| {
                             ui.label("Max recording:");
-                            ui.add(egui::Slider::new(&mut display_config.max_duration, 10.0..=300.0).text("seconds"));
+                            ui.add(
+                                egui::Slider::new(&mut display_config.max_duration, 10.0..=300.0)
+                                    .text("seconds"),
+                            );
                         });
 
                         if let Some(ref lang) = display_config.language {
@@ -5815,7 +7043,10 @@ example.com#@#.approved-ad\n\
                         ui.label("Trigger mode preset:");
                         egui::ComboBox::from_id_salt("voice_hotkey_combo")
                             .selected_text(
-                                hotkey_preset_names.get(selected_hotkey).copied().unwrap_or("Select...")
+                                hotkey_preset_names
+                                    .get(selected_hotkey)
+                                    .copied()
+                                    .unwrap_or("Select..."),
                             )
                             .show_ui(ui, |ui| {
                                 for (i, name) in hotkey_preset_names.iter().enumerate() {
@@ -5838,7 +7069,10 @@ example.com#@#.approved-ad\n\
                             if !mod_display.is_empty() {
                                 ui.label(format!("Modifiers: {}", mod_display));
                             }
-                            ui.label(format!("Audio feedback: {}", if preset.audio_feedback { "On" } else { "Off" }));
+                            ui.label(format!(
+                                "Audio feedback: {}",
+                                if preset.audio_feedback { "On" } else { "Off" }
+                            ));
                             if let Some(ref word) = preset.wake_word {
                                 ui.label(format!("Wake word: \"{}\"", word));
                             }
@@ -5854,12 +7088,23 @@ example.com#@#.approved-ad\n\
                             ];
                             for m in &combos {
                                 let d = m.display();
-                                let label = if d.is_empty() { "(none)".to_string() } else { d };
-                                let matches = m.matches(preset.modifiers.ctrl, preset.modifiers.alt, preset.modifiers.shift, preset.modifiers.win);
+                                let label = if d.is_empty() {
+                                    "(none)".to_string()
+                                } else {
+                                    d
+                                };
+                                let matches = m.matches(
+                                    preset.modifiers.ctrl,
+                                    preset.modifiers.alt,
+                                    preset.modifiers.shift,
+                                    preset.modifiers.win,
+                                );
                                 ui.horizontal(|ui| {
                                     ui.label(RichText::new(label).small().monospace());
                                     if matches {
-                                        ui.label(RichText::new("[active]").small().color(Color32::GREEN));
+                                        ui.label(
+                                            RichText::new("[active]").small().color(Color32::GREEN),
+                                        );
                                     }
                                 });
                             }
@@ -5870,11 +7115,16 @@ example.com#@#.approved-ad\n\
                         ui.label(RichText::new("Available trigger modes:").small());
                         for (mode, label) in &trigger_modes {
                             ui.horizontal(|ui| {
-                                let is_selected = hotkey_presets.get(selected_hotkey)
+                                let is_selected = hotkey_presets
+                                    .get(selected_hotkey)
                                     .map(|p| p.mode == *mode)
                                     .unwrap_or(false);
                                 if is_selected {
-                                    ui.label(RichText::new(*label).strong().color(Color32::from_rgb(100, 200, 255)));
+                                    ui.label(
+                                        RichText::new(*label)
+                                            .strong()
+                                            .color(Color32::from_rgb(100, 200, 255)),
+                                    );
                                 } else {
                                     ui.label(RichText::new(*label).small());
                                 }
@@ -5887,9 +7137,10 @@ example.com#@#.approved-ad\n\
                         ui.label("Cloud provider (fallback):");
                         egui::ComboBox::from_id_salt("voice_cloud_combo")
                             .selected_text(
-                                cloud_providers.get(selected_cloud)
+                                cloud_providers
+                                    .get(selected_cloud)
                                     .map(|p| p.name())
-                                    .unwrap_or("Select...")
+                                    .unwrap_or("Select..."),
                             )
                             .show_ui(ui, |ui| {
                                 for (i, provider) in cloud_providers.iter().enumerate() {
@@ -5899,27 +7150,37 @@ example.com#@#.approved-ad\n\
 
                         // Show provider details
                         if let Some(provider) = cloud_providers.get(selected_cloud) {
-                            ui.label(RichText::new(format!(
-                                "Endpoint: {}", provider.endpoint()
-                            )).small().color(Color32::GRAY));
+                            ui.label(
+                                RichText::new(format!("Endpoint: {}", provider.endpoint()))
+                                    .small()
+                                    .color(Color32::GRAY),
+                            );
                         }
 
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
                             ui.label("API Key:");
-                            ui.add(egui::TextEdit::singleline(&mut cloud_api_key)
-                                .password(true)
-                                .desired_width(300.0)
-                                .hint_text("Enter API key for cloud provider"));
+                            ui.add(
+                                egui::TextEdit::singleline(&mut cloud_api_key)
+                                    .password(true)
+                                    .desired_width(300.0)
+                                    .hint_text("Enter API key for cloud provider"),
+                            );
                         });
 
                         if !cloud_api_key.is_empty() {
                             // Show that a CloudTranscriber can be constructed
                             if let Some(provider) = cloud_providers.get(selected_cloud) {
-                                let _transcriber = CloudTranscriber::new(*provider, cloud_api_key.clone());
-                                ui.label(RichText::new(format!(
-                                    "Cloud transcriber configured: {}", provider.name()
-                                )).small().color(Color32::GREEN));
+                                let _transcriber =
+                                    CloudTranscriber::new(*provider, cloud_api_key.clone());
+                                ui.label(
+                                    RichText::new(format!(
+                                        "Cloud transcriber configured: {}",
+                                        provider.name()
+                                    ))
+                                    .small()
+                                    .color(Color32::GREEN),
+                                );
                             }
                         }
                     });
@@ -5938,175 +7199,422 @@ example.com#@#.approved-ad\n\
         self.voice_command_result = command_result;
     }
 
-
     fn render_sandbox_panel(&mut self, ctx: &egui::Context) {
-        if !self.show_sandbox_panel { return; }
+        if !self.show_sandbox_panel {
+            return;
+        }
         let mut open = self.show_sandbox_panel;
         egui::Window::new("Sandbox Isolation Dashboard")
-            .open(&mut open).default_width(520.0).resizable(true).scroll([false, true])
+            .open(&mut open)
+            .default_width(520.0)
+            .resizable(true)
+            .scroll([false, true])
             .show(ctx, |ui| {
                 ui.heading("Layer 1: Network Sandbox");
                 ui.separator();
                 let net_desc = self.network_sandbox.describe();
                 ui.label(format!("Status: {}", net_desc));
-                ui.label(format!("Allowed: {} | Blocked: {} | RateLimited: {}",
+                ui.label(format!(
+                    "Allowed: {} | Blocked: {} | RateLimited: {}",
                     self.network_sandbox.allowed_hosts.len(),
                     self.network_sandbox.connections_blocked,
-                    self.network_sandbox.rate_limited_count));
+                    self.network_sandbox.rate_limited_count
+                ));
                 if let Some(lv) = self.network_sandbox.last_validation {
                     ui.label(format!("Last validation: {:?} ago", lv.elapsed()));
-                } else { ui.label("Last validation: none"); }
+                } else {
+                    ui.label("Last validation: none");
+                }
                 ui.horizontal(|ui| {
-                    if ui.button("Cleanup").clicked() { self.network_sandbox.cleanup(); }
-                    if ui.button("Allow host").clicked() { self.network_sandbox.allow_host("trusted.com"); }
-                    if ui.button("Block host").clicked() { self.network_sandbox.block_host("evil.com"); }
+                    if ui.button("Cleanup").clicked() {
+                        self.network_sandbox.cleanup();
+                    }
+                    if ui.button("Allow host").clicked() {
+                        self.network_sandbox.allow_host("trusted.com");
+                    }
+                    if ui.button("Block host").clicked() {
+                        self.network_sandbox.block_host("evil.com");
+                    }
                 });
                 if !self.network_sandbox.allowed_hosts.is_empty() {
                     ui.collapsing("Allowed hosts", |ui| {
-                        for h in &self.network_sandbox.allowed_hosts { ui.label(format!("  + {}", h)); }
+                        for h in &self.network_sandbox.allowed_hosts {
+                            ui.label(format!("  + {}", h));
+                        }
                     });
                 }
                 ui.collapsing("Trust levels", |ui| {
-                    for tl in &[TrustLevel::Untrusted, TrustLevel::Acknowledged, TrustLevel::Reviewed, TrustLevel::Approved, TrustLevel::Established] {
-                        ui.label(format!("{}: exec={} fs={} net={}", tl.description(), tl.can_execute(), tl.can_write_filesystem(), tl.can_access_network()));
+                    for tl in &[
+                        TrustLevel::Untrusted,
+                        TrustLevel::Acknowledged,
+                        TrustLevel::Reviewed,
+                        TrustLevel::Approved,
+                        TrustLevel::Established,
+                    ] {
+                        ui.label(format!(
+                            "{}: exec={} fs={} net={}",
+                            tl.description(),
+                            tl.can_execute(),
+                            tl.can_write_filesystem(),
+                            tl.can_access_network()
+                        ));
                     }
-                    let r = self.network_sandbox.allow_network_for("test.org", TrustLevel::Established);
+                    let r = self
+                        .network_sandbox
+                        .allow_network_for("test.org", TrustLevel::Established);
                     ui.label(format!("allow_network_for = {}", r));
-                    ui.label(format!("is_blocked(coinhive) = {}", self.network_sandbox.is_blocked("coinhive.com")));
-                    ui.label(format!("resolve_host = {}", crate::sandbox::network::NetworkSandbox::resolve_host("localhost:80")));
+                    ui.label(format!(
+                        "is_blocked(coinhive) = {}",
+                        self.network_sandbox.is_blocked("coinhive.com")
+                    ));
+                    ui.label(format!(
+                        "resolve_host = {}",
+                        crate::sandbox::network::NetworkSandbox::resolve_host("localhost:80")
+                    ));
                 });
                 ui.add_space(12.0);
                 ui.heading("Layer 2: Page Sandbox");
                 ui.separator();
-                if self.sandbox_manager.get(0).is_none() { self.sandbox_manager.create(0, "https://example.com".into()); }
+                if self.sandbox_manager.get(0).is_none() {
+                    self.sandbox_manager.create(0, "https://example.com".into());
+                }
                 if ui.button("Click (tab0)").clicked() {
-                    self.sandbox_manager.record(0, Interaction::Click { x: 100, y: 200, element_width: 120, element_height: 40, element_type: "button".into(), timestamp: std::time::Instant::now() });
+                    self.sandbox_manager.record(
+                        0,
+                        Interaction::Click {
+                            x: 100,
+                            y: 200,
+                            element_width: 120,
+                            element_height: 40,
+                            element_type: "button".into(),
+                            timestamp: std::time::Instant::now(),
+                        },
+                    );
                 }
                 if ui.button("KeyboardInput (tab0)").clicked() {
-                    self.sandbox_manager.record(0, Interaction::KeyboardInput { in_form_field: true, char_count: 5, timestamp: std::time::Instant::now() });
+                    self.sandbox_manager.record(
+                        0,
+                        Interaction::KeyboardInput {
+                            in_form_field: true,
+                            char_count: 5,
+                            timestamp: std::time::Instant::now(),
+                        },
+                    );
                 }
                 if ui.button("Scroll (tab0)").clicked() {
-                    self.sandbox_manager.record(0, Interaction::Scroll { delta_y: 150, user_initiated: true, timestamp: std::time::Instant::now() });
+                    self.sandbox_manager.record(
+                        0,
+                        Interaction::Scroll {
+                            delta_y: 150,
+                            user_initiated: true,
+                            timestamp: std::time::Instant::now(),
+                        },
+                    );
                 }
                 if ui.button("FormSubmit (tab0)").clicked() {
-                    self.sandbox_manager.record(0, Interaction::FormSubmit { timestamp: std::time::Instant::now() });
+                    self.sandbox_manager.record(
+                        0,
+                        Interaction::FormSubmit {
+                            timestamp: std::time::Instant::now(),
+                        },
+                    );
                 }
                 if let Some(ps) = self.sandbox_manager.get(0) {
                     ui.label(format!("URL: {}", ps.url));
-                    ui.label(format!("Trust: {:?} | {} | {}", ps.trust, ps.status_text(), ps.status_color()));
-                    ui.label(format!("Meaningful: {} | Blocked: {}", ps.meaningful_count, ps.blocked_actions.len()));
-                    for ba in &ps.blocked_actions { ui.label(format!("  {} - {} {:?} | {}", ba.action, ba.reason, ba.timestamp.elapsed(), ba.describe())); }
-                    for i in &ps.interactions { ui.label(format!("  {}", i.describe())); }
+                    ui.label(format!(
+                        "Trust: {:?} | {} | {}",
+                        ps.trust,
+                        ps.status_text(),
+                        ps.status_color()
+                    ));
+                    ui.label(format!(
+                        "Meaningful: {} | Blocked: {}",
+                        ps.meaningful_count,
+                        ps.blocked_actions.len()
+                    ));
+                    for ba in &ps.blocked_actions {
+                        ui.label(format!(
+                            "  {} - {} {:?} | {}",
+                            ba.action,
+                            ba.reason,
+                            ba.timestamp.elapsed(),
+                            ba.describe()
+                        ));
+                    }
+                    for i in &ps.interactions {
+                        ui.label(format!("  {}", i.describe()));
+                    }
                     ui.label(format!("{}", ps.describe()));
                     let t = ps.trust;
-                    ui.label(format!("clip={} dl={} notif={} popup={} geo={} audio={} fs={}", t.can_access_clipboard(), t.can_initiate_download(), t.can_request_notifications(), t.can_open_popup(), t.can_request_geolocation(), t.can_autoplay_audio(), t.can_go_fullscreen()));
+                    ui.label(format!(
+                        "clip={} dl={} notif={} popup={} geo={} audio={} fs={}",
+                        t.can_access_clipboard(),
+                        t.can_initiate_download(),
+                        t.can_request_notifications(),
+                        t.can_open_popup(),
+                        t.can_request_geolocation(),
+                        t.can_autoplay_audio(),
+                        t.can_go_fullscreen()
+                    ));
                 }
-                if ui.button("Check clipboard").clicked() { let _ = self.sandbox_manager.check(0, "clipboard"); }
-                if ui.button("Remove tab0").clicked() { self.sandbox_manager.remove(0); }
-                if let Some(pm) = self.sandbox_manager.get_mut(0) { let _ = pm.check_permission("download"); }
+                if ui.button("Check clipboard").clicked() {
+                    let _ = self.sandbox_manager.check(0, "clipboard");
+                }
+                if ui.button("Remove tab0").clicked() {
+                    self.sandbox_manager.remove(0);
+                }
+                if let Some(pm) = self.sandbox_manager.get_mut(0) {
+                    let _ = pm.check_permission("download");
+                }
                 ui.add_space(12.0);
                 ui.heading("Layer 3: Popup Handler");
                 ui.separator();
                 ui.label(format!("{}", self.popup_handler.describe()));
                 ui.label(format!("Blocked: {}", self.popup_handler.blocked_count()));
                 ui.horizontal(|ui| {
-                    if ui.button("Page load").clicked() { self.popup_handler.page_loading(); self.popup_handler.page_loaded(); }
-                    if ui.button("Allow domain").clicked() { self.popup_handler.allow_domain("example.com"); }
-                    if ui.button("Clear").clicked() { self.popup_handler.clear_blocked(); }
+                    if ui.button("Page load").clicked() {
+                        self.popup_handler.page_loading();
+                        self.popup_handler.page_loaded();
+                    }
+                    if ui.button("Allow domain").clicked() {
+                        self.popup_handler.allow_domain("example.com");
+                    }
+                    if ui.button("Clear").clicked() {
+                        self.popup_handler.clear_blocked();
+                    }
                 });
                 if ui.button("Spam popup").clicked() {
-                    let req = PopupRequest { source_url: "https://x.com".into(), target_url: "https://malware.xyz".into(), width: Some(800), height: Some(600), user_gesture: false, timestamp: std::time::Instant::now() };
-                    let d = self.popup_handler.evaluate(&req); let _ = self.popup_handler.handle(req, &d);
+                    let req = PopupRequest {
+                        source_url: "https://x.com".into(),
+                        target_url: "https://malware.xyz".into(),
+                        width: Some(800),
+                        height: Some(600),
+                        user_gesture: false,
+                        timestamp: std::time::Instant::now(),
+                    };
+                    let d = self.popup_handler.evaluate(&req);
+                    let _ = self.popup_handler.handle(req, &d);
                 }
                 if ui.button("OAuth popup").clicked() {
-                    let req = PopupRequest { source_url: "https://app.com".into(), target_url: "https://accounts.google.com/oauth".into(), width: Some(500), height: Some(600), user_gesture: false, timestamp: std::time::Instant::now() };
-                    let d = self.popup_handler.evaluate(&req); let _ = self.popup_handler.handle(req, &d);
+                    let req = PopupRequest {
+                        source_url: "https://app.com".into(),
+                        target_url: "https://accounts.google.com/oauth".into(),
+                        width: Some(500),
+                        height: Some(600),
+                        user_gesture: false,
+                        timestamp: std::time::Instant::now(),
+                    };
+                    let d = self.popup_handler.evaluate(&req);
+                    let _ = self.popup_handler.handle(req, &d);
                 }
                 if ui.button("Gesture popup").clicked() {
-                    let req = PopupRequest { source_url: "https://l.com".into(), target_url: "https://l.com/p".into(), width: Some(400), height: Some(300), user_gesture: true, timestamp: std::time::Instant::now() };
-                    let d = self.popup_handler.evaluate(&req); let _ = self.popup_handler.handle(req, &d);
+                    let req = PopupRequest {
+                        source_url: "https://l.com".into(),
+                        target_url: "https://l.com/p".into(),
+                        width: Some(400),
+                        height: Some(300),
+                        user_gesture: true,
+                        timestamp: std::time::Instant::now(),
+                    };
+                    let d = self.popup_handler.evaluate(&req);
+                    let _ = self.popup_handler.handle(req, &d);
                 }
                 let bps = self.popup_handler.recent_blocked();
                 if !bps.is_empty() {
                     ui.collapsing(format!("Blocked ({})", bps.len()), |ui| {
                         for (i, bp) in bps.iter().enumerate() {
-                            ui.label(format!("#{}: {}->{}({}x{})g={} r={} {:?}ago", i, bp.request.source_url, bp.request.target_url, bp.request.width.unwrap_or(0), bp.request.height.unwrap_or(0), bp.request.user_gesture, bp.reason, bp.timestamp.elapsed()));
+                            ui.label(format!(
+                                "#{}: {}->{}({}x{})g={} r={} {:?}ago",
+                                i,
+                                bp.request.source_url,
+                                bp.request.target_url,
+                                bp.request.width.unwrap_or(0),
+                                bp.request.height.unwrap_or(0),
+                                bp.request.user_gesture,
+                                bp.reason,
+                                bp.timestamp.elapsed()
+                            ));
                         }
                     });
                 }
-                if ui.button("Allow first blocked").clicked() { let _ = self.popup_handler.allow_blocked(0); }
+                if ui.button("Allow first blocked").clicked() {
+                    let _ = self.popup_handler.allow_blocked(0);
+                }
                 ui.add_space(12.0);
                 ui.heading("Layer 4: Download Quarantine");
                 ui.separator();
-                ui.label(format!("Files: {} | Size: {} bytes", self.download_quarantine.list().len(), self.download_quarantine.total_size()));
+                ui.label(format!(
+                    "Files: {} | Size: {} bytes",
+                    self.download_quarantine.list().len(),
+                    self.download_quarantine.total_size()
+                ));
                 if ui.button("Add test exe").clicked() {
-                    let qf = QuarantinedFile::new("invoice.pdf.exe".into(), "http://bad.com/invoice.pdf.exe".into(), "application/octet-stream".into(), b"MZ fake".to_vec());
+                    let qf = QuarantinedFile::new(
+                        "invoice.pdf.exe".into(),
+                        "http://bad.com/invoice.pdf.exe".into(),
+                        "application/octet-stream".into(),
+                        b"MZ fake".to_vec(),
+                    );
                     self.download_quarantine.add(qf);
                 }
                 if ui.button("Add test PDF").clicked() {
-                    let qf = QuarantinedFile::new("report.pdf".into(), "https://good.com/report.pdf".into(), "application/pdf".into(), b"%PDF fake".to_vec());
+                    let qf = QuarantinedFile::new(
+                        "report.pdf".into(),
+                        "https://good.com/report.pdf".into(),
+                        "application/pdf".into(),
+                        b"%PDF fake".to_vec(),
+                    );
                     self.download_quarantine.add(qf);
                 }
-                let fids: Vec<String> = self.download_quarantine.list().iter().map(|f| f.id.clone()).collect();
+                let fids: Vec<String> = self
+                    .download_quarantine
+                    .list()
+                    .iter()
+                    .map(|f| f.id.clone())
+                    .collect();
                 for fid in &fids {
                     if let Some(qf) = self.download_quarantine.get(fid) {
                         ui.group(|ui| {
                             ui.label(RichText::new(&qf.filename).strong());
-                            ui.label(format!("ID:{} Src:{} Type:{}", qf.id, qf.source_url, qf.content_type));
-                            ui.label(format!("Size:{} SHA:{} Data:{} Enc:{}", qf.size_bytes, qf.sha256, qf.data.len(), qf.encrypted_data.is_some()));
+                            ui.label(format!(
+                                "ID:{} Src:{} Type:{}",
+                                qf.id, qf.source_url, qf.content_type
+                            ));
+                            ui.label(format!(
+                                "Size:{} SHA:{} Data:{} Enc:{}",
+                                qf.size_bytes,
+                                qf.sha256,
+                                qf.data.len(),
+                                qf.encrypted_data.is_some()
+                            ));
                             ui.label(format!("Age: {:?}", qf.quarantined_at.elapsed()));
                             let s = &qf.security;
-                            ui.label(format!("id={} origin={} type={:?} trust={}", s.id, s.origin, s.content_type, s.trust_level.description()));
-                            ui.label(format!("ints={} viols={} timeMet={} age={:?}", s.interactions.len(), s.violations.len(), s.meets_time_requirement(), s.created_at.elapsed()));
-                            if let Some(li) = s.last_interaction { ui.label(format!("lastInt: {:?}ago", li.elapsed())); }
+                            ui.label(format!(
+                                "id={} origin={} type={:?} trust={}",
+                                s.id,
+                                s.origin,
+                                s.content_type,
+                                s.trust_level.description()
+                            ));
+                            ui.label(format!(
+                                "ints={} viols={} timeMet={} age={:?}",
+                                s.interactions.len(),
+                                s.violations.len(),
+                                s.meets_time_requirement(),
+                                s.created_at.elapsed()
+                            ));
+                            if let Some(li) = s.last_interaction {
+                                ui.label(format!("lastInt: {:?}ago", li.elapsed()));
+                            }
                             for ir in &s.interactions {
-                                let n = match ir.action { InteractionType::Acknowledge=>"Ack", InteractionType::Review=>"Rev", InteractionType::Approve=>"App", InteractionType::Execute=>"Exe", InteractionType::Deny=>"Den" };
+                                let n = match ir.action {
+                                    InteractionType::Acknowledge => "Ack",
+                                    InteractionType::Review => "Rev",
+                                    InteractionType::Approve => "App",
+                                    InteractionType::Execute => "Exe",
+                                    InteractionType::Deny => "Den",
+                                };
                                 ui.label(format!("  {} {:?}ago", n, ir.timestamp.elapsed()));
                             }
                             for v in &s.violations {
-                                let sn = match v.severity { ViolationSeverity::Low=>"Lo", ViolationSeverity::Medium=>"Med", ViolationSeverity::High=>"Hi", ViolationSeverity::Critical=>"Crit" };
-                                ui.label(format!("  {}[{}] {:?}ago", v.description, sn, v.timestamp.elapsed()));
+                                let sn = match v.severity {
+                                    ViolationSeverity::Low => "Lo",
+                                    ViolationSeverity::Medium => "Med",
+                                    ViolationSeverity::High => "Hi",
+                                    ViolationSeverity::Critical => "Crit",
+                                };
+                                ui.label(format!(
+                                    "  {}[{}] {:?}ago",
+                                    v.description,
+                                    sn,
+                                    v.timestamp.elapsed()
+                                ));
                             }
                             ui.label(format!("Ctx: {}", s.describe()));
                             let ext = qf.filename.rsplit('.').next().unwrap_or("");
-                            ui.label(format!("ContentType('{}')={:?}", ext, ContentType::from_extension(ext)));
-                            ui.label(format!("interaction_for={:?}", SecurityContext::interaction_for("approve")));
+                            ui.label(format!(
+                                "ContentType('{}')={:?}",
+                                ext,
+                                ContentType::from_extension(ext)
+                            ));
+                            ui.label(format!(
+                                "interaction_for={:?}",
+                                SecurityContext::interaction_for("approve")
+                            ));
                             let mw = qf.max_warning_level();
-                            ui.label(format!("MaxWarn: {}", match mw { WarningLevel::Info=>"Info", WarningLevel::Caution=>"Caution", WarningLevel::Warning=>"Warning", WarningLevel::Danger=>"Danger" }));
+                            ui.label(format!(
+                                "MaxWarn: {}",
+                                match mw {
+                                    WarningLevel::Info => "Info",
+                                    WarningLevel::Caution => "Caution",
+                                    WarningLevel::Warning => "Warning",
+                                    WarningLevel::Danger => "Danger",
+                                }
+                            ));
                             for w in &qf.warnings {
-                                let ls = match w.level { WarningLevel::Info=>"I", WarningLevel::Caution=>"C", WarningLevel::Warning=>"W", WarningLevel::Danger=>"D" };
+                                let ls = match w.level {
+                                    WarningLevel::Info => "I",
+                                    WarningLevel::Caution => "C",
+                                    WarningLevel::Warning => "W",
+                                    WarningLevel::Danger => "D",
+                                };
                                 ui.label(format!("[{}] {}: {}", ls, w.message, w.detail));
                             }
-                            ui.label(format!("Release: {}", match &qf.can_release() {
-                                ReleaseStatus::Ready => "Ready".into(),
-                                ReleaseStatus::NeedsInteraction{current,required} => format!("{}/{}", current, required),
-                                ReleaseStatus::Waiting{seconds_remaining} => format!("Wait{}s", seconds_remaining),
-                                ReleaseStatus::Blocked{reason} => format!("Blocked:{}", reason),
-                            }));
+                            ui.label(format!(
+                                "Release: {}",
+                                match &qf.can_release() {
+                                    ReleaseStatus::Ready => "Ready".into(),
+                                    ReleaseStatus::NeedsInteraction { current, required } =>
+                                        format!("{}/{}", current, required),
+                                    ReleaseStatus::Waiting { seconds_remaining } =>
+                                        format!("Wait{}s", seconds_remaining),
+                                    ReleaseStatus::Blocked { reason } =>
+                                        format!("Blocked:{}", reason),
+                                }
+                            ));
                         });
                     }
                 }
                 if let Some(fid) = fids.first() {
                     ui.horizontal(|ui| {
-                        if ui.button("Ack").clicked() { if let Some(q)=self.download_quarantine.get_mut(fid) { q.interact(InteractionType::Acknowledge); } }
-                        if ui.button("Rev").clicked() { if let Some(q)=self.download_quarantine.get_mut(fid) { q.interact(InteractionType::Review); } }
-                        if ui.button("App").clicked() { if let Some(q)=self.download_quarantine.get_mut(fid) { q.interact(InteractionType::Approve); q.security.record_violation("Test", ViolationSeverity::Low); } }
-                        if ui.button("Rm").clicked() { self.download_quarantine.remove(fid); }
+                        if ui.button("Ack").clicked() {
+                            if let Some(q) = self.download_quarantine.get_mut(fid) {
+                                q.interact(InteractionType::Acknowledge);
+                            }
+                        }
+                        if ui.button("Rev").clicked() {
+                            if let Some(q) = self.download_quarantine.get_mut(fid) {
+                                q.interact(InteractionType::Review);
+                            }
+                        }
+                        if ui.button("App").clicked() {
+                            if let Some(q) = self.download_quarantine.get_mut(fid) {
+                                q.interact(InteractionType::Approve);
+                                q.security.record_violation("Test", ViolationSeverity::Low);
+                            }
+                        }
+                        if ui.button("Rm").clicked() {
+                            self.download_quarantine.remove(fid);
+                        }
                         if ui.button("Crit").clicked() {
-                            if let Some(q)=self.download_quarantine.get_mut(fid) {
-                                q.security.record_violation("Critical test", ViolationSeverity::Critical);
+                            if let Some(q) = self.download_quarantine.get_mut(fid) {
+                                q.security
+                                    .record_violation("Critical test", ViolationSeverity::Critical);
                             }
                         }
                         if ui.button("Encrypt").clicked() {
-                            if let Some(q)=self.download_quarantine.get_mut(fid) {
+                            if let Some(q) = self.download_quarantine.get_mut(fid) {
                                 let master = crate::crypto::MasterSecret::generate();
-                                let key = crate::crypto::EncryptionKey::from_master(&master, "quarantine");
+                                let key = crate::crypto::EncryptionKey::from_master(
+                                    &master,
+                                    "quarantine",
+                                );
                                 let _ = q.encrypt_with(&key);
                                 let _ = q.decrypt_with(&key);
                             }
                         }
                         if ui.button("Release").clicked() {
-                            if let Some(q)=self.download_quarantine.get_mut(fid) {
+                            if let Some(q) = self.download_quarantine.get_mut(fid) {
                                 let dest = std::path::PathBuf::from(".");
                                 let _ = q.release(dest, None);
                             }
@@ -6116,12 +7624,25 @@ example.com#@#.approved-ad\n\
 
                 // Exercise PopupDecision reason fields
                 ui.collapsing("Popup decision reasons", |ui| {
-                    let test_req = PopupRequest { source_url: "https://test.com".into(), target_url: "https://test.com/pop".into(), width: Some(300), height: Some(200), user_gesture: true, timestamp: std::time::Instant::now() };
+                    let test_req = PopupRequest {
+                        source_url: "https://test.com".into(),
+                        target_url: "https://test.com/pop".into(),
+                        width: Some(300),
+                        height: Some(200),
+                        user_gesture: true,
+                        timestamp: std::time::Instant::now(),
+                    };
                     let dec = self.popup_handler.evaluate(&test_req);
                     let reason_text = match &dec {
-                        crate::sandbox::popup::PopupDecision::Allow { reason } => format!("Allow: {}", reason),
-                        crate::sandbox::popup::PopupDecision::Block { reason } => format!("Block: {}", reason),
-                        crate::sandbox::popup::PopupDecision::Prompt { reason } => format!("Prompt: {}", reason),
+                        crate::sandbox::popup::PopupDecision::Allow { reason } => {
+                            format!("Allow: {}", reason)
+                        }
+                        crate::sandbox::popup::PopupDecision::Block { reason } => {
+                            format!("Block: {}", reason)
+                        }
+                        crate::sandbox::popup::PopupDecision::Prompt { reason } => {
+                            format!("Prompt: {}", reason)
+                        }
                     };
                     ui.label(reason_text);
                 });
@@ -6130,27 +7651,63 @@ example.com#@#.approved-ad\n\
     }
 
     fn render_rest_client_panel(&mut self, ctx: &egui::Context) {
-        if !self.rest_client_panel_visible { return; }
-        egui::Window::new("REST Client").open(&mut self.rest_client_panel_visible)
-            .resizable(true).default_size(Vec2::new(700.0, 600.0))
+        if !self.rest_client_panel_visible {
+            return;
+        }
+        egui::Window::new("REST Client")
+            .open(&mut self.rest_client_panel_visible)
+            .resizable(true)
+            .default_size(Vec2::new(700.0, 600.0))
             .show(ctx, |ui| {
-                ui.heading("REST API Tester"); ui.separator();
+                ui.heading("REST API Tester");
+                ui.separator();
                 ui.horizontal(|ui| {
                     ui.label("Method:");
-                    for m in &[RestMethod::Get,RestMethod::Post,RestMethod::Put,RestMethod::Patch,RestMethod::Delete,RestMethod::Head,RestMethod::Options] {
-                        if ui.selectable_label(self.rest_client.method==*m, m.as_str()).clicked() { self.rest_client.method=*m; }
+                    for m in &[
+                        RestMethod::Get,
+                        RestMethod::Post,
+                        RestMethod::Put,
+                        RestMethod::Patch,
+                        RestMethod::Delete,
+                        RestMethod::Head,
+                        RestMethod::Options,
+                    ] {
+                        if ui
+                            .selectable_label(self.rest_client.method == *m, m.as_str())
+                            .clicked()
+                        {
+                            self.rest_client.method = *m;
+                        }
                     }
-                    if let Some(p) = RestMethod::from_str(self.rest_client.method.as_str()) { ui.label(format!("(body:{})",p.has_body())); }
+                    if let Some(p) = RestMethod::from_str(self.rest_client.method.as_str()) {
+                        ui.label(format!("(body:{})", p.has_body()));
+                    }
                 });
                 ui.horizontal(|ui| {
-                    ui.label("URL:"); ui.text_edit_singleline(&mut self.rest_client.url);
-                    if ui.button("Send").clicked() { self.rest_client.execute(); }
-                    if ui.button("Clear").clicked() { self.rest_client.clear(); }
+                    ui.label("URL:");
+                    ui.text_edit_singleline(&mut self.rest_client.url);
+                    if ui.button("Send").clicked() {
+                        self.rest_client.execute();
+                    }
+                    if ui.button("Clear").clicked() {
+                        self.rest_client.clear();
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label("Type:");
-                    for ct in &[RestContentType::Json,RestContentType::FormUrlEncoded,RestContentType::FormData,RestContentType::Text,RestContentType::Binary] {
-                        if ui.selectable_label(self.rest_client.content_type==*ct, ct.mime_type()).clicked() { self.rest_client.content_type=*ct; }
+                    for ct in &[
+                        RestContentType::Json,
+                        RestContentType::FormUrlEncoded,
+                        RestContentType::FormData,
+                        RestContentType::Text,
+                        RestContentType::Binary,
+                    ] {
+                        if ui
+                            .selectable_label(self.rest_client.content_type == *ct, ct.mime_type())
+                            .clicked()
+                        {
+                            self.rest_client.content_type = *ct;
+                        }
                     }
                     let det = RestContentType::from_mime(self.rest_client.content_type.mime_type());
                     ui.label(format!("[{}]", det.mime_type()));
@@ -6159,28 +7716,69 @@ example.com#@#.approved-ad\n\
                     let hlen = self.rest_client.headers.len();
                     for i in 0..hlen {
                         ui.horizontal(|ui| {
-                            ui.label(if self.rest_client.headers[i].2 {"[on]"} else {"[off]"});
-                            ui.label(&self.rest_client.headers[i].0); ui.label(":"); ui.label(&self.rest_client.headers[i].1);
-                            if ui.small_button("Tog").clicked() { self.rest_client.toggle_header(i); }
-                            if ui.small_button("Rm").clicked() { self.rest_client.remove_header(i); }
+                            ui.label(if self.rest_client.headers[i].2 {
+                                "[on]"
+                            } else {
+                                "[off]"
+                            });
+                            ui.label(&self.rest_client.headers[i].0);
+                            ui.label(":");
+                            ui.label(&self.rest_client.headers[i].1);
+                            if ui.small_button("Tog").clicked() {
+                                self.rest_client.toggle_header(i);
+                            }
+                            if ui.small_button("Rm").clicked() {
+                                self.rest_client.remove_header(i);
+                            }
                         });
                     }
-                    if ui.button("Add Header").clicked() { self.rest_client.add_header("X-Custom","value"); }
+                    if ui.button("Add Header").clicked() {
+                        self.rest_client.add_header("X-Custom", "value");
+                    }
                 });
-                if self.rest_client.method.has_body() { ui.collapsing("Body", |ui| { ui.text_edit_multiline(&mut self.rest_client.body); }); }
+                if self.rest_client.method.has_body() {
+                    ui.collapsing("Body", |ui| {
+                        ui.text_edit_multiline(&mut self.rest_client.body);
+                    });
+                }
                 ui.collapsing("Environment", |ui| {
-                    let env: Vec<_> = self.rest_client.environment.iter().map(|(k,v)|(k.clone(),v.clone())).collect();
-                    for (k,v) in &env { ui.label(format!("{{{{{}}}}}: {}",k,v)); }
-                    ui.label(format!("Resolved: {}", self.rest_client.substitute_vars(&self.rest_client.url)));
+                    let env: Vec<_> = self
+                        .rest_client
+                        .environment
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                    for (k, v) in &env {
+                        ui.label(format!("{{{{{}}}}}: {}", k, v));
+                    }
+                    ui.label(format!(
+                        "Resolved: {}",
+                        self.rest_client.substitute_vars(&self.rest_client.url)
+                    ));
                 });
                 ui.separator();
-                if self.rest_client.is_loading { ui.label("Loading..."); }
-                if let Some(ref err) = self.rest_client.error { ui.colored_label(Color32::RED, format!("Error: {}",err)); }
+                if self.rest_client.is_loading {
+                    ui.label("Loading...");
+                }
+                if let Some(ref err) = self.rest_client.error {
+                    ui.colored_label(Color32::RED, format!("Error: {}", err));
+                }
                 if let Some(ref resp) = self.rest_client.response.clone() {
-                    ui.label(RichText::new(format!("{} {}",resp.status,resp.status_text)).strong());
-                    ui.label(format!("{}ms | {} bytes",resp.duration_ms,resp.size_bytes));
-                    if let Some(ct) = resp.content_type() { ui.label(format!("Type: {}",ct)); }
-                    ui.collapsing("Resp Headers", |ui| { for (n,v) in &resp.headers { ui.label(format!("{}: {}",n,v)); } });
+                    ui.label(
+                        RichText::new(format!("{} {}", resp.status, resp.status_text)).strong(),
+                    );
+                    ui.label(format!(
+                        "{}ms | {} bytes",
+                        resp.duration_ms, resp.size_bytes
+                    ));
+                    if let Some(ct) = resp.content_type() {
+                        ui.label(format!("Type: {}", ct));
+                    }
+                    ui.collapsing("Resp Headers", |ui| {
+                        for (n, v) in &resp.headers {
+                            ui.label(format!("{}: {}", n, v));
+                        }
+                    });
                     ui.collapsing("Resp Body", |ui| {
                         if resp.is_json() {
                             if let Some(ref body) = resp.body_text {
@@ -6192,7 +7790,8 @@ example.com#@#.approved-ad\n\
                                     ui.code(p);
                                 }
 
-                                let highlighted = self.syntax_highlighter
+                                let highlighted = self
+                                    .syntax_highlighter
                                     .highlight(body, crate::syntax::Language::Json);
                                 if !highlighted.is_empty() {
                                     ui.separator();
@@ -6232,269 +7831,781 @@ example.com#@#.approved-ad\n\
                             ui.label(format!("(binary {} bytes)", resp.body.len()));
                         }
                     });
-                    ui.collapsing("Resp Diagnostics", |ui| { ui.label(resp.describe()); });
+                    ui.collapsing("Resp Diagnostics", |ui| {
+                        ui.label(resp.describe());
+                    });
                 }
                 ui.separator();
-                ui.collapsing("cURL", |ui| { ui.code(self.rest_client.to_curl()); });
-                ui.collapsing("fetch()", |ui| { ui.code(self.rest_client.to_fetch()); });
+                ui.collapsing("cURL", |ui| {
+                    ui.code(self.rest_client.to_curl());
+                });
+                ui.collapsing("fetch()", |ui| {
+                    ui.code(self.rest_client.to_fetch());
+                });
                 ui.collapsing("Collections", |ui| {
-                    if ui.button("Save to Default").clicked() { self.rest_client.save_to_collection("Default"); }
-                    for c in &self.rest_client.collections { ui.label(c.describe()); }
+                    if ui.button("Save to Default").clicked() {
+                        self.rest_client.save_to_collection("Default");
+                    }
+                    for c in &self.rest_client.collections {
+                        ui.label(c.describe());
+                    }
                     if ui.button("Sample Collection").clicked() {
                         let mut col = RequestCollection::new("Samples");
-                        let req = SavedRequest::new("Test",RestMethod::Get,"https://api.example.com");
+                        let req =
+                            SavedRequest::new("Test", RestMethod::Get, "https://api.example.com");
                         col.add_request(req);
                         self.rest_client.collections.push(col);
                     }
                 });
                 ui.collapsing("History", |ui| {
-                    let hist: Vec<_> = self.rest_client.history.iter().take(10).map(|h|(h.name.clone(),h.describe(),h.clone())).collect();
-                    for (name,desc,saved) in hist {
-                        ui.horizontal(|ui| { if ui.small_button("Load").clicked() { self.rest_client.load_request(&saved); } ui.label(&name); });
+                    let hist: Vec<_> = self
+                        .rest_client
+                        .history
+                        .iter()
+                        .take(10)
+                        .map(|h| (h.name.clone(), h.describe(), h.clone()))
+                        .collect();
+                    for (name, desc, saved) in hist {
+                        ui.horizontal(|ui| {
+                            if ui.small_button("Load").clicked() {
+                                self.rest_client.load_request(&saved);
+                            }
+                            ui.label(&name);
+                        });
                         ui.small(desc);
                     }
-                    ui.label(format!("{}/{}",self.rest_client.history.len(),self.rest_client.max_history));
+                    ui.label(format!(
+                        "{}/{}",
+                        self.rest_client.history.len(),
+                        self.rest_client.max_history
+                    ));
                 });
-                ui.collapsing("Full Diagnostics", |ui| { ui.label(self.rest_client.describe()); });
+                ui.collapsing("Full Diagnostics", |ui| {
+                    ui.label(self.rest_client.describe());
+                });
             });
     }
 
     fn render_network_activity_panel(&mut self, ctx: &egui::Context) {
-        if !self.network_activity_panel_visible { return; }
-        egui::Window::new("Network Activity Monitor").open(&mut self.network_activity_panel_visible)
-            .resizable(true).default_size(Vec2::new(550.0, 450.0))
+        if !self.network_activity_panel_visible {
+            return;
+        }
+        egui::Window::new("Network Activity Monitor")
+            .open(&mut self.network_activity_panel_visible)
+            .resizable(true)
+            .default_size(Vec2::new(550.0, 450.0))
             .show(ctx, |ui| {
-                ui.heading("Network Activity"); ui.separator();
+                ui.heading("Network Activity");
+                ui.separator();
                 let state = self.net_activity_monitor.state();
                 let c = state.color();
-                let col = Color32::from_rgb(((c>>16)&0xFF) as u8,((c>>8)&0xFF) as u8,(c&0xFF) as u8);
+                let col = Color32::from_rgb(
+                    ((c >> 16) & 0xFF) as u8,
+                    ((c >> 8) & 0xFF) as u8,
+                    (c & 0xFF) as u8,
+                );
                 ui.horizontal(|ui| {
-                    ui.colored_label(col, format!("[{}] {:?}",state.icon(),state));
-                    ui.label(format!("active={} count={}",state.is_active(),self.net_activity_monitor.active_count()));
+                    ui.colored_label(col, format!("[{}] {:?}", state.icon(), state));
+                    ui.label(format!(
+                        "active={} count={}",
+                        state.is_active(),
+                        self.net_activity_monitor.active_count()
+                    ));
                 });
-                let (down,up) = self.net_activity_monitor.session_stats();
-                ui.label(format!("Down: {} | Up: {}",crate::network::NetworkMonitor::format_bytes(down),crate::network::NetworkMonitor::format_bytes(up)));
+                let (down, up) = self.net_activity_monitor.session_stats();
+                ui.label(format!(
+                    "Down: {} | Up: {}",
+                    crate::network::NetworkMonitor::format_bytes(down),
+                    crate::network::NetworkMonitor::format_bytes(up)
+                ));
                 ui.separator();
                 ui.collapsing("State Reference", |ui| {
-                    for s in &[NetActivityState::Idle,NetActivityState::Connecting,NetActivityState::Downloading,NetActivityState::Uploading,NetActivityState::Stalled,NetActivityState::Error] {
-                        let c2=s.color(); let col2=Color32::from_rgb(((c2>>16)&0xFF) as u8,((c2>>8)&0xFF) as u8,(c2&0xFF) as u8);
-                        ui.colored_label(col2, format!("[{}] {:?} active={}",s.icon(),s,s.is_active()));
+                    for s in &[
+                        NetActivityState::Idle,
+                        NetActivityState::Connecting,
+                        NetActivityState::Downloading,
+                        NetActivityState::Uploading,
+                        NetActivityState::Stalled,
+                        NetActivityState::Error,
+                    ] {
+                        let c2 = s.color();
+                        let col2 = Color32::from_rgb(
+                            ((c2 >> 16) & 0xFF) as u8,
+                            ((c2 >> 8) & 0xFF) as u8,
+                            (c2 & 0xFF) as u8,
+                        );
+                        ui.colored_label(
+                            col2,
+                            format!("[{}] {:?} active={}", s.icon(), s, s.is_active()),
+                        );
                     }
                 });
                 ui.horizontal(|ui| {
                     if ui.button("Start Request").clicked() {
-                        let id = self.net_activity_monitor.start_request("https://example.com/test".into(),"GET".into());
-                        self.net_activity_monitor.update_download(id, 1024, Some(4096));
+                        let id = self
+                            .net_activity_monitor
+                            .start_request("https://example.com/test".into(), "GET".into());
+                        self.net_activity_monitor
+                            .update_download(id, 1024, Some(4096));
                     }
-                    if ui.button("Tick").clicked() { self.net_activity_monitor.tick(); }
+                    if ui.button("Tick").clicked() {
+                        self.net_activity_monitor.tick();
+                    }
                 });
                 ui.separator();
                 ui.label(RichText::new("Active Requests").strong());
-                let descs: Vec<(u64,String)> = self.net_activity_monitor.active_requests().iter().map(|r|(r.id,r.describe())).collect();
-                if descs.is_empty() { ui.label("(none)"); }
-                for (rid,desc) in &descs {
+                let descs: Vec<(u64, String)> = self
+                    .net_activity_monitor
+                    .active_requests()
+                    .iter()
+                    .map(|r| (r.id, r.describe()))
+                    .collect();
+                if descs.is_empty() {
+                    ui.label("(none)");
+                }
+                for (rid, desc) in &descs {
                     ui.horizontal(|ui| {
-                        ui.label(desc); let id=*rid;
-                        if ui.small_button("Done").clicked() { self.net_activity_monitor.complete(id); }
-                        if ui.small_button("Err").clicked() { self.net_activity_monitor.error(id,"test"); }
-                        if ui.small_button("+DL").clicked() { self.net_activity_monitor.update_download(id,1024,None); }
-                        if ui.small_button("+UL").clicked() { self.net_activity_monitor.update_upload(id,512); }
+                        ui.label(desc);
+                        let id = *rid;
+                        if ui.small_button("Done").clicked() {
+                            self.net_activity_monitor.complete(id);
+                        }
+                        if ui.small_button("Err").clicked() {
+                            self.net_activity_monitor.error(id, "test");
+                        }
+                        if ui.small_button("+DL").clicked() {
+                            self.net_activity_monitor.update_download(id, 1024, None);
+                        }
+                        if ui.small_button("+UL").clicked() {
+                            self.net_activity_monitor.update_upload(id, 512);
+                        }
                     });
                 }
                 ui.collapsing("Request Details", |ui| {
-                    let sample = NetActivityRequest::new(0,"https://test.local".into(),"POST".into());
-                    ui.label(format!("progress={:?} dur={:.2}s stalled={}",sample.progress(),sample.duration().as_secs_f32(),sample.is_stalled()));
+                    let sample =
+                        NetActivityRequest::new(0, "https://test.local".into(), "POST".into());
+                    ui.label(format!(
+                        "progress={:?} dur={:.2}s stalled={}",
+                        sample.progress(),
+                        sample.duration().as_secs_f32(),
+                        sample.is_stalled()
+                    ));
                     ui.label(sample.describe());
                 });
-                ui.label(format!("Speed: {}",crate::network::NetworkMonitor::format_speed(0)));
+                ui.label(format!(
+                    "Speed: {}",
+                    crate::network::NetworkMonitor::format_speed(0)
+                ));
                 ui.collapsing("Shared Monitor", |ui| {
                     let shared: SharedNetworkMonitor = shared_monitor();
-                    { let mut lk = shared.lock().unwrap(); let sid=lk.start_request("https://shared.test".into(),"GET".into()); lk.update_download(sid,256,Some(1024)); lk.complete(sid); ui.label(lk.describe()); }
+                    {
+                        let mut lk = shared.lock().unwrap();
+                        let sid = lk.start_request("https://shared.test".into(), "GET".into());
+                        lk.update_download(sid, 256, Some(1024));
+                        lk.complete(sid);
+                        ui.label(lk.describe());
+                    }
                     ui.label(shared_monitor_describe());
                 });
-                ui.collapsing("Diagnostics", |ui| { ui.label(self.net_activity_monitor.describe()); });
+                ui.collapsing("Diagnostics", |ui| {
+                    ui.label(self.net_activity_monitor.describe());
+                });
             });
     }
 
     fn render_protocol_diagnostics_panel(&mut self, ctx: &egui::Context) {
-        if !self.protocol_diagnostics_panel_visible { return; }
-        egui::Window::new("Protocol Diagnostics").open(&mut self.protocol_diagnostics_panel_visible)
-            .resizable(true).default_size(Vec2::new(550.0, 500.0))
+        if !self.protocol_diagnostics_panel_visible {
+            return;
+        }
+        egui::Window::new("Protocol Diagnostics")
+            .open(&mut self.protocol_diagnostics_panel_visible)
+            .resizable(true)
+            .default_size(Vec2::new(550.0, 500.0))
             .show(ctx, |ui| {
-                ui.heading("HTTP Protocol Tools"); ui.separator();
+                ui.heading("HTTP Protocol Tools");
+                ui.separator();
                 ui.label(RichText::new("HTTP Client").strong());
                 ui.horizontal(|ui| {
-                    if ui.button("Set UA").clicked() { self.http_client.set_user_agent("SassyBrowser/diag"); }
-                    if ui.button("Timeout 10s").clicked() { self.http_client.set_timeout(Duration::from_secs(10)); }
-                    if ui.button("Clear Cookies").clicked() { self.http_client.clear_cookies(); }
+                    if ui.button("Set UA").clicked() {
+                        self.http_client.set_user_agent("SassyBrowser/diag");
+                    }
+                    if ui.button("Timeout 10s").clicked() {
+                        self.http_client.set_timeout(Duration::from_secs(10));
+                    }
+                    if ui.button("Clear Cookies").clicked() {
+                        self.http_client.clear_cookies();
+                    }
                 });
                 ui.horizontal(|ui| {
-                    if ui.button("Set Cookie").clicked() { self.http_client.set_cookie("example.com","sid","abc"); }
-                    if let Some(c) = self.http_client.get_cookie("example.com","sid") { ui.label(format!("Cookie: {}",c)); } else { ui.label("No cookie"); }
-                    if ui.button("Clear Host").clicked() { self.http_client.clear_cookies_for_host("example.com"); }
+                    if ui.button("Set Cookie").clicked() {
+                        self.http_client.set_cookie("example.com", "sid", "abc");
+                    }
+                    if let Some(c) = self.http_client.get_cookie("example.com", "sid") {
+                        ui.label(format!("Cookie: {}", c));
+                    } else {
+                        ui.label("No cookie");
+                    }
+                    if ui.button("Clear Host").clicked() {
+                        self.http_client.clear_cookies_for_host("example.com");
+                    }
                 });
                 ui.separator();
                 ui.label(RichText::new("FetchOptions").strong());
                 ui.collapsing("Builders", |ui| {
-                    let g = FetchOptions::get(); ui.label(format!("get: {}",g.method));
-                    let p = FetchOptions::post("{}").with_header("X","1").with_json_body("{\"a\":1}").with_credentials(CredentialsMode::Include).with_cache(CacheMode::NoStore).with_redirect(RedirectMode::Manual);
-                    ui.label(format!("post: {} body={:?}",p.method,p.body.as_deref()));
-                    ui.label(format!("cors: include={}",FetchOptions::cors_with_credentials().credentials==CredentialsMode::Include));
-                    ui.label(format!("anon: omit={}",FetchOptions::anonymous().credentials==CredentialsMode::Omit));
-                    ui.label(format!("no_cache: {}",FetchOptions::no_cache().method));
-                    ui.label(format!("reload: {}",FetchOptions::reload().method));
-                    ui.label(format!("manual_redir: manual={}",FetchOptions::manual_redirect().redirect==RedirectMode::Manual));
-                    let js = FetchOptions::from_js_options("PUT",Some("b".into()),"include","no-store","error");
-                    ui.label(format!("from_js: {} {:?}",js.method,js.body));
+                    let g = FetchOptions::get();
+                    ui.label(format!("get: {}", g.method));
+                    let p = FetchOptions::post("{}")
+                        .with_header("X", "1")
+                        .with_json_body("{\"a\":1}")
+                        .with_credentials(CredentialsMode::Include)
+                        .with_cache(CacheMode::NoStore)
+                        .with_redirect(RedirectMode::Manual);
+                    ui.label(format!("post: {} body={:?}", p.method, p.body.as_deref()));
+                    ui.label(format!(
+                        "cors: include={}",
+                        FetchOptions::cors_with_credentials().credentials
+                            == CredentialsMode::Include
+                    ));
+                    ui.label(format!(
+                        "anon: omit={}",
+                        FetchOptions::anonymous().credentials == CredentialsMode::Omit
+                    ));
+                    ui.label(format!("no_cache: {}", FetchOptions::no_cache().method));
+                    ui.label(format!("reload: {}", FetchOptions::reload().method));
+                    ui.label(format!(
+                        "manual_redir: manual={}",
+                        FetchOptions::manual_redirect().redirect == RedirectMode::Manual
+                    ));
+                    let js = FetchOptions::from_js_options(
+                        "PUT",
+                        Some("b".into()),
+                        "include",
+                        "no-store",
+                        "error",
+                    );
+                    ui.label(format!("from_js: {} {:?}", js.method, js.body));
                 });
                 ui.separator();
                 ui.label(RichText::new("Cache Modes").strong());
-                for (s,exp) in &[("default",CacheMode::Default),("no-store",CacheMode::NoStore),("reload",CacheMode::Reload),("no-cache",CacheMode::NoCache),("force-cache",CacheMode::ForceCache),("only-if-cached",CacheMode::OnlyIfCached)] {
-                    ui.label(format!("  '{}' ok={}",s,CacheMode::from_fetch_option(s)==*exp));
+                for (s, exp) in &[
+                    ("default", CacheMode::Default),
+                    ("no-store", CacheMode::NoStore),
+                    ("reload", CacheMode::Reload),
+                    ("no-cache", CacheMode::NoCache),
+                    ("force-cache", CacheMode::ForceCache),
+                    ("only-if-cached", CacheMode::OnlyIfCached),
+                ] {
+                    ui.label(format!(
+                        "  '{}' ok={}",
+                        s,
+                        CacheMode::from_fetch_option(s) == *exp
+                    ));
                 }
                 ui.label(RichText::new("Credentials").strong());
-                for (s,exp) in &[("omit",CredentialsMode::Omit),("same-origin",CredentialsMode::SameOrigin),("include",CredentialsMode::Include)] {
-                    ui.label(format!("  '{}' ok={}",s,CredentialsMode::from_fetch_option(s)==*exp));
+                for (s, exp) in &[
+                    ("omit", CredentialsMode::Omit),
+                    ("same-origin", CredentialsMode::SameOrigin),
+                    ("include", CredentialsMode::Include),
+                ] {
+                    ui.label(format!(
+                        "  '{}' ok={}",
+                        s,
+                        CredentialsMode::from_fetch_option(s) == *exp
+                    ));
                 }
                 ui.label(RichText::new("Redirects").strong());
-                for s in &["follow","error","manual"] { ui.label(format!("  '{}' follow={}",s,RedirectMode::from_fetch_option(s)==RedirectMode::Follow)); }
+                for s in &["follow", "error", "manual"] {
+                    ui.label(format!(
+                        "  '{}' follow={}",
+                        s,
+                        RedirectMode::from_fetch_option(s) == RedirectMode::Follow
+                    ));
+                }
                 ui.separator();
                 ui.label(RichText::new("Data URLs").strong());
-                if let Some((m,d)) = parse_data_url("data:text/plain,Hello%20World") { ui.label(format!("plain: {} len={}",m,d.len())); }
-                if let Some((m,d)) = parse_data_url("data:text/plain;base64,SGVsbG8=") { ui.label(format!("b64: {} len={}",m,d.len())); }
-                ui.label(format!("url_encode: {}",url_encode("hello world&x=1")));
-                let mut fd = std::collections::HashMap::new(); fd.insert("k".into(),"v v".into());
-                ui.label(format!("form: {}",encode_form_data(&fd)));
+                if let Some((m, d)) = parse_data_url("data:text/plain,Hello%20World") {
+                    ui.label(format!("plain: {} len={}", m, d.len()));
+                }
+                if let Some((m, d)) = parse_data_url("data:text/plain;base64,SGVsbG8=") {
+                    ui.label(format!("b64: {} len={}", m, d.len()));
+                }
+                ui.label(format!("url_encode: {}", url_encode("hello world&x=1")));
+                let mut fd = std::collections::HashMap::new();
+                fd.insert("k".into(), "v v".into());
+                ui.label(format!("form: {}", encode_form_data(&fd)));
                 ui.separator();
                 ui.label(RichText::new("Multipart").strong());
-                let mut mp = MultipartFormData::new(); mp.add_field("user","sassy"); mp.add_file("file","f.png","image/png",vec![0x89,0x50]);
-                ui.label(format!("type: {}",mp.get_content_type()));
-                ui.label(format!("encoded: {} bytes",mp.encode().len()));
+                let mut mp = MultipartFormData::new();
+                mp.add_field("user", "sassy");
+                mp.add_file("file", "f.png", "image/png", vec![0x89, 0x50]);
+                ui.label(format!("type: {}", mp.get_content_type()));
+                ui.label(format!("encoded: {} bytes", mp.encode().len()));
             });
     }
 
     fn render_mcp_panel(&mut self, ctx: &egui::Context) {
-        if !self.mcp_panel.is_visible { return; }
+        if !self.mcp_panel.is_visible {
+            return;
+        }
         let theme = McpTheme::dark();
         let light = McpTheme::light();
-        let bg = egui::Color32::from_rgba_premultiplied(theme.background.r, theme.background.g, theme.background.b, theme.background.a);
-        let surface = egui::Color32::from_rgba_premultiplied(theme.surface.r, theme.surface.g, theme.surface.b, theme.surface.a);
-        let text_c = egui::Color32::from_rgba_premultiplied(theme.text.r, theme.text.g, theme.text.b, theme.text.a);
-        let text_dim = egui::Color32::from_rgba_premultiplied(theme.text_dim.r, theme.text_dim.g, theme.text_dim.b, theme.text_dim.a);
-        let primary = egui::Color32::from_rgba_premultiplied(theme.primary.r, theme.primary.g, theme.primary.b, theme.primary.a);
-        let accent = egui::Color32::from_rgba_premultiplied(theme.accent.r, theme.accent.g, theme.accent.b, theme.accent.a);
-        let success_c = egui::Color32::from_rgba_premultiplied(theme.success.r, theme.success.g, theme.success.b, theme.success.a);
-        let warn_c = egui::Color32::from_rgba_premultiplied(theme.warning.r, theme.warning.g, theme.warning.b, theme.warning.a);
-        let err_c = egui::Color32::from_rgba_premultiplied(theme.error.r, theme.error.g, theme.error.b, theme.error.a);
-        let border_c = egui::Color32::from_rgba_premultiplied(theme.border.r, theme.border.g, theme.border.b, theme.border.a);
-        let _voice_c = egui::Color32::from_rgba_premultiplied(theme.voice_color.r, theme.voice_color.g, theme.voice_color.b, theme.voice_color.a);
-        let _orch_c = egui::Color32::from_rgba_premultiplied(theme.orchestrator_color.r, theme.orchestrator_color.g, theme.orchestrator_color.b, theme.orchestrator_color.a);
-        let _coder_c = egui::Color32::from_rgba_premultiplied(theme.coder_color.r, theme.coder_color.g, theme.coder_color.b, theme.coder_color.a);
-        let _auditor_c = egui::Color32::from_rgba_premultiplied(theme.auditor_color.r, theme.auditor_color.g, theme.auditor_color.b, theme.auditor_color.a);
-        let _user_b = egui::Color32::from_rgba_premultiplied(theme.user_bubble.r, theme.user_bubble.g, theme.user_bubble.b, theme.user_bubble.a);
-        let _agent_b = egui::Color32::from_rgba_premultiplied(theme.agent_bubble.r, theme.agent_bubble.g, theme.agent_bubble.b, theme.agent_bubble.a);
-        let _sys_b = egui::Color32::from_rgba_premultiplied(theme.system_bubble.r, theme.system_bubble.g, theme.system_bubble.b, theme.system_bubble.a);
+        let bg = egui::Color32::from_rgba_premultiplied(
+            theme.background.r,
+            theme.background.g,
+            theme.background.b,
+            theme.background.a,
+        );
+        let surface = egui::Color32::from_rgba_premultiplied(
+            theme.surface.r,
+            theme.surface.g,
+            theme.surface.b,
+            theme.surface.a,
+        );
+        let text_c = egui::Color32::from_rgba_premultiplied(
+            theme.text.r,
+            theme.text.g,
+            theme.text.b,
+            theme.text.a,
+        );
+        let text_dim = egui::Color32::from_rgba_premultiplied(
+            theme.text_dim.r,
+            theme.text_dim.g,
+            theme.text_dim.b,
+            theme.text_dim.a,
+        );
+        let primary = egui::Color32::from_rgba_premultiplied(
+            theme.primary.r,
+            theme.primary.g,
+            theme.primary.b,
+            theme.primary.a,
+        );
+        let accent = egui::Color32::from_rgba_premultiplied(
+            theme.accent.r,
+            theme.accent.g,
+            theme.accent.b,
+            theme.accent.a,
+        );
+        let success_c = egui::Color32::from_rgba_premultiplied(
+            theme.success.r,
+            theme.success.g,
+            theme.success.b,
+            theme.success.a,
+        );
+        let warn_c = egui::Color32::from_rgba_premultiplied(
+            theme.warning.r,
+            theme.warning.g,
+            theme.warning.b,
+            theme.warning.a,
+        );
+        let err_c = egui::Color32::from_rgba_premultiplied(
+            theme.error.r,
+            theme.error.g,
+            theme.error.b,
+            theme.error.a,
+        );
+        let border_c = egui::Color32::from_rgba_premultiplied(
+            theme.border.r,
+            theme.border.g,
+            theme.border.b,
+            theme.border.a,
+        );
+        let _voice_c = egui::Color32::from_rgba_premultiplied(
+            theme.voice_color.r,
+            theme.voice_color.g,
+            theme.voice_color.b,
+            theme.voice_color.a,
+        );
+        let _orch_c = egui::Color32::from_rgba_premultiplied(
+            theme.orchestrator_color.r,
+            theme.orchestrator_color.g,
+            theme.orchestrator_color.b,
+            theme.orchestrator_color.a,
+        );
+        let _coder_c = egui::Color32::from_rgba_premultiplied(
+            theme.coder_color.r,
+            theme.coder_color.g,
+            theme.coder_color.b,
+            theme.coder_color.a,
+        );
+        let _auditor_c = egui::Color32::from_rgba_premultiplied(
+            theme.auditor_color.r,
+            theme.auditor_color.g,
+            theme.auditor_color.b,
+            theme.auditor_color.a,
+        );
+        let _user_b = egui::Color32::from_rgba_premultiplied(
+            theme.user_bubble.r,
+            theme.user_bubble.g,
+            theme.user_bubble.b,
+            theme.user_bubble.a,
+        );
+        let _agent_b = egui::Color32::from_rgba_premultiplied(
+            theme.agent_bubble.r,
+            theme.agent_bubble.g,
+            theme.agent_bubble.b,
+            theme.agent_bubble.a,
+        );
+        let _sys_b = egui::Color32::from_rgba_premultiplied(
+            theme.system_bubble.r,
+            theme.system_bubble.g,
+            theme.system_bubble.b,
+            theme.system_bubble.a,
+        );
         // Exercise light theme agent_color
-        for role in &[AgentRole::Voice, AgentRole::Orchestrator, AgentRole::Coder, AgentRole::Auditor] {
+        for role in &[
+            AgentRole::Voice,
+            AgentRole::Orchestrator,
+            AgentRole::Coder,
+            AgentRole::Auditor,
+        ] {
             let ac = light.agent_color(role.clone());
             let _ = egui::Color32::from_rgba_premultiplied(ac.r, ac.g, ac.b, ac.a);
         }
         egui::Window::new("MCP AI Panel")
             .default_width(self.mcp_panel.width as f32)
-            .frame(egui::Frame::window(&ctx.style()).fill(bg).stroke(egui::Stroke::new(1.0, border_c)))
+            .frame(
+                egui::Frame::window(&ctx.style())
+                    .fill(bg)
+                    .stroke(egui::Stroke::new(1.0, border_c)),
+            )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    let modes = [PanelMode::Chat, PanelMode::Tasks, PanelMode::Edits, PanelMode::Settings];
+                    let modes = [
+                        PanelMode::Chat,
+                        PanelMode::Tasks,
+                        PanelMode::Edits,
+                        PanelMode::Settings,
+                    ];
                     for m in &modes {
-                        let label = match m { PanelMode::Chat=>"Chat", PanelMode::Tasks=>"Tasks", PanelMode::Edits=>"Edits", PanelMode::Settings=>"Settings", PanelMode::TokenMeter=>"Tokens" };
-                        if ui.selectable_label(std::mem::discriminant(&self.mcp_panel.mode)==std::mem::discriminant(m), RichText::new(label).color(primary)).clicked() {
+                        let label = match m {
+                            PanelMode::Chat => "Chat",
+                            PanelMode::Tasks => "Tasks",
+                            PanelMode::Edits => "Edits",
+                            PanelMode::Settings => "Settings",
+                            PanelMode::TokenMeter => "Tokens",
+                        };
+                        if ui
+                            .selectable_label(
+                                std::mem::discriminant(&self.mcp_panel.mode)
+                                    == std::mem::discriminant(m),
+                                RichText::new(label).color(primary),
+                            )
+                            .clicked()
+                        {
                             self.mcp_panel.set_mode(m.clone());
                         }
                     }
-                    if ui.button(RichText::new("Toggle Theme").color(accent)).clicked() {
+                    if ui
+                        .button(RichText::new("Toggle Theme").color(accent))
+                        .clicked()
+                    {
                         self.mcp_panel.toggle_theme();
                     }
                 });
                 ui.separator();
                 // Agent status bars
                 let agents = vec![
-                    AgentStatus { role: AgentRole::Voice, name: "Voice Agent".into(), online: true },
-                    AgentStatus { role: AgentRole::Orchestrator, name: "Orchestrator".into(), online: true },
-                    AgentStatus { role: AgentRole::Coder, name: "Coder Agent".into(), online: false },
-                    AgentStatus { role: AgentRole::Auditor, name: "Auditor Agent".into(), online: true },
+                    AgentStatus {
+                        role: AgentRole::Voice,
+                        name: "Voice Agent".into(),
+                        online: true,
+                    },
+                    AgentStatus {
+                        role: AgentRole::Orchestrator,
+                        name: "Orchestrator".into(),
+                        online: true,
+                    },
+                    AgentStatus {
+                        role: AgentRole::Coder,
+                        name: "Coder Agent".into(),
+                        online: false,
+                    },
+                    AgentStatus {
+                        role: AgentRole::Auditor,
+                        name: "Auditor Agent".into(),
+                        online: true,
+                    },
                 ];
                 for a in &agents {
                     let col = if a.online { success_c } else { text_dim };
-                    ui.label(RichText::new(format!("{} [{}] - {}", a.role.icon(), a.name, if a.online {"online"} else {"offline"})).color(col));
+                    ui.label(
+                        RichText::new(format!(
+                            "{} [{}] - {}",
+                            a.role.icon(),
+                            a.name,
+                            if a.online { "online" } else { "offline" }
+                        ))
+                        .color(col),
+                    );
                 }
                 ui.separator();
                 // Quick commands
                 let cmds: Vec<QuickCommand> = get_quick_commands();
                 ui.label(RichText::new("Quick Commands").color(text_c).strong());
                 for cmd in &cmds {
-                    ui.label(RichText::new(format!("{} - {} (e.g. {})", cmd.trigger, cmd.description, cmd.example)).color(text_dim));
+                    ui.label(
+                        RichText::new(format!(
+                            "{} - {} (e.g. {})",
+                            cmd.trigger, cmd.description, cmd.example
+                        ))
+                        .color(text_dim),
+                    );
                 }
                 ui.separator();
                 // Render elements
                 let render_output: PanelRender = self.mcp_panel.render();
-                ui.label(RichText::new(format!("Mode: {:?} | Width: {} | Scroll: {}", render_output.mode, render_output.width, render_output.scroll_offset)).color(surface));
-                egui::ScrollArea::vertical().auto_shrink([false; 2]).stick_to_bottom(true).show(ui, |ui| {
-                    for elem in &render_output.elements {
-                        match elem {
-                            RenderElement::Header { title, subtitle } => { ui.label(RichText::new(title).size(18.0).color(text_c).strong()); if let Some(sub) = subtitle { ui.label(RichText::new(sub).color(text_dim)); } }
-                            RenderElement::SectionHeader { title } => { ui.label(RichText::new(title).size(14.0).color(primary).strong()); }
-                            RenderElement::AgentBar { agents: bar_agents } => { for st in bar_agents { ui.label(RichText::new(format!("{} {} [{}]", st.role.icon(), st.name, if st.online {"up"} else {"down"})).color(if st.online { success_c } else { err_c })); } }
-                            RenderElement::Message { role: msg_role, agent, content, timestamp } => { let c = match msg_role { MessageRole::User => primary, MessageRole::Agent => accent, MessageRole::System => surface }; ui.label(RichText::new(format!("[{:?}] {}: {} ({})", msg_role, agent.as_ref().map(|a| a.name()).unwrap_or("user"), content, timestamp)).color(c)); }
-                            RenderElement::Task { id, title, description, status, assigned_to, has_artifacts } => { ui.label(RichText::new(format!("[#{}] {} - {} ({:?}, by {}, artifacts={})", id, title, description, status, assigned_to.name(), has_artifacts)).color(warn_c)); }
-                            RenderElement::CodeEdit { index, file_path, operation, description, preview, selected } => { ui.label(RichText::new(format!("#{} {} ({:?}) [{}]: {}", index, file_path, operation, if *selected {"sel"} else {"_"}, description)).color(accent)); for (line, _clr) in preview { ui.label(RichText::new(line).monospace().color(text_c)); } }
-                            RenderElement::AgentConfig { role, model, api_url, has_key, enabled } => { ui.label(RichText::new(format!("{}: {} @ {} key={} [{}]", role.name(), model, api_url, has_key, if *enabled {"on"} else {"off"})).color(text_dim)); }
-                            RenderElement::ActionBar { actions } => { ui.horizontal(|ui| { for act in actions { let c = match act.style { ActionStyle::Primary => primary, ActionStyle::Secondary => text_dim, ActionStyle::Danger => err_c }; let _ = ui.button(RichText::new(&act.label).color(c)); } }); }
-                            RenderElement::Input { placeholder, value: _, cursor: _ } => { /* Real TextEdit is rendered below the scroll area */ let _ = placeholder; }
-                            RenderElement::Notification { message, style } => { let c = match style { NotificationStyle::Info => primary, NotificationStyle::Success => success_c, NotificationStyle::Warning => warn_c, NotificationStyle::Error => err_c }; ui.label(RichText::new(message).color(c)); }
-                            RenderElement::EmptyState { icon, message, hint } => { ui.label(RichText::new(format!("{} {} ({})", icon, message, hint)).color(text_dim).italics()); }
-                            RenderElement::InfoRow { label, value } => { ui.horizontal(|ui| { ui.label(RichText::new(format!("{}: ", label)).color(text_dim)); ui.label(RichText::new(value).color(text_c)); }); }
+                ui.label(
+                    RichText::new(format!(
+                        "Mode: {:?} | Width: {} | Scroll: {}",
+                        render_output.mode, render_output.width, render_output.scroll_offset
+                    ))
+                    .color(surface),
+                );
+                egui::ScrollArea::vertical()
+                    .max_height(400.0)
+                    .show(ui, |ui| {
+                        for elem in &render_output.elements {
+                            match elem {
+                                RenderElement::Header { title, subtitle } => {
+                                    ui.label(
+                                        RichText::new(title).size(18.0).color(text_c).strong(),
+                                    );
+                                    if let Some(sub) = subtitle {
+                                        ui.label(RichText::new(sub).color(text_dim));
+                                    }
+                                }
+                                RenderElement::SectionHeader { title } => {
+                                    ui.label(
+                                        RichText::new(title).size(14.0).color(primary).strong(),
+                                    );
+                                }
+                                RenderElement::AgentBar { agents: bar_agents } => {
+                                    for st in bar_agents {
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "{} {} [{}]",
+                                                st.role.icon(),
+                                                st.name,
+                                                if st.online { "up" } else { "down" }
+                                            ))
+                                            .color(if st.online { success_c } else { err_c }),
+                                        );
+                                    }
+                                }
+                                RenderElement::Message {
+                                    role: msg_role,
+                                    agent,
+                                    content,
+                                    timestamp,
+                                } => {
+                                    let c = match msg_role {
+                                        MessageRole::User => primary,
+                                        MessageRole::Agent => accent,
+                                        MessageRole::System => surface,
+                                    };
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "[{:?}] {}: {} ({})",
+                                            msg_role,
+                                            agent.as_ref().map(|a| a.name()).unwrap_or("user"),
+                                            content,
+                                            timestamp
+                                        ))
+                                        .color(c),
+                                    );
+                                }
+                                RenderElement::Task {
+                                    id,
+                                    title,
+                                    description,
+                                    status,
+                                    assigned_to,
+                                    has_artifacts,
+                                } => {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "[#{}] {} - {} ({:?}, by {}, artifacts={})",
+                                            id,
+                                            title,
+                                            description,
+                                            status,
+                                            assigned_to.name(),
+                                            has_artifacts
+                                        ))
+                                        .color(warn_c),
+                                    );
+                                }
+                                RenderElement::CodeEdit {
+                                    index,
+                                    file_path,
+                                    operation,
+                                    description,
+                                    preview,
+                                    selected,
+                                } => {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "#{} {} ({:?}) [{}]: {}",
+                                            index,
+                                            file_path,
+                                            operation,
+                                            if *selected { "sel" } else { "_" },
+                                            description
+                                        ))
+                                        .color(accent),
+                                    );
+                                    for (line, _clr) in preview {
+                                        ui.label(RichText::new(line).monospace().color(text_c));
+                                    }
+                                }
+                                RenderElement::AgentConfig {
+                                    role,
+                                    model,
+                                    api_url,
+                                    has_key,
+                                    enabled,
+                                } => {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{}: {} @ {} key={} [{}]",
+                                            role.name(),
+                                            model,
+                                            api_url,
+                                            has_key,
+                                            if *enabled { "on" } else { "off" }
+                                        ))
+                                        .color(text_dim),
+                                    );
+                                }
+                                RenderElement::ActionBar { actions } => {
+                                    ui.horizontal(|ui| {
+                                        for act in actions {
+                                            let c = match act.style {
+                                                ActionStyle::Primary => primary,
+                                                ActionStyle::Secondary => text_dim,
+                                                ActionStyle::Danger => err_c,
+                                            };
+                                            let _ = ui.button(RichText::new(&act.label).color(c));
+                                        }
+                                    });
+                                }
+                                RenderElement::Input {
+                                    placeholder,
+                                    value,
+                                    cursor,
+                                } => {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "[Input: {} val='{}' cursor={}]",
+                                            placeholder, value, cursor
+                                        ))
+                                        .color(border_c),
+                                    );
+                                }
+                                RenderElement::Notification { message, style } => {
+                                    let c = match style {
+                                        NotificationStyle::Info => primary,
+                                        NotificationStyle::Success => success_c,
+                                        NotificationStyle::Warning => warn_c,
+                                        NotificationStyle::Error => err_c,
+                                    };
+                                    ui.label(RichText::new(message).color(c));
+                                }
+                                RenderElement::EmptyState {
+                                    icon,
+                                    message,
+                                    hint,
+                                } => {
+                                    ui.label(
+                                        RichText::new(format!("{} {} ({})", icon, message, hint))
+                                            .color(text_dim)
+                                            .italics(),
+                                    );
+                                }
+                                RenderElement::InfoRow { label, value } => {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new(format!("{}: ", label)).color(text_dim),
+                                        );
+                                        ui.label(RichText::new(value).color(text_c));
+                                    });
+                                }
+                            }
                         }
-                    }
-                });
+                    });
                 ui.separator();
                 // Action buttons for edits
                 ui.horizontal(|ui| {
-                    let approve_act = McpAction { label: "Approve".into(), id: "approve".into(), style: ActionStyle::Primary };
-                    let reject_act = McpAction { label: "Reject".into(), id: "reject".into(), style: ActionStyle::Danger };
-                    let review_act = McpAction { label: "Review".into(), id: "review".into(), style: ActionStyle::Secondary };
-                    if ui.button(RichText::new(&approve_act.label).color(success_c)).clicked() { self.mcp_panel.approve_edits(); }
-                    if ui.button(RichText::new(&reject_act.label).color(err_c)).clicked() { self.mcp_panel.reject_edits(); }
-                    ui.label(RichText::new(format!("{} [{}]", review_act.label, review_act.id)).color(text_dim));
+                    let approve_act = McpAction {
+                        label: "Approve".into(),
+                        id: "approve".into(),
+                        style: ActionStyle::Primary,
+                    };
+                    let reject_act = McpAction {
+                        label: "Reject".into(),
+                        id: "reject".into(),
+                        style: ActionStyle::Danger,
+                    };
+                    let review_act = McpAction {
+                        label: "Review".into(),
+                        id: "review".into(),
+                        style: ActionStyle::Secondary,
+                    };
+                    if ui
+                        .button(RichText::new(&approve_act.label).color(success_c))
+                        .clicked()
+                    {
+                        self.mcp_panel.approve_edits();
+                    }
+                    if ui
+                        .button(RichText::new(&reject_act.label).color(err_c))
+                        .clicked()
+                    {
+                        self.mcp_panel.reject_edits();
+                    }
+                    ui.label(
+                        RichText::new(format!("{} [{}]", review_act.label, review_act.id))
+                            .color(text_dim),
+                    );
                 });
                 // McpPanel interactive methods
                 ui.horizontal(|ui| {
-                    if ui.button("Toggle Panel").clicked() { self.mcp_panel.toggle(); }
-                    if ui.button("Approve Edit 0").clicked() { let _ = self.mcp_panel.approve_edit(0); }
-                });
-                // Chat input with real TextEdit
-                ui.separator();
-                ui.horizontal(|ui| {
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut self.mcp_panel.input_text)
-                            .desired_width(ui.available_width() - 60.0)
-                            .hint_text("Ask the AI agents...")
-                            .text_color(text_c)
-                    );
-                    if ui.button(RichText::new("Send").color(primary)).clicked()
-                        || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                    {
-                        self.mcp_panel.handle_enter();
+                    if ui.button("Toggle Panel").clicked() {
+                        self.mcp_panel.toggle();
                     }
-                    if response.changed() {
-                        self.mcp_panel.input_cursor = self.mcp_panel.input_text.len();
+                    if ui.button("Approve Edit 0").clicked() {
+                        let _ = self.mcp_panel.approve_edit(0);
+                    }
+                });
+                // Key handling
+                ctx.input(|i| {
+                    for event in &i.events {
+                        if let egui::Event::Text(t) = event {
+                            for ch in t.chars() {
+                                self.mcp_panel.handle_key(ch);
+                            }
+                        }
+                        if let egui::Event::Key {
+                            key, pressed: true, ..
+                        } = event
+                        {
+                            match key {
+                                egui::Key::Backspace => self.mcp_panel.handle_backspace(),
+                                egui::Key::Enter => self.mcp_panel.handle_enter(),
+                                _ => {}
+                            }
+                        }
                     }
                 });
                 // McpTheme secondary color
-                let _secondary = egui::Color32::from_rgba_premultiplied(theme.secondary.r, theme.secondary.g, theme.secondary.b, theme.secondary.a);
+                let _secondary = egui::Color32::from_rgba_premultiplied(
+                    theme.secondary.r,
+                    theme.secondary.g,
+                    theme.secondary.b,
+                    theme.secondary.a,
+                );
             });
     }
-
-
 }
 
 impl eframe::App for BrowserApp {
@@ -6505,12 +8616,15 @@ impl eframe::App for BrowserApp {
                 if let Some(pos) = i.pointer.hover_pos() {
                     self.auth.add_entropy_mouse(pos.x as i32, pos.y as i32);
                 }
-                if i.events.iter().any(|e| matches!(e, egui::Event::Key { .. })) {
+                if i.events
+                    .iter()
+                    .any(|e| matches!(e, egui::Event::Key { .. }))
+                {
                     self.auth.add_entropy_key();
                 }
             });
         }
-        
+
         // Show first-run wizard if not complete
         if self.first_run.step != FirstRunStep::Complete {
             self.render_first_run_wizard(ctx);
@@ -6520,9 +8634,13 @@ impl eframe::App for BrowserApp {
         // Periodic bookkeeping for profiles and smart history
         self.profile_manager.record_activity();
         self.smart_history.tick();
-        
+
         // Sync smart history lifecycle with the active tab
-        let (active_url, active_title) = if let Some(Tab { content: TabContent::Web { url, title, .. }, .. }) = self.engine.active_tab() {
+        let (active_url, active_title) = if let Some(Tab {
+            content: TabContent::Web { url, title, .. },
+            ..
+        }) = self.engine.active_tab()
+        {
             (Some(url.clone()), Some(title.clone()))
         } else {
             (None, None)
@@ -6547,7 +8665,7 @@ impl eframe::App for BrowserApp {
         if let Some(url) = self.smart_history_active_url.as_deref() {
             self.smart_history.update_scroll(url, 0.9);
         }
-        
+
         // Process any pending messages from webviews
         self.engine.process_messages();
 
@@ -6560,7 +8678,9 @@ impl eframe::App for BrowserApp {
                 let is_loading = *loading;
 
                 // Only run detection on loaded pages we haven't analyzed yet
-                if !is_loading && self.detection_last_analyzed_url.as_deref() != Some(url_owned.as_str()) {
+                if !is_loading
+                    && self.detection_last_analyzed_url.as_deref() != Some(url_owned.as_str())
+                {
                     // Update page context URL/domain
                     self.detection_page_ctx.url = url_owned.clone();
                     self.detection_page_ctx.domain = extract_domain_from_url(&url_owned);
@@ -6569,7 +8689,11 @@ impl eframe::App for BrowserApp {
                     // Run detection analysis
                     let _alerts = self.detection_engine.analyze(&self.detection_page_ctx);
                     if self.detection_engine.active_alert_count() > 0 {
-                        console_error(&format!("Detection alerts on {}: {} threat(s)", url_owned, self.detection_engine.active_alert_count()));
+                        console_error(&format!(
+                            "Detection alerts on {}: {} threat(s)",
+                            url_owned,
+                            self.detection_engine.active_alert_count()
+                        ));
                     }
                     self.detection_last_analyzed_url = Some(url_owned.clone());
 
@@ -6623,10 +8747,17 @@ impl eframe::App for BrowserApp {
         }
 
         // Feed network monitor with active tab loading state
-        if let Some(Tab { content: TabContent::Web { url, loading, .. }, .. }) = self.engine.active_tab() {
+        if let Some(Tab {
+            content: TabContent::Web { url, loading, .. },
+            ..
+        }) = self.engine.active_tab()
+        {
             if *loading {
-                if self.network_active_connection.is_none() && !self.network_monitor.is_blocked(url) {
-                    let conn_id = self.network_monitor.start_connection(url, ConnectionType::Document);
+                if self.network_active_connection.is_none() && !self.network_monitor.is_blocked(url)
+                {
+                    let conn_id = self
+                        .network_monitor
+                        .start_connection(url, ConnectionType::Document);
                     self.network_active_connection = Some(conn_id);
                     self.network_last_net_sample = Some(Instant::now());
                 }
@@ -6637,11 +8768,16 @@ impl eframe::App for BrowserApp {
                     let secs = (now - last).as_secs_f64().max(0.016);
                     let bytes_down = (80_000.0 * secs) as u64;
                     let bytes_up = (2_000.0 * secs) as u64;
-                    self.network_monitor.update_connection(conn_id, bytes_down, bytes_up);
+                    self.network_monitor
+                        .update_connection(conn_id, bytes_down, bytes_up);
                     self.network_last_net_sample = Some(now);
                 }
             } else if let Some(conn_id) = self.network_active_connection.take() {
-                self.network_monitor.complete_connection(conn_id, 200, Some("text/html".to_string()));
+                self.network_monitor.complete_connection(
+                    conn_id,
+                    200,
+                    Some("text/html".to_string()),
+                );
                 self.network_last_net_sample = None;
             }
         } else {
@@ -6657,7 +8793,11 @@ impl eframe::App for BrowserApp {
             if let TabContent::Web { url, title, .. } = &tab.content {
                 let url_clone = url.clone();
                 let raw_title = title.clone();
-                let history_title = if raw_title.is_empty() { tab.title() } else { raw_title.clone() };
+                let history_title = if raw_title.is_empty() {
+                    tab.title()
+                } else {
+                    raw_title.clone()
+                };
                 let changed = self.history_last_url.as_deref() != Some(url_clone.as_str())
                     || self.history_last_title.as_deref() != Some(raw_title.as_str());
                 if changed {
@@ -6678,34 +8818,34 @@ impl eframe::App for BrowserApp {
         if self.password_vault.check_auto_lock() {
             self.vault_status = "Vault auto-locked".into();
         }
-        
+
         // Handle input
         self.handle_keyboard_shortcuts(ctx);
         self.handle_dropped_files(ctx);
-        
+
         // Main layout
         egui::TopBottomPanel::top("browser_chrome").show(ctx, |ui| {
             // Tab bar
             self.render_tabs(ui);
-            
+
             ui.separator();
-            
+
             // Toolbar (navigation + address bar)
             self.render_toolbar(ctx, ui);
-            
+
             // Bookmarks bar
             if self.engine.show_bookmarks_bar() {
                 ui.separator();
                 self.render_bookmarks_bar(ui);
             }
-            
+
             // Find bar
             if self.find_bar_visible {
                 ui.separator();
                 self.render_find_bar(ctx, ui);
             }
         });
-        
+
         // Downloads panel (if visible)
         self.render_downloads_panel(ctx);
 
@@ -6869,34 +9009,38 @@ fn configure_style(ctx: &egui::Context, dark_mode: bool, _preset: ThemePreset) {
     // ────────────────────────────────────────────────
     // Concise, modern styling — brand colors + crisp feel
     // ────────────────────────────────────────────────
-    let accent  = Color32::from_rgb(108,  99, 255);   // #6C63FF  Brand Purple
-    let yellow  = Color32::from_rgb(254, 195,  55);   // #FEC337  Highlight
-    let bg_dark = Color32::from_rgb( 16,  30,  50);   // #101E32  Deep navy
-    let bg_mid  = Color32::from_rgb( 46,  56,  75);   // #2E384B  Panel surface
+    let accent = Color32::from_rgb(108, 99, 255); // #6C63FF  Brand Purple
+    let yellow = Color32::from_rgb(254, 195, 55); // #FEC337  Highlight
+    let bg_dark = Color32::from_rgb(16, 30, 50); // #101E32  Deep navy
+    let bg_mid = Color32::from_rgb(46, 56, 75); // #2E384B  Panel surface
 
-    let mut visuals = if dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
+    let mut visuals = if dark_mode {
+        egui::Visuals::dark()
+    } else {
+        egui::Visuals::light()
+    };
 
     if dark_mode {
-        visuals.window_fill       = bg_dark;
-        visuals.panel_fill        = bg_mid;
-        visuals.extreme_bg_color  = Color32::from_rgb(10, 20, 36);
-        visuals.faint_bg_color    = bg_mid.gamma_multiply(1.2);
+        visuals.window_fill = bg_dark;
+        visuals.panel_fill = bg_mid;
+        visuals.extreme_bg_color = Color32::from_rgb(10, 20, 36);
+        visuals.faint_bg_color = bg_mid.gamma_multiply(1.2);
         visuals.override_text_color = Some(Color32::from_rgb(230, 237, 243));
-        visuals.hyperlink_color     = yellow;
-        visuals.selection.bg_fill   = accent.gamma_multiply(0.35);
-        visuals.selection.stroke    = egui::Stroke::new(1.5, accent);
+        visuals.hyperlink_color = yellow;
+        visuals.selection.bg_fill = accent.gamma_multiply(0.35);
+        visuals.selection.stroke = egui::Stroke::new(1.5, accent);
     } else {
-        visuals.window_fill       = Color32::from_rgb(246, 246, 246);
-        visuals.panel_fill        = Color32::WHITE;
+        visuals.window_fill = Color32::from_rgb(246, 246, 246);
+        visuals.panel_fill = Color32::WHITE;
         visuals.override_text_color = Some(bg_dark);
-        visuals.hyperlink_color     = accent;
-        visuals.selection.bg_fill   = Color32::from_rgb(184, 180, 255);
-        visuals.selection.stroke    = egui::Stroke::new(1.5, accent);
+        visuals.hyperlink_color = accent;
+        visuals.selection.bg_fill = Color32::from_rgb(184, 180, 255);
+        visuals.selection.stroke = egui::Stroke::new(1.5, accent);
     }
 
     // Slim chrome & consistent rounding
     visuals.window_rounding = egui::Rounding::same(10.0);
-    visuals.menu_rounding   = egui::Rounding::same(8.0);
+    visuals.menu_rounding = egui::Rounding::same(8.0);
     let widget_r = egui::Rounding::same(8.0);
     for w in [
         &mut visuals.widgets.noninteractive,
@@ -6909,11 +9053,15 @@ fn configure_style(ctx: &egui::Context, dark_mode: bool, _preset: ThemePreset) {
     }
 
     visuals.window_shadow = egui::Shadow {
-        offset: egui::vec2(0.0, 6.0), blur: 16.0, spread: 0.0,
+        offset: egui::vec2(0.0, 6.0),
+        blur: 16.0,
+        spread: 0.0,
         color: Color32::from_black_alpha(60),
     };
     visuals.popup_shadow = egui::Shadow {
-        offset: egui::vec2(0.0, 4.0), blur: 12.0, spread: 0.0,
+        offset: egui::vec2(0.0, 4.0),
+        blur: 12.0,
+        spread: 0.0,
         color: Color32::from_black_alpha(50),
     };
 
@@ -6923,18 +9071,28 @@ fn configure_style(ctx: &egui::Context, dark_mode: bool, _preset: ThemePreset) {
     // Tight typography & spacing
     // ────────────────────────────────────────────────
     let mut style = (*ctx.style()).clone();
-    style.text_styles.insert(egui::TextStyle::Small,     FontId::proportional(12.5));
-    style.text_styles.insert(egui::TextStyle::Body,      FontId::proportional(14.5));
-    style.text_styles.insert(egui::TextStyle::Monospace,  FontId::monospace(13.0));
-    style.text_styles.insert(egui::TextStyle::Button,    FontId::proportional(14.5));
-    style.text_styles.insert(egui::TextStyle::Heading,   FontId::proportional(19.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Small, FontId::proportional(12.5));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Body, FontId::proportional(14.5));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Monospace, FontId::monospace(13.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Button, FontId::proportional(14.5));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Heading, FontId::proportional(19.0));
 
-    style.spacing.item_spacing     = egui::vec2(9.0, 7.0);
-    style.spacing.button_padding   = egui::vec2(12.0, 7.0);
-    style.spacing.menu_margin      = egui::Margin::symmetric(12.0, 10.0);
-    style.spacing.interact_size    = egui::vec2(40.0, 24.0);
+    style.spacing.item_spacing = egui::vec2(9.0, 7.0);
+    style.spacing.button_padding = egui::vec2(12.0, 7.0);
+    style.spacing.menu_margin = egui::Margin::symmetric(12.0, 10.0);
+    style.spacing.interact_size = egui::vec2(40.0, 24.0);
     style.spacing.scroll.bar_width = 7.0;
-    style.animation_time           = 0.12;
+    style.animation_time = 0.12;
 
     ctx.set_style(style);
 }
@@ -6954,5 +9112,6 @@ pub fn run_browser() -> Result<()> {
         "Sassy Browser",
         native_options,
         Box::new(|cc| Ok(Box::new(BrowserApp::new(cc)))),
-    ).map_err(|e| anyhow::anyhow!("Failed to run browser: {}", e))
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to run browser: {}", e))
 }

@@ -2,12 +2,12 @@
 //!
 //! Covers: Lexer, Parser, Interpreter, DomBridge, and CssEngine.
 
-use super::lexer::{Lexer, TokenKind};
-use super::parser::{Parser, Stmt, Expr};
-use super::interpreter::JsInterpreter;
-use super::dom::DomBridge;
-use super::value::Value;
 use super::css::{CssEngine, Specificity};
+use super::dom::DomBridge;
+use super::interpreter::JsInterpreter;
+use super::lexer::{Lexer, TokenKind};
+use super::parser::{Expr, Parser, Stmt};
+use super::value::Value;
 
 // ======================================================================
 // Lexer tests
@@ -19,7 +19,11 @@ fn lexer_basic_tokenization() {
     let tokens = lexer.tokenize();
 
     // Expected: Let, Identifier("x"), Eq, Number(42.0), Semicolon, Eof
-    assert!(tokens.len() >= 6, "Expected at least 6 tokens, got {}", tokens.len());
+    assert!(
+        tokens.len() >= 6,
+        "Expected at least 6 tokens, got {}",
+        tokens.len()
+    );
     assert!(matches!(tokens[0].kind, TokenKind::Let));
     assert!(matches!(&tokens[1].kind, TokenKind::Identifier(name) if name == "x"));
     assert!(matches!(tokens[2].kind, TokenKind::Eq));
@@ -138,7 +142,9 @@ fn parser_multiple_statements() {
 #[test]
 fn interpreter_basic_execution() {
     let mut interp = JsInterpreter::new();
-    let result = interp.execute("let x = 42; x + 8;").expect("execute failed");
+    let result = interp
+        .execute("let x = 42; x + 8;")
+        .expect("execute failed");
     // The interpreter returns the last expression-statement result only if it
     // produces a ControlFlow::Return.  For simple expression statements the
     // result is Undefined (no explicit return).  This test verifies execution
@@ -150,38 +156,40 @@ fn interpreter_basic_execution() {
 #[test]
 fn interpreter_string_concatenation() {
     let mut interp = JsInterpreter::new();
-    let _result = interp.execute("let greeting = 'hello' + ' ' + 'world';")
+    let _result = interp
+        .execute("let greeting = 'hello' + ' ' + 'world';")
         .expect("execute failed");
 }
 
 #[test]
 fn interpreter_function_call() {
     let mut interp = JsInterpreter::new();
-    let _result = interp.execute(
-        "function double(n) { return n * 2; } double(21);"
-    ).expect("execute failed");
+    let _result = interp
+        .execute("function double(n) { return n * 2; } double(21);")
+        .expect("execute failed");
 }
 
 #[test]
 fn interpreter_if_else() {
     let mut interp = JsInterpreter::new();
-    let _result = interp.execute(
-        "let x = 10; if (x > 5) { x = 1; } else { x = 0; }"
-    ).expect("execute failed");
+    let _result = interp
+        .execute("let x = 10; if (x > 5) { x = 1; } else { x = 0; }")
+        .expect("execute failed");
 }
 
 #[test]
 fn interpreter_while_loop() {
     let mut interp = JsInterpreter::new();
-    let _result = interp.execute(
-        "let i = 0; while (i < 5) { i = i + 1; }"
-    ).expect("execute failed");
+    let _result = interp
+        .execute("let i = 0; while (i < 5) { i = i + 1; }")
+        .expect("execute failed");
 }
 
 #[test]
 fn interpreter_console_log() {
     let mut interp = JsInterpreter::new();
-    let _result = interp.execute("console.log('test message');")
+    let _result = interp
+        .execute("console.log('test message');")
         .expect("execute failed");
     let output = interp.get_console_output();
     assert!(!output.is_empty(), "Expected console output");
@@ -190,17 +198,17 @@ fn interpreter_console_log() {
 #[test]
 fn interpreter_array_operations() {
     let mut interp = JsInterpreter::new();
-    let _result = interp.execute(
-        "let arr = [1, 2, 3]; arr.push(4);"
-    ).expect("execute failed");
+    let _result = interp
+        .execute("let arr = [1, 2, 3]; arr.push(4);")
+        .expect("execute failed");
 }
 
 #[test]
 fn interpreter_try_catch() {
     let mut interp = JsInterpreter::new();
-    let _result = interp.execute(
-        "let result; try { throw 'error'; } catch (e) { result = e; }"
-    ).expect("execute failed");
+    let _result = interp
+        .execute("let result; try { throw 'error'; } catch (e) { result = e; }")
+        .expect("execute failed");
 }
 
 // ======================================================================
@@ -339,11 +347,13 @@ fn css_compute_style_no_match() {
 #[test]
 fn css_add_stylesheet_and_compute() {
     let mut engine = CssEngine::new();
-    engine.add_stylesheet(r#"
+    engine.add_stylesheet(
+        r#"
         body { background: white; font-size: 16px; }
         .error { color: red; }
         #main { padding: 20px; }
-    "#);
+    "#,
+    );
 
     let body = engine.compute_style("body");
     assert_eq!(body.get("background"), Some(&"white".to_string()));

@@ -113,7 +113,7 @@ impl StealthVictories {
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
-                        .as_secs()
+                        .as_secs(),
                 );
                 drop(stats); // Unlock before I/O
                 let _ = self.save();
@@ -216,7 +216,9 @@ impl StealthVictories {
 
     /// Get per-domain count
     pub fn poisoned_for_domain(&self, domain: &str) -> u32 {
-        self.stats.lock().unwrap()
+        self.stats
+            .lock()
+            .unwrap()
             .poisoned_sites
             .get(domain)
             .copied()
@@ -231,7 +233,9 @@ impl StealthVictories {
     /// Get top N poisoned domains (for UI display)
     pub fn top_poisoned_domains(&self, n: usize) -> Vec<(String, u32)> {
         let stats = self.stats.lock().unwrap();
-        let mut domains: Vec<_> = stats.poisoned_sites.iter()
+        let mut domains: Vec<_> = stats
+            .poisoned_sites
+            .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect();
         domains.sort_by(|a, b| b.1.cmp(&a.1));
@@ -278,14 +282,18 @@ mod tests {
         // Same length
         assert_eq!(faked.len(), original.len());
         // Last 4 chars should be different
-        assert_ne!(&faked[faked.len()-4..], &original[original.len()-4..]);
+        assert_ne!(&faked[faked.len() - 4..], &original[original.len() - 4..]);
     }
 
     #[test]
     fn test_top_poisoned_domains() {
         let sv = StealthVictories::new();
-        for _ in 0..5 { sv.silent_kill("https://facebook.com/pixel"); }
-        for _ in 0..3 { sv.silent_kill("https://google.com/analytics"); }
+        for _ in 0..5 {
+            sv.silent_kill("https://facebook.com/pixel");
+        }
+        for _ in 0..3 {
+            sv.silent_kill("https://google.com/analytics");
+        }
         sv.silent_kill("https://twitter.com/track");
 
         let top = sv.top_poisoned_domains(2);

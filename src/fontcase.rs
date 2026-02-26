@@ -6,7 +6,8 @@
 /// and converting to ASCII lowercase. Useful for canonicalizing keys and
 /// authorization checks where differing case or separators should be ignored.
 pub fn normalize_key<S: AsRef<str>>(s: S) -> String {
-    s.as_ref().chars()
+    s.as_ref()
+        .chars()
         .filter(|c| c.is_ascii_alphanumeric())
         .map(|c| c.to_ascii_lowercase())
         .collect()
@@ -36,5 +37,3 @@ mod tests {
         assert!(eq_normalized("SomeValue", "some_value"));
     }
 }
-
-

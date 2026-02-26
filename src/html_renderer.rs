@@ -9,8 +9,8 @@
 //! This is the fallback renderer when system webview isn't available,
 //! or for rendering HTML in file viewers.
 
-use crate::js::{JsInterpreter, DomBridge};
-use crate::layout_engine::{LayoutTree, ComputedStyle};
+use crate::js::{DomBridge, JsInterpreter};
+use crate::layout_engine::{ComputedStyle, LayoutTree};
 use crate::style::{StyleEngine, Stylesheet};
 use eframe::egui::{self, Color32, RichText, Ui, Vec2};
 use std::collections::HashMap;
@@ -100,7 +100,11 @@ impl HtmlRenderer {
 
     /// Build a taffy layout tree from the cached HTML document
     /// This enables CSS flexbox/grid layout calculation
-    pub fn build_layout_tree(&self, available_width: f32, available_height: f32) -> Option<LayoutTree> {
+    pub fn build_layout_tree(
+        &self,
+        available_width: f32,
+        available_height: f32,
+    ) -> Option<LayoutTree> {
         let doc = self.cached_doc.as_ref()?;
         let mut tree = LayoutTree::new();
 
@@ -146,7 +150,12 @@ impl HtmlRenderer {
     }
 
     /// Recursively build layout nodes from HTML nodes
-    fn build_layout_nodes(&self, tree: &mut LayoutTree, nodes: &[HtmlNode], styles: &[CssRule]) -> Vec<usize> {
+    fn build_layout_nodes(
+        &self,
+        tree: &mut LayoutTree,
+        nodes: &[HtmlNode],
+        styles: &[CssRule],
+    ) -> Vec<usize> {
         let mut indices = Vec::new();
 
         for node in nodes {
@@ -158,7 +167,14 @@ impl HtmlRenderer {
                         indices.push(idx);
                     }
                 }
-                HtmlNode::Element { tag, id, class, style: inline_style, children, .. } => {
+                HtmlNode::Element {
+                    tag,
+                    id,
+                    class,
+                    style: inline_style,
+                    children,
+                    ..
+                } => {
                     let mut computed = ComputedStyle::default();
 
                     // Apply inline styles
@@ -177,7 +193,8 @@ impl HtmlRenderer {
 
                     // Set display based on tag for common block/inline elements
                     match tag.to_lowercase().as_str() {
-                        "div" | "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "section" | "article" | "header" | "footer" | "main" | "nav" => {
+                        "div" | "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "section"
+                        | "article" | "header" | "footer" | "main" | "nav" => {
                             if computed.display == taffy::prelude::Display::Block {
                                 computed.display = taffy::prelude::Display::Block;
                             }
@@ -206,7 +223,13 @@ impl HtmlRenderer {
     }
 
     /// Check if a CSS selector matches an element
-    fn selector_matches(&self, selector: &str, tag: &str, id: Option<&str>, classes: &[String]) -> bool {
+    fn selector_matches(
+        &self,
+        selector: &str,
+        tag: &str,
+        id: Option<&str>,
+        classes: &[String],
+    ) -> bool {
         let selector = selector.trim();
 
         // Tag selector
@@ -273,7 +296,14 @@ impl HtmlRenderer {
                 }
             }
             HtmlNode::Script(_) => {}
-            HtmlNode::Element { tag, id, class, style, attrs, children } => {
+            HtmlNode::Element {
+                tag,
+                id,
+                class,
+                style,
+                attrs,
+                children,
+            } => {
                 let _computed = self.compute_styles(tag, id.as_deref(), class, style, styles);
                 match tag.as_str() {
                     "a" => {
@@ -281,19 +311,20 @@ impl HtmlRenderer {
                         let text = self.text_content(children);
                         let display = if text.is_empty() { &href } else { &text };
                         let flagged_reason = link_check.and_then(|f| f(&href));
-                        let link = ui.link(
-                            if let Some(_reason) = flagged_reason {
-                                RichText::new(display).color(accent_warn).underline().strong()
+                        let link = ui
+                            .link(if let Some(_reason) = flagged_reason {
+                                RichText::new(display)
+                                    .color(accent_warn)
+                                    .underline()
+                                    .strong()
                             } else {
                                 RichText::new(display)
-                            }
-                        ).on_hover_text(
-                            if let Some(reason) = flagged_reason {
+                            })
+                            .on_hover_text(if let Some(reason) = flagged_reason {
                                 format!("{}\n[Flagged: {}]", href, reason)
                             } else {
                                 href.clone()
-                            }
-                        );
+                            });
                         if link.clicked() {
                             self.hover_link = Some(href.clone());
                         }
@@ -304,12 +335,12 @@ impl HtmlRenderer {
             }
         }
     }
-    
+
     /// Parse CSS into rules
     fn parse_css(&self, css: &str) -> Vec<CssRule> {
         let mut rules = Vec::new();
         let css = css.trim();
-        
+
         // Simple CSS parser
         let mut pos = 0;
         while pos < css.len() {
@@ -317,11 +348,11 @@ impl HtmlRenderer {
             if let Some(brace_start) = css[pos..].find('{') {
                 let selector = css[pos..pos + brace_start].trim().to_string();
                 let props_start = pos + brace_start + 1;
-                
+
                 if let Some(brace_end) = css[props_start..].find('}') {
                     let props_str = &css[props_start..props_start + brace_end];
                     let mut properties = HashMap::new();
-                    
+
                     for prop in props_str.split(';') {
                         let prop = prop.trim();
                         if let Some(colon) = prop.find(':') {
@@ -330,11 +361,14 @@ impl HtmlRenderer {
                             properties.insert(key, value);
                         }
                     }
-                    
+
                     if !selector.is_empty() {
-                        rules.push(CssRule { selector, properties });
+                        rules.push(CssRule {
+                            selector,
+                            properties,
+                        });
                     }
-                    
+
                     pos = props_start + brace_end + 1;
                 } else {
                     break;
@@ -343,10 +377,10 @@ impl HtmlRenderer {
                 break;
             }
         }
-        
+
         rules
     }
-    
+
     /// Parse full HTML and populate cached_doc
     /// Render an HTML string directly (parse and cache it for next render frame).
     pub fn render_string(&mut self, html: &str) {
@@ -412,7 +446,11 @@ impl HtmlRenderer {
             }
         }
 
-        let doc = HtmlDocument { title, nodes, styles };
+        let doc = HtmlDocument {
+            title,
+            nodes,
+            styles,
+        };
         self.cached_doc = Some(doc);
     }
 
@@ -470,10 +508,27 @@ impl HtmlRenderer {
                         continue;
                     }
 
-                    let is_self_closing = tag_content.ends_with('/') ||
-                        tag_content.split_whitespace().next()
-                            .map(|t| matches!(crate::fontcase::ascii_lower(t).as_str(), 
-                                "br" | "hr" | "img" | "input" | "meta" | "link" | "area" | "base" | "col" | "embed" | "source" | "track" | "wbr"))
+                    let is_self_closing = tag_content.ends_with('/')
+                        || tag_content
+                            .split_whitespace()
+                            .next()
+                            .map(|t| {
+                                matches!(
+                                    crate::fontcase::ascii_lower(t).as_str(),
+                                    "br" | "hr"
+                                        | "img"
+                                        | "input"
+                                        | "meta"
+                                        | "link"
+                                        | "area"
+                                        | "base"
+                                        | "col"
+                                        | "embed"
+                                        | "source"
+                                        | "track"
+                                        | "wbr"
+                                )
+                            })
                             .unwrap_or(false);
 
                     let (tag_name, attrs) = self.parse_tag(tag_content);
@@ -484,11 +539,15 @@ impl HtmlRenderer {
                     } else {
                         // Find closing tag
                         let close_tag = format!("</{}", tag_name);
-                        if let Some(close_rel) = crate::fontcase::ascii_lower(&html[tag_end + 1..]).find(&crate::fontcase::ascii_lower(&close_tag)) {
+                        if let Some(close_rel) = crate::fontcase::ascii_lower(&html[tag_end + 1..])
+                            .find(&crate::fontcase::ascii_lower(&close_tag))
+                        {
                             let close_start = tag_end + 1 + close_rel;
                             let inner_html = &html[tag_end + 1..close_start];
 
-                            let children = if tag_name.eq_ignore_ascii_case("script") || tag_name.eq_ignore_ascii_case("style") {
+                            let children = if tag_name.eq_ignore_ascii_case("script")
+                                || tag_name.eq_ignore_ascii_case("style")
+                            {
                                 vec![HtmlNode::Text(inner_html.to_string())]
                             } else {
                                 self.parse_nodes(inner_html)
@@ -522,8 +581,7 @@ impl HtmlRenderer {
 
         nodes
     }
-    
-    
+
     /// Parse tag name and attributes
     fn parse_tag(&self, content: &str) -> (String, HashMap<String, String>) {
         let s = content.trim_end_matches('/').trim();
@@ -533,7 +591,12 @@ impl HtmlRenderer {
 
         // Helper to skip ASCII whitespace
         let skip_ws = |i: &mut usize| {
-            while *i < len && (bytes[*i] == b' ' || bytes[*i] == b'\n' || bytes[*i] == b'\t' || bytes[*i] == b'\r') {
+            while *i < len
+                && (bytes[*i] == b' '
+                    || bytes[*i] == b'\n'
+                    || bytes[*i] == b'\t'
+                    || bytes[*i] == b'\r')
+            {
                 *i += 1;
             }
         };
@@ -544,18 +607,31 @@ impl HtmlRenderer {
         while i < len && !bytes[i].is_ascii_whitespace() && bytes[i] != b'/' && bytes[i] != b'>' {
             i += 1;
         }
-        let tag_name = if name_start < i { crate::fontcase::ascii_lower(&s[name_start..i]) } else { "div".into() };
+        let tag_name = if name_start < i {
+            crate::fontcase::ascii_lower(&s[name_start..i])
+        } else {
+            "div".into()
+        };
 
         let mut attrs = HashMap::new();
 
         loop {
             skip_ws(&mut i);
-            if i >= len { break; }
-            if bytes[i] == b'/' || bytes[i] == b'>' { break; }
+            if i >= len {
+                break;
+            }
+            if bytes[i] == b'/' || bytes[i] == b'>' {
+                break;
+            }
 
             // attr name
             let an_start = i;
-            while i < len && bytes[i] != b'=' && !bytes[i].is_ascii_whitespace() && bytes[i] != b'/' && bytes[i] != b'>' {
+            while i < len
+                && bytes[i] != b'='
+                && !bytes[i].is_ascii_whitespace()
+                && bytes[i] != b'/'
+                && bytes[i] != b'>'
+            {
                 i += 1;
             }
             let an_end = i;
@@ -575,15 +651,23 @@ impl HtmlRenderer {
                         i += 1;
                     }
                     let val_end = i;
-                    if i < len { i += 1; }
+                    if i < len {
+                        i += 1;
+                    }
                     let raw = &s[val_start..val_end];
                     let decoded = decode_html_entities(raw).trim().to_string();
-                    if attr_name.is_empty() { attr_name = "".into(); }
+                    if attr_name.is_empty() {
+                        attr_name = "".into();
+                    }
                     attrs.insert(attr_name, decoded);
                 } else {
                     // unquoted value
                     let val_start = i;
-                    while i < len && !bytes[i].is_ascii_whitespace() && bytes[i] != b'/' && bytes[i] != b'>' {
+                    while i < len
+                        && !bytes[i].is_ascii_whitespace()
+                        && bytes[i] != b'/'
+                        && bytes[i] != b'>'
+                    {
                         i += 1;
                     }
                     let val_end = i;
@@ -601,17 +685,24 @@ impl HtmlRenderer {
 
         (tag_name, attrs)
     }
-    
+
     /// Create an element node
-    fn create_element(&self, tag: &str, attrs: HashMap<String, String>, children: Vec<HtmlNode>) -> HtmlNode {
+    fn create_element(
+        &self,
+        tag: &str,
+        attrs: HashMap<String, String>,
+        children: Vec<HtmlNode>,
+    ) -> HtmlNode {
         let id = attrs.get("id").cloned();
-        let class = attrs.get("class")
+        let class = attrs
+            .get("class")
             .map(|c| c.split_whitespace().map(String::from).collect())
             .unwrap_or_default();
-        let style = attrs.get("style")
+        let style = attrs
+            .get("style")
             .map(|s| self.parse_inline_style(s))
             .unwrap_or_default();
-        
+
         HtmlNode::Element {
             tag: crate::fontcase::ascii_lower(tag),
             id,
@@ -621,7 +712,7 @@ impl HtmlRenderer {
             children,
         }
     }
-    
+
     /// Parse inline style attribute
     fn parse_inline_style(&self, style: &str) -> HashMap<String, String> {
         let mut props = HashMap::new();
@@ -635,7 +726,7 @@ impl HtmlRenderer {
         }
         props
     }
-    
+
     /// Render HTML document to egui
     pub fn render(&mut self, ui: &mut Ui, url: &str) {
         // Register for image-update notifications on first render so
@@ -660,16 +751,20 @@ impl HtmlRenderer {
         if self.cached_doc.is_none() {
             self.load_url(url);
         }
-        
+
         // Drain any image updates and reload textures for those specific URLs
         let updates = crate::imaging::drain_image_update_queue();
         for u in updates {
-            if let Some(crate::imaging::ImageState::Loaded(img)) = crate::imaging::cache_get_global(&u) {
+            if let Some(crate::imaging::ImageState::Loaded(img)) =
+                crate::imaging::cache_get_global(&u)
+            {
                 let size = [img.width as usize, img.height as usize];
                 let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &img.pixels);
                 let key = format!("sassy_image:{}", u);
                 // Replace or insert texture so subsequent draw uses fresh data
-                let _ = ui.ctx().load_texture(&key, color_image, egui::TextureOptions::LINEAR);
+                let _ = ui
+                    .ctx()
+                    .load_texture(&key, color_image, egui::TextureOptions::LINEAR);
             }
         }
 
@@ -689,7 +784,7 @@ impl HtmlRenderer {
             });
         }
     }
-    
+
     /// Load URL content
     fn load_url(&mut self, url: &str) {
         // For local files
@@ -700,7 +795,7 @@ impl HtmlRenderer {
                 return;
             }
         }
-        
+
         // For sassy:// internal pages
         if url.starts_with("sassy://") {
             let page = url.trim_start_matches("sassy://");
@@ -708,7 +803,7 @@ impl HtmlRenderer {
             self.parse_html(&html);
             return;
         }
-        
+
         // Fetch remote page using pure Rust HTTP client (ureq)
         match crate::http_client::fetch_text(url) {
             Ok(body) => {
@@ -718,7 +813,8 @@ impl HtmlRenderer {
             Err(e) => {
                 tracing::warn!("Failed to fetch {}: {}", url, e);
                 // Show error page with details
-                let html = format!(r#"
+                let html = format!(
+                    r#"
                     <!DOCTYPE html>
                     <html>
                     <head><title>Page Load Error</title></head>
@@ -731,12 +827,14 @@ impl HtmlRenderer {
                         <p style="color: #666;">Common causes: network issues, invalid URL, site blocking non-browser requests</p>
                     </body>
                     </html>
-                "#, url, e);
+                "#,
+                    url, e
+                );
                 self.parse_html(&html);
             }
         }
     }
-    
+
     /// Generate internal pages
     fn generate_internal_page(&self, page: &str) -> String {
         match page {
@@ -749,8 +847,9 @@ impl HtmlRenderer {
                     <p>Fast - Free - Handles Everything</p>
                 </body>
                 </html>
-            "#.into(),
-            
+            "#
+            .into(),
+
             "settings" => r#"
                 <!DOCTYPE html>
                 <html>
@@ -760,9 +859,11 @@ impl HtmlRenderer {
                     <p>Settings page content here</p>
                 </body>
                 </html>
-            "#.into(),
-            
-            _ => format!(r#"
+            "#
+            .into(),
+
+            _ => format!(
+                r#"
                 <!DOCTYPE html>
                 <html>
                 <head><title>Sassy Browser</title></head>
@@ -770,17 +871,19 @@ impl HtmlRenderer {
                     <h1>Page: {}</h1>
                 </body>
                 </html>
-            "#, page),
+            "#,
+                page
+            ),
         }
     }
-    
+
     /// Render nodes recursively
     fn render_nodes(&mut self, ui: &mut Ui, nodes: &[HtmlNode], styles: &[CssRule]) {
         for node in nodes {
             self.render_node(ui, node, styles);
         }
     }
-    
+
     /// Render a single node
     fn render_node(&mut self, ui: &mut Ui, node: &HtmlNode, styles: &[CssRule]) {
         match node {
@@ -789,34 +892,69 @@ impl HtmlRenderer {
                     ui.label(text);
                 }
             }
-            
+
             HtmlNode::Script(_) => {
                 // Scripts already executed during parse
             }
-            
-            HtmlNode::Element { tag, id, class, style, attrs, children } => {
+
+            HtmlNode::Element {
+                tag,
+                id,
+                class,
+                style,
+                attrs,
+                children,
+            } => {
                 // Get computed styles
                 let computed = self.compute_styles(tag, id.as_deref(), class, style, styles);
-                
+
                 match tag.as_str() {
                     // Block elements
                     "h1" => {
-                        let size = computed.get("font-size").and_then(|s| parse_size(s)).unwrap_or(32.0);
-                        ui.heading(RichText::new(self.text_content(children)).size(size).strong());
+                        let size = computed
+                            .get("font-size")
+                            .and_then(|s| parse_size(s))
+                            .unwrap_or(32.0);
+                        ui.heading(
+                            RichText::new(self.text_content(children))
+                                .size(size)
+                                .strong(),
+                        );
                     }
                     "h2" => {
-                        let size = computed.get("font-size").and_then(|s| parse_size(s)).unwrap_or(28.0);
-                        ui.heading(RichText::new(self.text_content(children)).size(size).strong());
+                        let size = computed
+                            .get("font-size")
+                            .and_then(|s| parse_size(s))
+                            .unwrap_or(28.0);
+                        ui.heading(
+                            RichText::new(self.text_content(children))
+                                .size(size)
+                                .strong(),
+                        );
                     }
                     "h3" => {
-                        let size = computed.get("font-size").and_then(|s| parse_size(s)).unwrap_or(24.0);
-                        ui.heading(RichText::new(self.text_content(children)).size(size).strong());
+                        let size = computed
+                            .get("font-size")
+                            .and_then(|s| parse_size(s))
+                            .unwrap_or(24.0);
+                        ui.heading(
+                            RichText::new(self.text_content(children))
+                                .size(size)
+                                .strong(),
+                        );
                     }
                     "h4" | "h5" | "h6" => {
-                        let size = computed.get("font-size").and_then(|s| parse_size(s)).unwrap_or(20.0);
-                        ui.heading(RichText::new(self.text_content(children)).size(size).strong());
+                        let size = computed
+                            .get("font-size")
+                            .and_then(|s| parse_size(s))
+                            .unwrap_or(20.0);
+                        ui.heading(
+                            RichText::new(self.text_content(children))
+                                .size(size)
+                                .strong(),
+                        );
                     }
-                    
+
                     "p" => {
                         let text = self.text_content(children);
                         if !text.is_empty() {
@@ -826,17 +964,18 @@ impl HtmlRenderer {
                         }
                         ui.add_space(8.0);
                     }
-                    
-                    "div" | "section" | "article" | "main" | "header" | "footer" | "nav" | "aside" => {
+
+                    "div" | "section" | "article" | "main" | "header" | "footer" | "nav"
+                    | "aside" => {
                         self.render_nodes(ui, children, styles);
                     }
-                    
+
                     "span" => {
                         ui.horizontal(|ui| {
                             self.render_nodes(ui, children, styles);
                         });
                     }
-                    
+
                     "a" => {
                         let href = attrs.get("href").cloned().unwrap_or_default();
                         let text = self.text_content(children);
@@ -845,27 +984,31 @@ impl HtmlRenderer {
                             self.hover_link = Some(href);
                         }
                     }
-                    
+
                     "br" => {
                         ui.add_space(self.font_size_base);
                     }
-                    
+
                     "hr" => {
                         ui.separator();
                     }
-                    
+
                     "strong" | "b" => {
                         ui.label(RichText::new(self.text_content(children)).strong());
                     }
-                    
+
                     "em" | "i" => {
                         ui.label(RichText::new(self.text_content(children)).italics());
                     }
-                    
+
                     "code" => {
-                        ui.label(RichText::new(self.text_content(children)).monospace().background_color(Color32::from_gray(40)));
+                        ui.label(
+                            RichText::new(self.text_content(children))
+                                .monospace()
+                                .background_color(Color32::from_gray(40)),
+                        );
                     }
-                    
+
                     "pre" => {
                         egui::Frame::none()
                             .fill(Color32::from_gray(30))
@@ -875,10 +1018,15 @@ impl HtmlRenderer {
                                 ui.label(RichText::new(self.text_content(children)).monospace());
                             });
                     }
-                    
+
                     "ul" => {
                         for child in children {
-                            if let HtmlNode::Element { tag, children: li_children, .. } = child {
+                            if let HtmlNode::Element {
+                                tag,
+                                children: li_children,
+                                ..
+                            } = child
+                            {
                                 if tag == "li" {
                                     ui.horizontal(|ui| {
                                         ui.label("-");
@@ -888,10 +1036,15 @@ impl HtmlRenderer {
                             }
                         }
                     }
-                    
+
                     "ol" => {
                         for (i, child) in children.iter().enumerate() {
-                            if let HtmlNode::Element { tag, children: li_children, .. } = child {
+                            if let HtmlNode::Element {
+                                tag,
+                                children: li_children,
+                                ..
+                            } = child
+                            {
                                 if tag == "li" {
                                     ui.horizontal(|ui| {
                                         ui.label(format!("{}.", i + 1));
@@ -901,7 +1054,7 @@ impl HtmlRenderer {
                             }
                         }
                     }
-                    
+
                     "img" => {
                         let src = attrs.get("src").cloned().unwrap_or_default();
                         let alt = attrs.get("alt").cloned().unwrap_or_else(|| "Image".into());
@@ -921,28 +1074,45 @@ impl HtmlRenderer {
                         if let Some(img) = maybe_img {
                             // Convert to egui ColorImage and display
                             let size = [img.width as usize, img.height as usize];
-                            let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &img.pixels);
+                            let color_image =
+                                egui::ColorImage::from_rgba_unmultiplied(size, &img.pixels);
                             let key = format!("sassy_image:{}", src);
-                            let texture = ui.ctx().load_texture(&key, color_image, egui::TextureOptions::LINEAR);
-                            ui.image((texture.id(), Vec2::new(img.width as f32, img.height as f32)));
+                            let texture = ui.ctx().load_texture(
+                                &key,
+                                color_image,
+                                egui::TextureOptions::LINEAR,
+                            );
+                            ui.image((
+                                texture.id(),
+                                Vec2::new(img.width as f32, img.height as f32),
+                            ));
                         } else {
                             // Show placeholder text or small placeholder image
                             let ph = crate::imaging::placeholder_image(64, 48);
                             let size = [ph.width as usize, ph.height as usize];
-                            let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &ph.pixels);
+                            let color_image =
+                                egui::ColorImage::from_rgba_unmultiplied(size, &ph.pixels);
                             let key = format!("sassy_image_placeholder:{}", src);
-                            let texture = ui.ctx().load_texture(&key, color_image, egui::TextureOptions::LINEAR);
+                            let texture = ui.ctx().load_texture(
+                                &key,
+                                color_image,
+                                egui::TextureOptions::LINEAR,
+                            );
                             ui.image((texture.id(), Vec2::new(ph.width as f32, ph.height as f32)));
-                            ui.label(RichText::new(alt.to_string()).italics().color(Color32::GRAY));
+                            ui.label(
+                                RichText::new(alt.to_string())
+                                    .italics()
+                                    .color(Color32::GRAY),
+                            );
                         }
                     }
-                    
+
                     "table" => {
                         egui::Grid::new("html_table").striped(true).show(ui, |ui| {
                             self.render_table_contents(ui, children, styles);
                         });
                     }
-                    
+
                     "button" => {
                         let text = self.text_content(children);
                         if ui.button(&text).clicked() {
@@ -952,53 +1122,63 @@ impl HtmlRenderer {
                             }
                         }
                     }
-                    
+
                     "input" => {
                         let input_type = attrs.get("type").map(|s| s.as_str()).unwrap_or("text");
                         let placeholder = attrs.get("placeholder").cloned().unwrap_or_default();
-                        
+
                         match input_type {
                             "text" | "email" | "password" | "search" => {
                                 let mut value = attrs.get("value").cloned().unwrap_or_default();
-                                ui.add(egui::TextEdit::singleline(&mut value).hint_text(placeholder));
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut value).hint_text(placeholder),
+                                );
                             }
                             "checkbox" => {
                                 let mut checked = attrs.get("checked").is_some();
                                 ui.checkbox(&mut checked, "");
                             }
                             "submit" | "button" => {
-                                let value = attrs.get("value").cloned().unwrap_or_else(|| "Submit".into());
+                                let value = attrs
+                                    .get("value")
+                                    .cloned()
+                                    .unwrap_or_else(|| "Submit".into());
                                 let _ = ui.button(&value);
                             }
                             _ => {}
                         }
                     }
-                    
+
                     "textarea" => {
                         let mut value = self.text_content(children);
                         ui.text_edit_multiline(&mut value);
                     }
-                    
+
                     "form" => {
-                        egui::Frame::none()
-                            .inner_margin(8.0)
-                            .show(ui, |ui| {
-                                self.render_nodes(ui, children, styles);
-                            });
+                        egui::Frame::none().inner_margin(8.0).show(ui, |ui| {
+                            self.render_nodes(ui, children, styles);
+                        });
                     }
-                    
+
                     "canvas" => {
-                        let width = attrs.get("width").and_then(|s| s.parse().ok()).unwrap_or(300.0);
-                        let height = attrs.get("height").and_then(|s| s.parse().ok()).unwrap_or(150.0);
-                        
-                        let (rect, _response) = ui.allocate_exact_size(Vec2::new(width, height), egui::Sense::hover());
+                        let width = attrs
+                            .get("width")
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(300.0);
+                        let height = attrs
+                            .get("height")
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(150.0);
+
+                        let (rect, _response) =
+                            ui.allocate_exact_size(Vec2::new(width, height), egui::Sense::hover());
                         ui.painter().rect_filled(rect, 0.0, Color32::from_gray(50));
                     }
-                    
+
                     "script" | "style" | "head" | "meta" | "link" | "title" => {
                         // Ignore these in rendering
                     }
-                    
+
                     _ => {
                         // Generic element - just render children
                         self.render_nodes(ui, children, styles);
@@ -1007,7 +1187,7 @@ impl HtmlRenderer {
             }
         }
     }
-    
+
     /// Render table contents
     #[allow(clippy::only_used_in_recursion)]
     fn render_table_contents(&mut self, ui: &mut Ui, nodes: &[HtmlNode], styles: &[CssRule]) {
@@ -1019,7 +1199,12 @@ impl HtmlRenderer {
                     }
                     "tr" => {
                         for cell in children {
-                            if let HtmlNode::Element { tag, children: cell_children, .. } = cell {
+                            if let HtmlNode::Element {
+                                tag,
+                                children: cell_children,
+                                ..
+                            } = cell
+                            {
                                 if tag == "th" || tag == "td" {
                                     let text = self.text_content(cell_children);
                                     if tag == "th" {
@@ -1037,7 +1222,7 @@ impl HtmlRenderer {
             }
         }
     }
-    
+
     /// Get text content from nodes
     #[allow(clippy::only_used_in_recursion)]
     fn text_content(&self, nodes: &[HtmlNode]) -> String {
@@ -1053,7 +1238,7 @@ impl HtmlRenderer {
         }
         text
     }
-    
+
     /// Compute styles for an element
     fn compute_styles(
         &self,
@@ -1064,7 +1249,7 @@ impl HtmlRenderer {
         rules: &[CssRule],
     ) -> HashMap<String, String> {
         let mut result = HashMap::new();
-        
+
         // Apply rules in order of specificity
         for rule in rules {
             let matches = if rule.selector.starts_with('#') {
@@ -1074,28 +1259,28 @@ impl HtmlRenderer {
             } else {
                 rule.selector == tag || rule.selector == "*"
             };
-            
+
             if matches {
                 result.extend(rule.properties.clone());
             }
         }
-        
+
         // Inline styles override
         result.extend(inline.clone());
-        
+
         result
     }
-    
+
     /// Get JS console output
     pub fn console_output(&self) -> &[String] {
         self.js.get_console_output()
     }
-    
+
     /// Get clicked link
     pub fn take_clicked_link(&mut self) -> Option<String> {
         self.hover_link.take()
     }
-    
+
     /// Clear cached document
     pub fn clear_cache(&mut self) {
         self.cached_doc = None;
@@ -1106,7 +1291,9 @@ impl HtmlRenderer {
         if query.is_empty() {
             return 0;
         }
-        let Some(doc) = &self.cached_doc else { return 0 };
+        let Some(doc) = &self.cached_doc else {
+            return 0;
+        };
         let query_lower = query.to_lowercase();
         let mut count = 0;
         fn count_in_nodes(nodes: &[HtmlNode], query: &str, count: &mut usize) {
@@ -1165,7 +1352,7 @@ fn parse_size(s: &str) -> Option<f32> {
 /// Parse CSS color value
 fn parse_color(s: &str) -> Option<Color32> {
     let s = crate::fontcase::ascii_lower(s.trim());
-    
+
     // Named colors
     match s.as_str() {
         "black" => return Some(Color32::BLACK),
@@ -1178,7 +1365,7 @@ fn parse_color(s: &str) -> Option<Color32> {
         "transparent" => return Some(Color32::TRANSPARENT),
         _ => {}
     }
-    
+
     // Hex colors
     if let Some(hex) = s.strip_prefix('#') {
         if hex.len() == 3 {
@@ -1193,10 +1380,11 @@ fn parse_color(s: &str) -> Option<Color32> {
             return Some(Color32::from_rgb(r, g, b));
         }
     }
-    
+
     // RGB/RGBA
     if s.starts_with("rgb") {
-        let inner = s.trim_start_matches("rgba(")
+        let inner = s
+            .trim_start_matches("rgba(")
             .trim_start_matches("rgb(")
             .trim_end_matches(')');
         let parts: Vec<&str> = inner.split(',').collect();
@@ -1204,13 +1392,14 @@ fn parse_color(s: &str) -> Option<Color32> {
             let r = parts[0].trim().parse::<u8>().ok()?;
             let g = parts[1].trim().parse::<u8>().ok()?;
             let b = parts[2].trim().parse::<u8>().ok()?;
-            let a = parts.get(3)
+            let a = parts
+                .get(3)
                 .and_then(|s| s.trim().parse::<f32>().ok())
                 .map(|v| (v * 255.0) as u8)
                 .unwrap_or(255);
             return Some(Color32::from_rgba_unmultiplied(r, g, b, a));
         }
     }
-    
+
     None
 }

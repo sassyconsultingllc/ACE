@@ -96,9 +96,7 @@ use std::sync::Arc;
 use ureq::rustls::{
     self,
     crypto::{
-        ring::{
-            cipher_suite, kx_group,
-        },
+        ring::{cipher_suite, kx_group},
         CryptoProvider,
     },
     version, ClientConfig, RootCertStore, SignatureScheme, SupportedCipherSuite,
@@ -113,9 +111,7 @@ use ureq::rustls::{
 /// Each value follows the pattern `0x?a?a` where the high and low bytes share
 /// the same nibble structure.  Chrome picks one at random for each connection.
 pub const GREASE_VALUES: [u16; 16] = [
-    0x0a0a, 0x1a1a, 0x2a2a, 0x3a3a,
-    0x4a4a, 0x5a5a, 0x6a6a, 0x7a7a,
-    0x8a8a, 0x9a9a, 0xaaaa, 0xbaba,
+    0x0a0a, 0x1a1a, 0x2a2a, 0x3a3a, 0x4a4a, 0x5a5a, 0x6a6a, 0x7a7a, 0x8a8a, 0x9a9a, 0xaaaa, 0xbaba,
     0xcaca, 0xdada, 0xeaea, 0xfafa,
 ];
 
@@ -156,16 +152,16 @@ pub fn generate_grease_pair() -> (u16, u16) {
 pub fn chrome132_cipher_suites() -> Vec<SupportedCipherSuite> {
     vec![
         // TLS 1.3
-        cipher_suite::TLS13_AES_128_GCM_SHA256,        // 0x1301
-        cipher_suite::TLS13_AES_256_GCM_SHA384,        // 0x1302
-        cipher_suite::TLS13_CHACHA20_POLY1305_SHA256,   // 0x1303
+        cipher_suite::TLS13_AES_128_GCM_SHA256,       // 0x1301
+        cipher_suite::TLS13_AES_256_GCM_SHA384,       // 0x1302
+        cipher_suite::TLS13_CHACHA20_POLY1305_SHA256, // 0x1303
         // TLS 1.2 ECDHE suites (Chrome order)
-        cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,       // 0xc02b
-        cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,         // 0xc02f
-        cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,       // 0xc02c
-        cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,         // 0xc030
+        cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, // 0xc02b
+        cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,   // 0xc02f
+        cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, // 0xc02c
+        cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,   // 0xc030
         cipher_suite::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256, // 0xcca9
-        cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,   // 0xcca8
+        cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, // 0xcca8
     ]
 }
 
@@ -523,16 +519,43 @@ mod tests {
 
         // Verify TLS 1.3 suites come first, in Chrome's order
         let codes: Vec<u16> = suites.iter().map(|s| u16::from(s.suite())).collect();
-        assert_eq!(codes[0], 0x1301, "First suite should be TLS_AES_128_GCM_SHA256");
-        assert_eq!(codes[1], 0x1302, "Second suite should be TLS_AES_256_GCM_SHA384");
-        assert_eq!(codes[2], 0x1303, "Third suite should be TLS_CHACHA20_POLY1305_SHA256");
+        assert_eq!(
+            codes[0], 0x1301,
+            "First suite should be TLS_AES_128_GCM_SHA256"
+        );
+        assert_eq!(
+            codes[1], 0x1302,
+            "Second suite should be TLS_AES_256_GCM_SHA384"
+        );
+        assert_eq!(
+            codes[2], 0x1303,
+            "Third suite should be TLS_CHACHA20_POLY1305_SHA256"
+        );
         // TLS 1.2 ECDHE suites
-        assert_eq!(codes[3], 0xc02b, "4th: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256");
-        assert_eq!(codes[4], 0xc02f, "5th: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256");
-        assert_eq!(codes[5], 0xc02c, "6th: TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384");
-        assert_eq!(codes[6], 0xc030, "7th: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384");
-        assert_eq!(codes[7], 0xcca9, "8th: TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256");
-        assert_eq!(codes[8], 0xcca8, "9th: TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256");
+        assert_eq!(
+            codes[3], 0xc02b,
+            "4th: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+        );
+        assert_eq!(
+            codes[4], 0xc02f,
+            "5th: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        );
+        assert_eq!(
+            codes[5], 0xc02c,
+            "6th: TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+        );
+        assert_eq!(
+            codes[6], 0xc030,
+            "7th: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        );
+        assert_eq!(
+            codes[7], 0xcca9,
+            "8th: TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
+        );
+        assert_eq!(
+            codes[8], 0xcca8,
+            "9th: TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+        );
     }
 
     #[test]
@@ -554,11 +577,20 @@ mod tests {
         for _ in 0..100 {
             let val = generate_grease_value();
             // GREASE values have the pattern 0x?a?a
-            assert_eq!(val & 0x0f0f, 0x0a0a, "GREASE value {:#06x} is malformed", val);
+            assert_eq!(
+                val & 0x0f0f,
+                0x0a0a,
+                "GREASE value {:#06x} is malformed",
+                val
+            );
             // High and low bytes should have the same high nibble
             let hi = (val >> 8) as u8;
             let lo = val as u8;
-            assert_eq!(hi, lo, "GREASE bytes should match: {:#04x} vs {:#04x}", hi, lo);
+            assert_eq!(
+                hi, lo,
+                "GREASE bytes should match: {:#04x} vs {:#04x}",
+                hi, lo
+            );
         }
     }
 
@@ -579,8 +611,7 @@ mod tests {
 
     #[test]
     fn test_spoofed_connector_custom_ua() {
-        let connector = SpoofedTlsConnector::chrome132()
-            .with_user_agent("CustomBot/1.0");
+        let connector = SpoofedTlsConnector::chrome132().with_user_agent("CustomBot/1.0");
         assert_eq!(connector.user_agent, "CustomBot/1.0");
     }
 
@@ -613,9 +644,7 @@ mod tests {
 
     #[test]
     fn test_chrome_tls_config_no_sni() {
-        let config = ChromeTlsConfig::new()
-            .enable_sni(false)
-            .build();
+        let config = ChromeTlsConfig::new().enable_sni(false).build();
         assert!(!config.enable_sni);
     }
 
@@ -687,7 +716,12 @@ mod tests {
     #[test]
     fn test_all_grease_values_valid() {
         for &val in &GREASE_VALUES {
-            assert_eq!(val & 0x0f0f, 0x0a0a, "GREASE constant {:#06x} is malformed", val);
+            assert_eq!(
+                val & 0x0f0f,
+                0x0a0a,
+                "GREASE constant {:#06x} is malformed",
+                val
+            );
         }
         assert_eq!(GREASE_VALUES.len(), 16);
     }

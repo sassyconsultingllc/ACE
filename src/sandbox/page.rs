@@ -48,28 +48,28 @@ impl PageTrust {
     pub fn can_access_clipboard(&self) -> bool {
         *self >= PageTrust::Trusted
     }
-    
+
     pub fn can_initiate_download(&self) -> bool {
         *self >= PageTrust::Trusted
     }
-    
+
     pub fn can_request_notifications(&self) -> bool {
         *self >= PageTrust::Trusted
     }
-    
+
     pub fn can_open_popup(&self) -> bool {
         // Popups need trust OR smart popup detection
         *self >= PageTrust::Cautious
     }
-    
+
     pub fn can_request_geolocation(&self) -> bool {
         *self >= PageTrust::Trusted
     }
-    
+
     pub fn can_autoplay_audio(&self) -> bool {
         *self >= PageTrust::Warming
     }
-    
+
     pub fn can_go_fullscreen(&self) -> bool {
         *self >= PageTrust::Trusted
     }
@@ -105,14 +105,47 @@ impl Interaction {
     /// Describe this interaction for logging
     pub fn describe(&self) -> String {
         match self {
-            Interaction::Click { x, y, element_width, element_height, element_type, timestamp } => {
-                format!("Click({},{}) on {}({}x{}) at {:?} ago", x, y, element_type, element_width, element_height, timestamp.elapsed())
+            Interaction::Click {
+                x,
+                y,
+                element_width,
+                element_height,
+                element_type,
+                timestamp,
+            } => {
+                format!(
+                    "Click({},{}) on {}({}x{}) at {:?} ago",
+                    x,
+                    y,
+                    element_type,
+                    element_width,
+                    element_height,
+                    timestamp.elapsed()
+                )
             }
-            Interaction::KeyboardInput { in_form_field, char_count, timestamp } => {
-                format!("KeyboardInput(form={}, chars={}) at {:?} ago", in_form_field, char_count, timestamp.elapsed())
+            Interaction::KeyboardInput {
+                in_form_field,
+                char_count,
+                timestamp,
+            } => {
+                format!(
+                    "KeyboardInput(form={}, chars={}) at {:?} ago",
+                    in_form_field,
+                    char_count,
+                    timestamp.elapsed()
+                )
             }
-            Interaction::Scroll { delta_y, user_initiated, timestamp } => {
-                format!("Scroll(dy={}, user={}) at {:?} ago", delta_y, user_initiated, timestamp.elapsed())
+            Interaction::Scroll {
+                delta_y,
+                user_initiated,
+                timestamp,
+            } => {
+                format!(
+                    "Scroll(dy={}, user={}) at {:?} ago",
+                    delta_y,
+                    user_initiated,
+                    timestamp.elapsed()
+                )
             }
             Interaction::FormSubmit { timestamp } => {
                 format!("FormSubmit at {:?} ago", timestamp.elapsed())
@@ -135,23 +168,39 @@ impl Interaction {
         }
 
         match self {
-            Interaction::Click { element_width, element_height, element_type, .. } => {
+            Interaction::Click {
+                element_width,
+                element_height,
+                element_type,
+                ..
+            } => {
                 // Anti-clickjack: element must be visible size
                 if *element_width < 20 || *element_height < 20 {
                     return false;
                 }
                 // Don't count clicks on known ad containers
                 let suspicious = ["ad", "banner", "sponsor", "promo", "track"];
-                if suspicious.iter().any(|s| crate::fontcase::ascii_lower(element_type).contains(s)) {
+                if suspicious
+                    .iter()
+                    .any(|s| crate::fontcase::ascii_lower(element_type).contains(s))
+                {
                     return false;
                 }
                 true
             }
-            Interaction::KeyboardInput { in_form_field, char_count, .. } => {
+            Interaction::KeyboardInput {
+                in_form_field,
+                char_count,
+                ..
+            } => {
                 // Must be in a form field and have typed something
                 *in_form_field && *char_count >= 3
             }
-            Interaction::Scroll { delta_y, user_initiated, .. } => {
+            Interaction::Scroll {
+                delta_y,
+                user_initiated,
+                ..
+            } => {
                 // Must be user-initiated and a reasonable scroll
                 *user_initiated && delta_y.abs() > 50 && delta_y.abs() < 2000
             }
@@ -194,15 +243,15 @@ impl PageSandbox {
             blocked_actions: Vec::new(),
         }
     }
-    
+
     /// Record an interaction, potentially upgrading trust
     pub fn record_interaction(&mut self, interaction: Interaction) {
         let page_age = self.created_at.elapsed();
         let is_meaningful = interaction.is_meaningful(page_age, self.last_interaction);
-        
+
         self.last_interaction = Some(Instant::now());
         self.interactions.push(interaction);
-        
+
         if is_meaningful {
             self.meaningful_count += 1;
             self.trust = match self.meaningful_count {
@@ -213,7 +262,7 @@ impl PageSandbox {
             };
         }
     }
-    
+
     /// Check if an action is allowed, record if blocked
     pub fn check_permission(&mut self, action: &str) -> bool {
         let allowed = match action {
@@ -226,7 +275,7 @@ impl PageSandbox {
             "fullscreen" => self.trust.can_go_fullscreen(),
             _ => self.trust >= PageTrust::Trusted,
         };
-        
+
         if !allowed {
             self.blocked_actions.push(BlockedAction {
                 action: action.to_string(),
@@ -238,10 +287,10 @@ impl PageSandbox {
                 timestamp: Instant::now(),
             });
         }
-        
+
         allowed
     }
-    
+
     /// Get status text for UI
     pub fn status_text(&self) -> String {
         match self.trust {
@@ -251,7 +300,7 @@ impl PageSandbox {
             PageTrust::Trusted => "Trusted".to_string(),
         }
     }
-    
+
     /// Get status color
     pub fn status_color(&self) -> &'static str {
         match self.trust {
@@ -264,10 +313,14 @@ impl PageSandbox {
 
     /// Describe sandbox state for diagnostics
     pub fn describe(&self) -> String {
-        let last_int = self.interactions.last()
+        let last_int = self
+            .interactions
+            .last()
             .map(|i| i.describe())
             .unwrap_or_default();
-        let blocked_desc = self.blocked_actions.last()
+        let blocked_desc = self
+            .blocked_actions
+            .last()
             .map(|b| b.describe())
             .unwrap_or_default();
         format!(
@@ -283,14 +336,19 @@ impl PageSandbox {
 impl BlockedAction {
     /// Describe this blocked action for logging
     pub fn describe(&self) -> String {
-        format!("Blocked({}: {}) at {:?} ago", self.action, self.reason, self.timestamp.elapsed())
+        format!(
+            "Blocked({}: {}) at {:?} ago",
+            self.action,
+            self.reason,
+            self.timestamp.elapsed()
+        )
     }
 }
 
 /// Manage sandboxes for all open pages
 #[derive(Debug, Default)]
 pub struct SandboxManager {
-    pages: HashMap<u64, PageSandbox>,  // tab_id -> sandbox
+    pages: HashMap<u64, PageSandbox>, // tab_id -> sandbox
 }
 
 impl SandboxManager {
@@ -299,34 +357,34 @@ impl SandboxManager {
             pages: HashMap::new(),
         }
     }
-    
+
     /// Create sandbox for new page
     pub fn create(&mut self, tab_id: u64, url: String) {
         self.pages.insert(tab_id, PageSandbox::new(url));
     }
-    
+
     /// Get sandbox for tab
     pub fn get(&self, tab_id: u64) -> Option<&PageSandbox> {
         self.pages.get(&tab_id)
     }
-    
+
     /// Get mutable sandbox
     pub fn get_mut(&mut self, tab_id: u64) -> Option<&mut PageSandbox> {
         self.pages.get_mut(&tab_id)
     }
-    
+
     /// Remove sandbox when tab closes
     pub fn remove(&mut self, tab_id: u64) {
         self.pages.remove(&tab_id);
     }
-    
+
     /// Record interaction for active tab
     pub fn record(&mut self, tab_id: u64, interaction: Interaction) {
         if let Some(sandbox) = self.pages.get_mut(&tab_id) {
             sandbox.record_interaction(interaction);
         }
     }
-    
+
     /// Check permission for tab
     pub fn check(&mut self, tab_id: u64, action: &str) -> bool {
         if let Some(sandbox) = self.pages.get_mut(&tab_id) {
@@ -341,59 +399,63 @@ impl SandboxManager {
 mod tests {
     use super::*;
     use std::thread;
-    
+
     #[test]
     fn test_trust_progression() {
         let mut sandbox = PageSandbox::new("https://example.com".into());
         assert_eq!(sandbox.trust, PageTrust::Untrusted);
-        
+
         // Wait for page age requirement
         thread::sleep(Duration::from_secs(3));
-        
+
         // First meaningful click
         sandbox.record_interaction(Interaction::Click {
-            x: 100, y: 100,
-            element_width: 100, element_height: 50,
+            x: 100,
+            y: 100,
+            element_width: 100,
+            element_height: 50,
             element_type: "button".into(),
             timestamp: Instant::now(),
         });
-        
+
         thread::sleep(Duration::from_secs(2));
         assert_eq!(sandbox.trust, PageTrust::Cautious);
-        
+
         // Second: keyboard input
         sandbox.record_interaction(Interaction::KeyboardInput {
             in_form_field: true,
             char_count: 10,
             timestamp: Instant::now(),
         });
-        
+
         thread::sleep(Duration::from_secs(2));
         assert_eq!(sandbox.trust, PageTrust::Warming);
-        
+
         // Third: scroll
         sandbox.record_interaction(Interaction::Scroll {
             delta_y: 200,
             user_initiated: true,
             timestamp: Instant::now(),
         });
-        
+
         assert_eq!(sandbox.trust, PageTrust::Trusted);
     }
-    
+
     #[test]
     fn test_anti_clickjack() {
         let mut sandbox = PageSandbox::new("https://example.com".into());
         thread::sleep(Duration::from_secs(3));
-        
+
         // Tiny element - shouldn't count
         sandbox.record_interaction(Interaction::Click {
-            x: 100, y: 100,
-            element_width: 5, element_height: 5,  // Too small!
+            x: 100,
+            y: 100,
+            element_width: 5,
+            element_height: 5, // Too small!
             element_type: "div".into(),
             timestamp: Instant::now(),
         });
-        
+
         assert_eq!(sandbox.trust, PageTrust::Untrusted);
         assert_eq!(sandbox.meaningful_count, 0);
     }

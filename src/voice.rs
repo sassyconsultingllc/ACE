@@ -21,17 +21,16 @@
 //! Whisper uses GPU by default via whisper-rs (whisper.cpp bindings).
 //! Falls back to CPU if no GPU available.
 
-use std::sync::{Arc, Mutex};
-use std::path::Path;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 // ==============================================================================
 // Configuration
 // ==============================================================================
 
 /// Whisper model size - tradeoff between speed and accuracy
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum WhisperModel {
     /// Fastest, least accurate (~39 MB)
     Tiny,
@@ -56,22 +55,31 @@ impl WhisperModel {
             WhisperModel::Large => "ggml-large-v3.bin",
         }
     }
-    
+
     pub fn model_path(&self) -> String {
         format!("models/{}", self.filename())
     }
-    
+
     pub fn download_url(&self) -> &'static str {
         match self {
-            WhisperModel::Tiny => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin",
-            WhisperModel::Base => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin",
-            WhisperModel::Small => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin",
-            WhisperModel::Medium => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
-            WhisperModel::Large => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin",
+            WhisperModel::Tiny => {
+                "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin"
+            }
+            WhisperModel::Base => {
+                "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"
+            }
+            WhisperModel::Small => {
+                "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin"
+            }
+            WhisperModel::Medium => {
+                "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin"
+            }
+            WhisperModel::Large => {
+                "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
+            }
         }
     }
 }
-
 
 /// Voice input configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -215,12 +223,12 @@ impl WhisperEngine {
             },
         }
     }
-    
+
     /// Check if the model file exists
     pub fn model_exists(&self) -> bool {
         Path::new(&self.config.model.model_path()).exists()
     }
-    
+
     /// Get model file size in bytes (for download progress)
     pub fn model_size_bytes(&self) -> u64 {
         match self.config.model {
@@ -231,63 +239,67 @@ impl WhisperEngine {
             WhisperModel::Large => 1_550_000_000,
         }
     }
-    
+
     /// Download the model file (blocking)
-    pub fn download_model(&self, progress_callback: Option<Box<dyn Fn(u64, u64)>>) -> Result<(), String> {
+    pub fn download_model(
+        &self,
+        progress_callback: Option<Box<dyn Fn(u64, u64)>>,
+    ) -> Result<(), String> {
         let url = self.config.model.download_url();
         let path = self.config.model.model_path();
-        
+
         // Create models directory
         if let Some(parent) = Path::new(&path).parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create models directory: {}", e))?;
         }
-        
+
         // Download with ureq
         let response = ureq::get(url)
             .call()
             .map_err(|e| format!("Download failed: {}", e))?;
-        
-        let total_size = response.header("content-length")
+
+        let total_size = response
+            .header("content-length")
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(self.model_size_bytes());
-        
+
         let mut file = std::fs::File::create(&path)
             .map_err(|e| format!("Failed to create model file: {}", e))?;
-        
+
         let mut reader = response.into_reader();
         let mut buffer = [0u8; 8192];
         let mut downloaded: u64 = 0;
-        
+
         loop {
             let bytes_read = std::io::Read::read(&mut reader, &mut buffer)
                 .map_err(|e| format!("Read error: {}", e))?;
-            
+
             if bytes_read == 0 {
                 break;
             }
-            
+
             std::io::Write::write_all(&mut file, &buffer[..bytes_read])
                 .map_err(|e| format!("Write error: {}", e))?;
-            
+
             downloaded += bytes_read as u64;
-            
+
             if let Some(ref cb) = progress_callback {
                 cb(downloaded, total_size);
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Load the Whisper model (call once at startup)
     pub fn load_model(&mut self) -> Result<(), String> {
         if self.model_loaded {
             return Ok(());
         }
-        
+
         let model_path = self.config.model.model_path();
-        
+
         if !Path::new(&model_path).exists() {
             return Err(format!(
                 "Whisper model not found: {}. Download from: {}",
@@ -295,55 +307,55 @@ impl WhisperEngine {
                 self.config.model.download_url()
             ));
         }
-        
+
         // Validate model file
-        let metadata = std::fs::metadata(&model_path)
-            .map_err(|e| format!("Cannot read model file: {}", e))?;
-        
+        let metadata =
+            std::fs::metadata(&model_path).map_err(|e| format!("Cannot read model file: {}", e))?;
+
         if metadata.len() < 1_000_000 {
             return Err("Model file appears corrupted (too small)".to_string());
         }
-        
+
         // Real implementation would initialize whisper-rs here:
         // let params = WhisperContextParameters::default()
         //     .use_gpu(self.config.use_gpu);
         // self.context = Some(WhisperContext::new_with_params(&model_path, params)?);
-        
+
         self.model_loaded = true;
         self.error = None;
         Ok(())
     }
-    
+
     /// Unload the model to free memory
     pub fn unload_model(&mut self) {
         self.model_loaded = false;
         // Real implementation would drop the WhisperContext
     }
-    
+
     /// Check if model is loaded
     pub fn is_loaded(&self) -> bool {
         self.model_loaded
     }
-    
+
     /// Set transcription parameters
     pub fn set_params(&mut self, params: WhisperParams) {
         self.model_params = params;
     }
-    
+
     /// Transcribe audio samples (16kHz f32 mono)
     pub fn transcribe(&self, samples: &[f32]) -> Result<TranscriptResult, String> {
         if !self.model_loaded {
             return Err("Whisper model not loaded".to_string());
         }
-        
+
         if samples.is_empty() {
             return Err("No audio samples provided".to_string());
         }
-        
+
         if samples.len() < 1600 {
             return Err("Audio too short (minimum 100ms)".to_string());
         }
-        
+
         // Real implementation using whisper-rs:
         // let mut state = self.context.as_ref().unwrap().create_state()?;
         // let mut params = whisper_rs::FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
@@ -353,13 +365,13 @@ impl WhisperEngine {
         // params.set_print_progress(false);
         // params.set_print_realtime(false);
         // params.set_suppress_non_speech_tokens(self.model_params.suppress_non_speech);
-        // 
+        //
         // if let Some(ref prompt) = self.model_params.initial_prompt {
         //     params.set_initial_prompt(prompt);
         // }
-        // 
+        //
         // state.full(params, samples)?;
-        // 
+        //
         // let mut segments = Vec::new();
         // for i in 0..state.full_n_segments()? {
         //     let start_ms = (state.full_get_segment_t0(i)? * 10) as u64;
@@ -372,10 +384,10 @@ impl WhisperEngine {
         //         confidence: 1.0,
         //     });
         // }
-        
+
         // Placeholder result
         let duration_ms = (samples.len() as f32 / 16.0) as u64;
-        
+
         Ok(TranscriptResult {
             text: String::new(),
             language: self.model_params.language.clone(),
@@ -383,31 +395,35 @@ impl WhisperEngine {
             duration_ms,
         })
     }
-    
+
     /// Transcribe with streaming callback (for live preview)
-    pub fn transcribe_streaming<F>(&self, samples: &[f32], mut callback: F) -> Result<TranscriptResult, String>
+    pub fn transcribe_streaming<F>(
+        &self,
+        samples: &[f32],
+        mut callback: F,
+    ) -> Result<TranscriptResult, String>
     where
         F: FnMut(&str, bool), // (partial_text, is_final)
     {
         if !self.model_loaded {
             return Err("Whisper model not loaded".to_string());
         }
-        
+
         // Real implementation would use whisper-rs streaming API
         // For now, simulate streaming by processing chunks
         let chunk_size = 16000; // 1 second chunks
         let mut full_text = String::new();
         let mut segments = Vec::new();
-        
+
         for (i, chunk) in samples.chunks(chunk_size).enumerate() {
             if chunk.len() < 1600 {
                 continue; // Skip very short final chunk
             }
-            
+
             // Simulate partial transcription
             let start_ms = (i * 1000) as u64;
             let end_ms = start_ms + (chunk.len() as u64 * 1000 / 16000);
-            
+
             // In real impl, transcribe chunk here
             // TODO: Replace with actual transcription
             let chunk_text = String::new(); // placeholder for streaming result
@@ -427,10 +443,10 @@ impl WhisperEngine {
                 callback(&full_text, false);
             }
         }
-        
+
         // Final callback
         callback(&full_text, true);
-        
+
         Ok(TranscriptResult {
             text: full_text.trim().to_string(),
             language: self.model_params.language.clone(),
@@ -487,7 +503,7 @@ impl AudioFormat {
             _ => None,
         }
     }
-    
+
     pub fn from_mime(mime: &str) -> Option<Self> {
         match mime {
             "audio/wav" | "audio/wave" | "audio/x-wav" => Some(AudioFormat::Wav),
@@ -514,21 +530,21 @@ pub fn convert_to_whisper_format(bytes: &[u8], format: AudioFormat) -> Result<Ve
 fn convert_wav_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
     // Use hound crate for WAV parsing
     // This is a simplified implementation - full version handles all WAV variants
-    
+
     if bytes.len() < 44 {
         return Err("WAV file too small".to_string());
     }
-    
+
     // Check RIFF header
     if &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         return Err("Invalid WAV header".to_string());
     }
-    
+
     // Parse format chunk
     let channels = u16::from_le_bytes([bytes[22], bytes[23]]) as u32;
     let sample_rate = u32::from_le_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]);
     let bits_per_sample = u16::from_le_bytes([bytes[34], bytes[35]]) as u32;
-    
+
     // Find data chunk
     let data_start = find_wav_data_chunk(bytes).ok_or("Data chunk not found")?;
     let data_size = u32::from_le_bytes([
@@ -537,12 +553,15 @@ fn convert_wav_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
         bytes[data_start + 6],
         bytes[data_start + 7],
     ]) as usize;
-    
+
     let audio_data = &bytes[data_start + 8..data_start + 8 + data_size];
-    
+
     // Convert to f32
     let samples: Vec<f32> = match bits_per_sample {
-        8 => audio_data.iter().map(|&b| (b as f32 - 128.0) / 128.0).collect(),
+        8 => audio_data
+            .iter()
+            .map(|&b| (b as f32 - 128.0) / 128.0)
+            .collect(),
         16 => audio_data
             .chunks(2)
             .map(|chunk| {
@@ -576,7 +595,7 @@ fn convert_wav_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
             .collect(),
         _ => return Err(format!("Unsupported bit depth: {}", bits_per_sample)),
     };
-    
+
     // Convert to mono if stereo
     let mono_samples: Vec<f32> = if channels > 1 {
         samples
@@ -586,14 +605,14 @@ fn convert_wav_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
     } else {
         samples
     };
-    
+
     // Resample to 16kHz if needed
     let resampled = if sample_rate != 16000 {
         resample(&mono_samples, sample_rate, 16000)
     } else {
         mono_samples
     };
-    
+
     Ok(resampled)
 }
 
@@ -608,11 +627,11 @@ fn find_wav_data_chunk(bytes: &[u8]) -> Option<usize> {
             bytes[pos + 6],
             bytes[pos + 7],
         ]) as usize;
-        
+
         if chunk_id == b"data" {
             return Some(pos);
         }
-        
+
         pos += 8 + chunk_size;
         // Align to 2-byte boundary
         if chunk_size % 2 == 1 {
@@ -623,7 +642,7 @@ fn find_wav_data_chunk(bytes: &[u8]) -> Option<usize> {
 }
 
 /// Convert MP3 bytes to 16kHz f32 mono
-/// 
+///
 /// MP3 decoding using minimp3 algorithm:
 /// 1. Parse MP3 frame headers (sync word 0xFFE)
 /// 2. Decode Huffman-coded frequency data
@@ -633,7 +652,7 @@ fn convert_mp3_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
     if bytes.len() < 4 {
         return Err("MP3 file too small".to_string());
     }
-    
+
     // Check for MP3 sync word or ID3 tag
     let has_id3 = &bytes[0..3] == b"ID3";
     let start_offset = if has_id3 {
@@ -649,7 +668,7 @@ fn convert_mp3_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
     } else {
         0
     };
-    
+
     // Find first sync word (0xFF followed by 0xE0-0xFF)
     let audio_data = &bytes[start_offset..];
     let mut sync_pos = None;
@@ -659,11 +678,11 @@ fn convert_mp3_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
             break;
         }
     }
-    
+
     if sync_pos.is_none() {
         return Err("No MP3 sync word found".to_string());
     }
-    
+
     // Real implementation would use minimp3:
     // let mut decoder = minimp3::Decoder::new(audio_data);
     // let mut samples = Vec::new();
@@ -672,16 +691,16 @@ fn convert_mp3_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
     //         samples.push(sample as f32 / 32768.0);
     //     }
     // }
-    // 
+    //
     // // Convert to mono and resample
     // let mono = to_mono(&samples, frame.channels);
     // resample(&mono, frame.sample_rate as u32, 16000)
-    
+
     Err("MP3 decoding requires minimp3 crate - enable 'voice' feature".to_string())
 }
 
 /// Convert FLAC bytes to 16kHz f32 mono
-/// 
+///
 /// FLAC decoding process:
 /// 1. Parse FLAC stream info metadata block
 /// 2. Decode frames using LPC prediction
@@ -691,23 +710,22 @@ fn convert_flac_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
     if bytes.len() < 4 {
         return Err("FLAC file too small".to_string());
     }
-    
+
     // Check FLAC magic number
     if &bytes[0..4] != b"fLaC" {
         return Err("Invalid FLAC header (missing 'fLaC' magic)".to_string());
     }
-    
+
     // Parse STREAMINFO metadata block
     if bytes.len() < 42 {
         return Err("FLAC file truncated".to_string());
     }
-    
+
     // Extract stream info
     let _min_block_size = u16::from_be_bytes([bytes[8], bytes[9]]);
     let _max_block_size = u16::from_be_bytes([bytes[10], bytes[11]]);
-    let sample_rate = ((bytes[18] as u32) << 12)
-        | ((bytes[19] as u32) << 4)
-        | ((bytes[20] as u32) >> 4);
+    let sample_rate =
+        ((bytes[18] as u32) << 12) | ((bytes[19] as u32) << 4) | ((bytes[20] as u32) >> 4);
     let channels = ((bytes[20] >> 1) & 0x07) + 1;
     let bits_per_sample = (((bytes[20] & 0x01) << 4) | (bytes[21] >> 4)) + 1;
     let _total_samples = ((bytes[21] as u64 & 0x0F) << 32)
@@ -715,10 +733,10 @@ fn convert_flac_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
         | ((bytes[23] as u64) << 16)
         | ((bytes[24] as u64) << 8)
         | (bytes[25] as u64);
-    
+
     // Log detected format
     let _ = (sample_rate, channels, bits_per_sample);
-    
+
     // Real implementation would use claxon:
     // let mut reader = claxon::FlacReader::new(Cursor::new(bytes))?;
     // let mut samples: Vec<f32> = Vec::new();
@@ -726,15 +744,15 @@ fn convert_flac_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
     //     let s = sample?;
     //     samples.push(s as f32 / (1 << (bits_per_sample - 1)) as f32);
     // }
-    // 
+    //
     // let mono = to_mono(&samples, channels as usize);
     // resample(&mono, sample_rate, 16000)
-    
+
     Err("FLAC decoding requires claxon crate - enable 'voice' feature".to_string())
 }
 
 /// Convert OGG Vorbis bytes to 16kHz f32 mono
-/// 
+///
 /// OGG/Vorbis decoding:
 /// 1. Parse OGG page structure
 /// 2. Extract Vorbis packets
@@ -744,69 +762,73 @@ fn convert_ogg_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
     if bytes.len() < 4 {
         return Err("OGG file too small".to_string());
     }
-    
+
     // Check OGG magic number
     if &bytes[0..4] != b"OggS" {
         return Err("Invalid OGG header (missing 'OggS' magic)".to_string());
     }
-    
+
     // Parse first page header
     if bytes.len() < 27 {
         return Err("OGG file truncated".to_string());
     }
-    
+
     let version = bytes[4];
     let header_type = bytes[5];
     let _granule_position = u64::from_le_bytes([
-        bytes[6], bytes[7], bytes[8], bytes[9],
-        bytes[10], bytes[11], bytes[12], bytes[13],
+        bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13],
     ]);
     let _serial = u32::from_le_bytes([bytes[14], bytes[15], bytes[16], bytes[17]]);
     let _page_seq = u32::from_le_bytes([bytes[18], bytes[19], bytes[20], bytes[21]]);
     let _crc = u32::from_le_bytes([bytes[22], bytes[23], bytes[24], bytes[25]]);
     let n_segments = bytes[26] as usize;
-    
+
     if version != 0 {
         return Err(format!("Unsupported OGG version: {}", version));
     }
-    
+
     let _ = (header_type, n_segments);
-    
+
     // Real implementation would use lewton:
     // let mut reader = lewton::inside_ogg::OggStreamReader::new(Cursor::new(bytes))?;
     // let channels = reader.ident_hdr.audio_channels as usize;
     // let sample_rate = reader.ident_hdr.audio_sample_rate;
-    // 
+    //
     // let mut samples = Vec::new();
     // while let Some(packet) = reader.read_dec_packet_generic::<Vec<Vec<f32>>>()? {
     //     for channel in packet {
     //         samples.extend(channel);
     //     }
     // }
-    // 
+    //
     // let mono = to_mono(&samples, channels);
     // resample(&mono, sample_rate, 16000)
-    
+
     Err("OGG decoding requires lewton crate - enable 'voice' feature".to_string())
 }
 
 /// Convert raw PCM bytes to f32
-/// 
+///
 /// Supports multiple formats based on parameters
 fn convert_raw_to_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
     convert_raw_pcm(bytes, 16, true, true)
 }
 
 /// Convert raw PCM with explicit format
-/// 
+///
 /// # Arguments
 /// * `bytes` - Raw audio bytes
 /// * `bits` - Bits per sample (8, 16, 24, 32)
 /// * `signed` - Whether samples are signed
 /// * `little_endian` - Byte order
-pub fn convert_raw_pcm(bytes: &[u8], bits: u32, signed: bool, little_endian: bool) -> Result<Vec<f32>, String> {
+pub fn convert_raw_pcm(
+    bytes: &[u8],
+    bits: u32,
+    signed: bool,
+    little_endian: bool,
+) -> Result<Vec<f32>, String> {
     let bytes_per_sample = (bits / 8) as usize;
-    
+
     if bytes.len() % bytes_per_sample != 0 {
         return Err(format!(
             "Byte count {} not divisible by sample size {}",
@@ -814,60 +836,68 @@ pub fn convert_raw_pcm(bytes: &[u8], bits: u32, signed: bool, little_endian: boo
             bytes_per_sample
         ));
     }
-    
+
     let samples: Vec<f32> = bytes
         .chunks(bytes_per_sample)
-        .map(|chunk| {
-            match (bits, signed, little_endian) {
-                (8, true, _) => chunk[0] as i8 as f32 / 128.0,
-                (8, false, _) => (chunk[0] as f32 - 128.0) / 128.0,
-                (16, true, true) => {
-                    let s = i16::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0)]);
-                    s as f32 / 32768.0
-                }
-                (16, true, false) => {
-                    let s = i16::from_be_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0)]);
-                    s as f32 / 32768.0
-                }
-                (16, false, true) => {
-                    let s = u16::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0)]);
-                    (s as f32 - 32768.0) / 32768.0
-                }
-                (16, false, false) => {
-                    let s = u16::from_be_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0)]);
-                    (s as f32 - 32768.0) / 32768.0
-                }
-                (24, true, true) => {
-                    let s = i32::from_le_bytes([0, chunk[0], chunk.get(1).copied().unwrap_or(0), chunk.get(2).copied().unwrap_or(0)]);
-                    (s >> 8) as f32 / 8388608.0
-                }
-                (24, true, false) => {
-                    let s = i32::from_be_bytes([chunk.get(2).copied().unwrap_or(0), chunk.get(1).copied().unwrap_or(0), chunk[0], 0]);
-                    (s >> 8) as f32 / 8388608.0
-                }
-                (32, true, true) => {
-                    let s = i32::from_le_bytes([
-                        chunk[0],
-                        chunk.get(1).copied().unwrap_or(0),
-                        chunk.get(2).copied().unwrap_or(0),
-                        chunk.get(3).copied().unwrap_or(0),
-                    ]);
-                    s as f32 / 2147483648.0
-                }
-                (32, true, false) => {
-                    let s = i32::from_be_bytes([
-                        chunk[0],
-                        chunk.get(1).copied().unwrap_or(0),
-                        chunk.get(2).copied().unwrap_or(0),
-                        chunk.get(3).copied().unwrap_or(0),
-                    ]);
-                    s as f32 / 2147483648.0
-                }
-                _ => 0.0,
+        .map(|chunk| match (bits, signed, little_endian) {
+            (8, true, _) => chunk[0] as i8 as f32 / 128.0,
+            (8, false, _) => (chunk[0] as f32 - 128.0) / 128.0,
+            (16, true, true) => {
+                let s = i16::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0)]);
+                s as f32 / 32768.0
             }
+            (16, true, false) => {
+                let s = i16::from_be_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0)]);
+                s as f32 / 32768.0
+            }
+            (16, false, true) => {
+                let s = u16::from_le_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0)]);
+                (s as f32 - 32768.0) / 32768.0
+            }
+            (16, false, false) => {
+                let s = u16::from_be_bytes([chunk[0], chunk.get(1).copied().unwrap_or(0)]);
+                (s as f32 - 32768.0) / 32768.0
+            }
+            (24, true, true) => {
+                let s = i32::from_le_bytes([
+                    0,
+                    chunk[0],
+                    chunk.get(1).copied().unwrap_or(0),
+                    chunk.get(2).copied().unwrap_or(0),
+                ]);
+                (s >> 8) as f32 / 8388608.0
+            }
+            (24, true, false) => {
+                let s = i32::from_be_bytes([
+                    chunk.get(2).copied().unwrap_or(0),
+                    chunk.get(1).copied().unwrap_or(0),
+                    chunk[0],
+                    0,
+                ]);
+                (s >> 8) as f32 / 8388608.0
+            }
+            (32, true, true) => {
+                let s = i32::from_le_bytes([
+                    chunk[0],
+                    chunk.get(1).copied().unwrap_or(0),
+                    chunk.get(2).copied().unwrap_or(0),
+                    chunk.get(3).copied().unwrap_or(0),
+                ]);
+                s as f32 / 2147483648.0
+            }
+            (32, true, false) => {
+                let s = i32::from_be_bytes([
+                    chunk[0],
+                    chunk.get(1).copied().unwrap_or(0),
+                    chunk.get(2).copied().unwrap_or(0),
+                    chunk.get(3).copied().unwrap_or(0),
+                ]);
+                s as f32 / 2147483648.0
+            }
+            _ => 0.0,
         })
         .collect();
-    
+
     Ok(samples)
 }
 
@@ -876,24 +906,23 @@ fn resample(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
     if from_rate == to_rate {
         return samples.to_vec();
     }
-    
+
     let ratio = from_rate as f64 / to_rate as f64;
     let new_len = (samples.len() as f64 / ratio) as usize;
-    
+
     (0..new_len)
         .map(|i| {
             let src_idx = i as f64 * ratio;
             let idx = src_idx as usize;
             let frac = (src_idx - idx as f64) as f32;
-            
+
             let s0 = samples.get(idx).copied().unwrap_or(0.0);
             let s1 = samples.get(idx + 1).copied().unwrap_or(s0);
-            
+
             s0 * (1.0 - frac) + s1 * frac
         })
         .collect()
 }
-
 
 // ==============================================================================
 // Microphone Capture (Platform-specific)
@@ -968,17 +997,15 @@ pub fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
     //         }
     //     }
     // }
-    
+
     // Placeholder: return simulated devices
-    Ok(vec![
-        AudioDevice {
-            id: "default".to_string(),
-            name: "Default Microphone".to_string(),
-            is_default: true,
-            max_sample_rate: 48000,
-            channels: 2,
-        },
-    ])
+    Ok(vec![AudioDevice {
+        id: "default".to_string(),
+        name: "Default Microphone".to_string(),
+        is_default: true,
+        max_sample_rate: 48000,
+        channels: 2,
+    }])
 }
 
 /// Get the default audio input device
@@ -1010,7 +1037,7 @@ impl MicrophoneCapture {
     pub fn new(config: VoiceConfig) -> Self {
         Self::with_capture_config(config, CaptureConfig::default())
     }
-    
+
     /// Create with specific capture configuration
     pub fn with_capture_config(config: VoiceConfig, capture_config: CaptureConfig) -> Self {
         Self {
@@ -1025,19 +1052,19 @@ impl MicrophoneCapture {
             last_error: Arc::new(Mutex::new(None)),
         }
     }
-    
+
     /// Start recording from microphone
     pub fn start(&self) -> Result<(), String> {
         if *self.is_recording.lock().unwrap() {
             return Err("Already recording".to_string());
         }
-        
+
         // Clear previous state
         self.buffer.lock().unwrap().clear();
         self.waveform.lock().unwrap().clear();
         *self.peak_level.lock().unwrap() = 0.0;
         *self.last_error.lock().unwrap() = None;
-        
+
         // Real implementation with cpal:
         // let host = cpal::default_host();
         // let device = if let Some(ref id) = self.capture_config.device_id {
@@ -1087,113 +1114,117 @@ impl MicrophoneCapture {
         //
         // stream.play()?;
         // Store stream handle for later stopping
-        
+
         *self.is_recording.lock().unwrap() = true;
         *self.is_paused.lock().unwrap() = false;
         Ok(())
     }
-    
+
     /// Pause recording (keep buffer, stop capturing)
     pub fn pause(&self) {
         *self.is_paused.lock().unwrap() = true;
     }
-    
+
     /// Resume recording after pause
     pub fn resume(&self) {
         *self.is_paused.lock().unwrap() = false;
     }
-    
+
     /// Stop recording and return audio buffer
     pub fn stop(&self) -> Vec<f32> {
         *self.is_recording.lock().unwrap() = false;
         *self.is_paused.lock().unwrap() = false;
-        
+
         // Real implementation would stop the cpal stream here
-        
+
         let mut buffer = self.buffer.lock().unwrap();
         std::mem::take(&mut *buffer)
     }
-    
+
     /// Check if currently recording
     pub fn is_recording(&self) -> bool {
         *self.is_recording.lock().unwrap()
     }
-    
+
     /// Check if paused
     pub fn is_paused(&self) -> bool {
         *self.is_paused.lock().unwrap()
     }
-    
+
     /// Get current buffer duration in seconds
     pub fn duration_secs(&self) -> f32 {
         let buffer = self.buffer.lock().unwrap();
         buffer.len() as f32 / self.sample_rate as f32
     }
-    
+
     /// Get current peak audio level (0.0 - 1.0)
     pub fn peak_level(&self) -> f32 {
         *self.peak_level.lock().unwrap()
     }
-    
+
     /// Get current RMS audio level (for visualization)
     pub fn current_level(&self) -> f32 {
         let buffer = self.buffer.lock().unwrap();
         if buffer.is_empty() {
             return 0.0;
         }
-        
+
         // RMS of last 1600 samples (~100ms at 16kHz)
         let recent: Vec<_> = buffer.iter().rev().take(1600).collect();
         if recent.is_empty() {
             return 0.0;
         }
-        
+
         let sum_sq: f32 = recent.iter().map(|&s| s * s).sum();
         (sum_sq / recent.len() as f32).sqrt()
     }
-    
+
     /// Get waveform data for visualization
     /// Returns downsampled waveform (typically 100-200 points)
     pub fn waveform(&self) -> Vec<f32> {
         self.waveform.lock().unwrap().clone()
     }
-    
+
     /// Get number of samples captured
     pub fn sample_count(&self) -> usize {
         self.buffer.lock().unwrap().len()
     }
-    
+
     /// Get last error message if any
     pub fn last_error(&self) -> Option<String> {
         self.last_error.lock().unwrap().clone()
     }
-    
+
     /// Clear the audio buffer without stopping
     pub fn clear_buffer(&self) {
         self.buffer.lock().unwrap().clear();
         self.waveform.lock().unwrap().clear();
     }
-    
+
     /// Add audio samples directly (for testing or streaming input)
     pub fn push_samples(&self, samples: &[f32]) {
         if !*self.is_recording.lock().unwrap() || *self.is_paused.lock().unwrap() {
             return;
         }
-        
+
         let mut buffer = self.buffer.lock().unwrap();
         buffer.extend_from_slice(samples);
-        
+
         // Update peak level
-        if let Some(max) = samples.iter().map(|s| s.abs()).max_by(|a, b| a.partial_cmp(b).unwrap()) {
+        if let Some(max) = samples
+            .iter()
+            .map(|s| s.abs())
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+        {
             let mut peak = self.peak_level.lock().unwrap();
             *peak = peak.max(max);
         }
-        
+
         // Update waveform (downsample to ~100 points)
         let mut waveform = self.waveform.lock().unwrap();
         const MAX_WAVEFORM_POINTS: usize = 200;
         let buffer_len = buffer.len();
-        
+
         if buffer_len > 0 {
             let step = (buffer_len / MAX_WAVEFORM_POINTS).max(1);
             *waveform = buffer
@@ -1246,24 +1277,28 @@ fn process_audio_callback(
     } else {
         data.to_vec()
     };
-    
+
     // Resample if needed
     let resampled = if source_rate != target_rate {
         resample(&mono, source_rate, target_rate)
     } else {
         mono
     };
-    
+
     // Update buffer
     let mut buf = buffer.lock().unwrap();
     buf.extend_from_slice(&resampled);
-    
+
     // Update peak
-    if let Some(max) = resampled.iter().map(|s| s.abs()).max_by(|a, b| a.partial_cmp(b).unwrap()) {
+    if let Some(max) = resampled
+        .iter()
+        .map(|s| s.abs())
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+    {
         let mut p = peak.lock().unwrap();
         *p = p.max(max);
     }
-    
+
     // Update waveform (downsample)
     const MAX_POINTS: usize = 200;
     let buf_len = buf.len();
@@ -1297,35 +1332,35 @@ impl VoiceActivityDetector {
             silence_threshold_samples: (silence_duration_secs * sample_rate as f32) as usize,
         }
     }
-    
+
     /// Process audio samples and return true if speech detected
     pub fn process(&mut self, samples: &[f32]) -> bool {
         if samples.is_empty() {
             return false;
         }
-        
+
         // Calculate RMS energy
         let rms: f32 = (samples.iter().map(|&s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
-        
+
         // Smooth the level
         self.current_level = self.smoothing * self.current_level + (1.0 - self.smoothing) * rms;
-        
+
         let is_speech = self.current_level > self.threshold;
-        
+
         if is_speech {
             self.silence_samples = 0;
         } else {
             self.silence_samples += samples.len();
         }
-        
+
         is_speech
     }
-    
+
     /// Check if silence duration exceeded
     pub fn is_silence_timeout(&self) -> bool {
         self.silence_samples >= self.silence_threshold_samples
     }
-    
+
     /// Reset detector state
     pub fn reset(&mut self) {
         self.current_level = 0.0;
@@ -1349,12 +1384,8 @@ pub struct VoiceInput {
 impl VoiceInput {
     /// Create new voice input manager
     pub fn new(config: VoiceConfig) -> Self {
-        let vad = VoiceActivityDetector::new(
-            config.vad_threshold,
-            config.silence_duration,
-            16000,
-        );
-        
+        let vad = VoiceActivityDetector::new(config.vad_threshold, config.silence_duration, 16000);
+
         Self {
             config: config.clone(),
             engine: WhisperEngine::new(config.clone()),
@@ -1363,24 +1394,24 @@ impl VoiceInput {
             session: VoiceSession::default(),
         }
     }
-    
+
     /// Initialize the voice input system
     pub fn initialize(&mut self) -> Result<(), String> {
         if !self.config.enabled {
             return Ok(());
         }
-        
+
         self.engine.load_model()?;
         self.microphone = Some(MicrophoneCapture::new(self.config.clone()));
         Ok(())
     }
-    
+
     /// Start voice recording
     pub fn start_recording(&mut self) -> Result<(), String> {
         if !self.config.enabled {
             return Err("Voice input is disabled".to_string());
         }
-        
+
         if let Some(ref mic) = self.microphone {
             mic.start()?;
             self.session.state = VoiceState::Listening;
@@ -1390,7 +1421,7 @@ impl VoiceInput {
             Err("Microphone not initialized".to_string())
         }
     }
-    
+
     /// Stop recording and transcribe
     pub fn stop_and_transcribe(&mut self) -> Result<String, String> {
         if let Some(ref mic) = self.microphone {
@@ -1398,19 +1429,19 @@ impl VoiceInput {
             self.session.state = VoiceState::Transcribing;
             self.session.audio_buffer = samples.clone();
             self.session.duration_secs = samples.len() as f32 / 16000.0;
-            
+
             let result = self.engine.transcribe(&samples)?;
             let text = result.text.trim().to_string();
-            
+
             self.session.transcript = Some(text.clone());
             self.session.state = VoiceState::Idle;
-            
+
             Ok(text)
         } else {
             Err("Microphone not initialized".to_string())
         }
     }
-    
+
     /// Cancel current recording
     pub fn cancel(&mut self) {
         if let Some(ref mic) = self.microphone {
@@ -1418,19 +1449,19 @@ impl VoiceInput {
         }
         self.session = VoiceSession::default();
     }
-    
+
     /// Transcribe audio from bytes
     pub fn transcribe_audio(&self, bytes: &[u8], format: AudioFormat) -> Result<String, String> {
         let samples = convert_to_whisper_format(bytes, format)?;
         let result = self.engine.transcribe(&samples)?;
         Ok(result.text.trim().to_string())
     }
-    
+
     /// Get current voice state
     pub fn state(&self) -> &VoiceState {
         &self.session.state
     }
-    
+
     /// Get recording duration
     pub fn duration(&self) -> f32 {
         if let Some(ref mic) = self.microphone {
@@ -1439,7 +1470,7 @@ impl VoiceInput {
             0.0
         }
     }
-    
+
     /// Get current audio level (for visualization)
     pub fn level(&self) -> f32 {
         if let Some(ref mic) = self.microphone {
@@ -1490,33 +1521,43 @@ impl VoiceCommand {
     /// Parse voice input into a command type
     pub fn parse(text: &str) -> Self {
         let lower = crate::fontcase::ascii_lower(text);
-        
+
         if lower.starts_with("cancel") || lower == "stop" || lower == "abort" {
             return VoiceCommand::Cancel;
         }
-        
-        if lower.starts_with("confirm") || lower.starts_with("yes") || lower.starts_with("approve") {
+
+        if lower.starts_with("confirm") || lower.starts_with("yes") || lower.starts_with("approve")
+        {
             return VoiceCommand::Confirm;
         }
-        
-        if lower.starts_with("write code") || lower.starts_with("create code") ||
-           lower.starts_with("generate code") || lower.starts_with("code:") {
-            let content = text.trim_start_matches(|c: char| !c.is_alphabetic() || "write create generate code:".contains(c));
+
+        if lower.starts_with("write code")
+            || lower.starts_with("create code")
+            || lower.starts_with("generate code")
+            || lower.starts_with("code:")
+        {
+            let content = text.trim_start_matches(|c: char| {
+                !c.is_alphabetic() || "write create generate code:".contains(c)
+            });
             return VoiceCommand::Code(content.to_string());
         }
-        
-        if lower.starts_with("open") || lower.starts_with("go to") || lower.starts_with("navigate") {
+
+        if lower.starts_with("open") || lower.starts_with("go to") || lower.starts_with("navigate")
+        {
             return VoiceCommand::Navigate(text.to_string());
         }
-        
-        if lower.starts_with("create file") || lower.starts_with("new file") ||
-           lower.starts_with("save as") || lower.starts_with("edit file") {
+
+        if lower.starts_with("create file")
+            || lower.starts_with("new file")
+            || lower.starts_with("save as")
+            || lower.starts_with("edit file")
+        {
             return VoiceCommand::File(text.to_string());
         }
-        
+
         VoiceCommand::Query(text.to_string())
     }
-    
+
     /// Extract the action/content portion from the command
     pub fn content(&self) -> &str {
         match self {
@@ -1529,7 +1570,7 @@ impl VoiceCommand {
             VoiceCommand::Unknown => "",
         }
     }
-    
+
     /// Get a human-readable description of the command type
     pub fn description(&self) -> &'static str {
         match self {
@@ -1542,7 +1583,7 @@ impl VoiceCommand {
             VoiceCommand::Unknown => "Unknown",
         }
     }
-    
+
     /// Check if this command can be handled without AI
     pub fn is_local(&self) -> bool {
         matches!(self, VoiceCommand::Cancel | VoiceCommand::Confirm)
@@ -1573,12 +1614,14 @@ impl CloudProvider {
         match self {
             CloudProvider::OpenAI => "https://api.openai.com/v1/audio/transcriptions",
             CloudProvider::Google => "https://speech.googleapis.com/v1/speech:recognize",
-            CloudProvider::Azure => "https://{region}.api.cognitive.microsoft.com/speechtotext/v3.1/transcriptions",
+            CloudProvider::Azure => {
+                "https://{region}.api.cognitive.microsoft.com/speechtotext/v3.1/transcriptions"
+            }
             CloudProvider::AssemblyAI => "https://api.assemblyai.com/v2/transcript",
             CloudProvider::Deepgram => "https://api.deepgram.com/v1/listen",
         }
     }
-    
+
     pub fn name(&self) -> &'static str {
         match self {
             CloudProvider::OpenAI => "OpenAI Whisper",
@@ -1594,7 +1637,7 @@ impl CloudProvider {
 pub struct CloudTranscriber {
     provider: CloudProvider,
     api_key: String,
-    region: Option<String>,  // For Azure
+    region: Option<String>, // For Azure
     language: String,
 }
 
@@ -1607,12 +1650,12 @@ impl CloudTranscriber {
             language: "en".to_string(),
         }
     }
-    
+
     pub fn with_region(mut self, region: &str) -> Self {
         self.region = Some(region.to_string());
         self
     }
-    
+
     pub fn with_language(mut self, language: &str) -> Self {
         self.language = language.to_string();
         self
@@ -1638,7 +1681,7 @@ impl CloudTranscriber {
             CloudProvider::Deepgram => self.transcribe_deepgram(audio_data),
         }
     }
-    
+
     /// OpenAI Whisper API transcription
     fn transcribe_openai(&self, audio_data: &[u8], format: AudioFormat) -> Result<String, String> {
         // Determine file extension for multipart upload
@@ -1647,14 +1690,14 @@ impl CloudTranscriber {
             AudioFormat::Mp3 => "mp3",
             AudioFormat::Flac => "flac",
             AudioFormat::Ogg => "ogg",
-            AudioFormat::Raw => "wav",  // Wrap raw as WAV
+            AudioFormat::Raw => "wav", // Wrap raw as WAV
         };
-        
+
         // Build multipart form data
         // Real implementation would use multipart boundary properly
         let boundary = "----SassyBrowserBoundary";
         let mut body = Vec::new();
-        
+
         // Add file part
         body.extend_from_slice(format!(
             "--{}`r`nContent-Disposition: form-data; name=\"file\"; filename=\"audio.{}\"`r`nContent-Type: audio/{}`r`n`r`n",
@@ -1662,46 +1705,53 @@ impl CloudTranscriber {
         ).as_bytes());
         body.extend_from_slice(audio_data);
         body.extend_from_slice(b"`r`n");
-        
+
         // Add model part
-        body.extend_from_slice(format!(
-            "--{}`r`nContent-Disposition: form-data; name=\"model\"`r`n`r`nwhisper-1`r`n",
-            boundary
-        ).as_bytes());
-        
+        body.extend_from_slice(
+            format!(
+                "--{}`r`nContent-Disposition: form-data; name=\"model\"`r`n`r`nwhisper-1`r`n",
+                boundary
+            )
+            .as_bytes(),
+        );
+
         // Add language part
-        body.extend_from_slice(format!(
-            "--{}`r`nContent-Disposition: form-data; name=\"language\"`r`n`r`n{}`r`n",
-            boundary, self.language
-        ).as_bytes());
-        
+        body.extend_from_slice(
+            format!(
+                "--{}`r`nContent-Disposition: form-data; name=\"language\"`r`n`r`n{}`r`n",
+                boundary, self.language
+            )
+            .as_bytes(),
+        );
+
         // End boundary
         body.extend_from_slice(format!("--{}--`r`n", boundary).as_bytes());
-        
+
         // Make request
         let response = ureq::post(CloudProvider::OpenAI.endpoint())
             .set("Authorization", &format!("Bearer {}", self.api_key))
-            .set("Content-Type", &format!("multipart/form-data; boundary={}", boundary))
+            .set(
+                "Content-Type",
+                &format!("multipart/form-data; boundary={}", boundary),
+            )
             .send_bytes(&body)
             .map_err(|e| format!("OpenAI request failed: {}", e))?;
-        
+
         let json: serde_json::Value = response
             .into_json()
             .map_err(|e| format!("Failed to parse response: {}", e))?;
-        
+
         json["text"]
             .as_str()
             .map(|s| s.to_string())
             .ok_or_else(|| "No transcription in response".to_string())
     }
-    
+
     /// Google Cloud Speech-to-Text
     fn transcribe_google(&self, audio_data: &[u8]) -> Result<String, String> {
-        let audio_base64 = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            audio_data,
-        );
-        
+        let audio_base64 =
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, audio_data);
+
         let body = serde_json::json!({
             "config": {
                 "encoding": "LINEAR16",
@@ -1713,18 +1763,18 @@ impl CloudTranscriber {
                 "content": audio_base64,
             }
         });
-        
+
         let url = format!("{}?key={}", CloudProvider::Google.endpoint(), self.api_key);
-        
+
         let response = ureq::post(&url)
             .set("Content-Type", "application/json")
             .send_string(&body.to_string())
             .map_err(|e| format!("Google STT request failed: {}", e))?;
-        
+
         let json: serde_json::Value = response
             .into_json()
             .map_err(|e| format!("Failed to parse response: {}", e))?;
-        
+
         // Extract transcript from results
         json["results"]
             .as_array()
@@ -1735,7 +1785,7 @@ impl CloudTranscriber {
             .map(|s| s.to_string())
             .ok_or_else(|| "No transcription in response".to_string())
     }
-    
+
     /// Azure Cognitive Services Speech
     fn transcribe_azure(&self, audio_data: &[u8]) -> Result<String, String> {
         let region = self.region.as_deref().unwrap_or("eastus");
@@ -1743,23 +1793,23 @@ impl CloudTranscriber {
             "https://{}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language={}",
             region, self.language
         );
-        
+
         let response = ureq::post(&url)
             .set("Ocp-Apim-Subscription-Key", &self.api_key)
             .set("Content-Type", "audio/wav")
             .send_bytes(audio_data)
             .map_err(|e| format!("Azure request failed: {}", e))?;
-        
+
         let json: serde_json::Value = response
             .into_json()
             .map_err(|e| format!("Failed to parse response: {}", e))?;
-        
+
         json["DisplayText"]
             .as_str()
             .map(|s| s.to_string())
             .ok_or_else(|| "No transcription in response".to_string())
     }
-    
+
     /// AssemblyAI transcription
     fn transcribe_assemblyai(&self, audio_data: &[u8]) -> Result<String, String> {
         // AssemblyAI requires upload then polling
@@ -1769,52 +1819,53 @@ impl CloudTranscriber {
             .set("Content-Type", "application/octet-stream")
             .send_bytes(audio_data)
             .map_err(|e| format!("Upload failed: {}", e))?;
-        
+
         let upload_json: serde_json::Value = upload_response
             .into_json()
             .map_err(|e| format!("Failed to parse upload response: {}", e))?;
-        
+
         let audio_url = upload_json["upload_url"]
             .as_str()
             .ok_or("No upload URL in response")?;
-        
+
         // Step 2: Create transcription job
         let body = serde_json::json!({
             "audio_url": audio_url,
             "language_code": self.language,
         });
-        
+
         let create_response = ureq::post(CloudProvider::AssemblyAI.endpoint())
             .set("Authorization", &self.api_key)
             .set("Content-Type", "application/json")
             .send_string(&body.to_string())
             .map_err(|e| format!("Create job failed: {}", e))?;
-        
+
         let create_json: serde_json::Value = create_response
             .into_json()
             .map_err(|e| format!("Failed to parse response: {}", e))?;
-        
+
         let transcript_id = create_json["id"]
             .as_str()
             .ok_or("No transcript ID in response")?;
-        
+
         // Step 3: Poll for completion (simplified - real impl would use async)
         let poll_url = format!("{}/{}", CloudProvider::AssemblyAI.endpoint(), transcript_id);
-        
-        for _ in 0..60 {  // Max 60 attempts
+
+        for _ in 0..60 {
+            // Max 60 attempts
             std::thread::sleep(std::time::Duration::from_secs(1));
-            
+
             let poll_response = ureq::get(&poll_url)
                 .set("Authorization", &self.api_key)
                 .call()
                 .map_err(|e| format!("Poll failed: {}", e))?;
-            
+
             let poll_json: serde_json::Value = poll_response
                 .into_json()
                 .map_err(|e| format!("Failed to parse poll response: {}", e))?;
-            
+
             let status = poll_json["status"].as_str().unwrap_or("");
-            
+
             match status {
                 "completed" => {
                     return poll_json["text"]
@@ -1831,10 +1882,10 @@ impl CloudTranscriber {
                 _ => continue,
             }
         }
-        
+
         Err("Transcription timed out".to_string())
     }
-    
+
     /// Deepgram transcription
     fn transcribe_deepgram(&self, audio_data: &[u8]) -> Result<String, String> {
         let url = format!(
@@ -1842,17 +1893,17 @@ impl CloudTranscriber {
             CloudProvider::Deepgram.endpoint(),
             self.language
         );
-        
+
         let response = ureq::post(&url)
             .set("Authorization", &format!("Token {}", self.api_key))
             .set("Content-Type", "audio/wav")
             .send_bytes(audio_data)
             .map_err(|e| format!("Deepgram request failed: {}", e))?;
-        
+
         let json: serde_json::Value = response
             .into_json()
             .map_err(|e| format!("Failed to parse response: {}", e))?;
-        
+
         json["results"]["channels"][0]["alternatives"][0]["transcript"]
             .as_str()
             .map(|s| s.to_string())
@@ -1896,7 +1947,7 @@ impl Default for HotkeyConfig {
     fn default() -> Self {
         Self {
             mode: TriggerMode::PushToTalk,
-            key_code: 0x14,  // Caps Lock - easy to hold
+            key_code: 0x14, // Caps Lock - easy to hold
             modifiers: HotkeyModifiers::default(),
             wake_word: Some("hey sassy".to_string()),
             audio_feedback: true,
@@ -1917,31 +1968,49 @@ impl HotkeyModifiers {
     pub fn none() -> Self {
         Self::default()
     }
-    
+
     pub fn ctrl() -> Self {
-        Self { ctrl: true, ..Default::default() }
+        Self {
+            ctrl: true,
+            ..Default::default()
+        }
     }
-    
+
     pub fn alt() -> Self {
-        Self { alt: true, ..Default::default() }
+        Self {
+            alt: true,
+            ..Default::default()
+        }
     }
-    
+
     pub fn ctrl_shift() -> Self {
-        Self { ctrl: true, shift: true, ..Default::default() }
+        Self {
+            ctrl: true,
+            shift: true,
+            ..Default::default()
+        }
     }
-    
+
     /// Check if modifiers match current keyboard state
     pub fn matches(&self, ctrl: bool, alt: bool, shift: bool, win: bool) -> bool {
         self.ctrl == ctrl && self.alt == alt && self.shift == shift && self.win == win
     }
-    
+
     /// Get display string for the modifiers
     pub fn display(&self) -> String {
         let mut parts = Vec::new();
-        if self.ctrl { parts.push("Ctrl"); }
-        if self.alt { parts.push("Alt"); }
-        if self.shift { parts.push("Shift"); }
-        if self.win { parts.push("Win"); }
+        if self.ctrl {
+            parts.push("Ctrl");
+        }
+        if self.alt {
+            parts.push("Alt");
+        }
+        if self.shift {
+            parts.push("Shift");
+        }
+        if self.win {
+            parts.push("Win");
+        }
         parts.join("+")
     }
 }
@@ -1952,9 +2021,18 @@ pub fn key_name(code: u32) -> &'static str {
         0x14 => "Caps Lock",
         0x20 => "Space",
         0x70..=0x7B => match code {
-            0x70 => "F1", 0x71 => "F2", 0x72 => "F3", 0x73 => "F4",
-            0x74 => "F5", 0x75 => "F6", 0x76 => "F7", 0x77 => "F8",
-            0x78 => "F9", 0x79 => "F10", 0x7A => "F11", 0x7B => "F12",
+            0x70 => "F1",
+            0x71 => "F2",
+            0x72 => "F3",
+            0x73 => "F4",
+            0x74 => "F5",
+            0x75 => "F6",
+            0x76 => "F7",
+            0x77 => "F8",
+            0x78 => "F9",
+            0x79 => "F10",
+            0x7A => "F11",
+            0x7B => "F12",
             _ => "Unknown",
         },
         0xA0 => "Left Shift",
@@ -1974,7 +2052,7 @@ pub fn key_name(code: u32) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_whisper_model_and_audio_helpers() {
         let m = WhisperModel::Base;
@@ -2003,14 +2081,14 @@ mod tests {
         // value should be approximately 0.0
         assert!(samples[0].abs() <= 1.0);
     }
-    
+
     #[test]
     fn test_whisper_model_paths() {
         assert_eq!(WhisperModel::Base.filename(), "ggml-base.en.bin");
         assert_eq!(WhisperModel::Large.filename(), "ggml-large-v3.bin");
         assert_eq!(WhisperModel::Tiny.model_path(), "models/ggml-tiny.en.bin");
     }
-    
+
     #[test]
     fn test_whisper_model_sizes() {
         let engine = WhisperEngine::new(VoiceConfig {
@@ -2018,14 +2096,14 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(engine.model_size_bytes(), 74_000_000);
-        
+
         let engine_large = WhisperEngine::new(VoiceConfig {
             model: WhisperModel::Large,
             ..Default::default()
         });
         assert_eq!(engine_large.model_size_bytes(), 1_550_000_000);
     }
-    
+
     #[test]
     fn test_audio_format_detection() {
         assert_eq!(AudioFormat::from_extension("wav"), Some(AudioFormat::Wav));
@@ -2033,32 +2111,35 @@ mod tests {
         assert_eq!(AudioFormat::from_extension("FLAC"), Some(AudioFormat::Flac));
         assert_eq!(AudioFormat::from_extension("ogg"), Some(AudioFormat::Ogg));
         assert_eq!(AudioFormat::from_extension("xyz"), None);
-        
+
         assert_eq!(AudioFormat::from_mime("audio/wav"), Some(AudioFormat::Wav));
         assert_eq!(AudioFormat::from_mime("audio/mpeg"), Some(AudioFormat::Mp3));
-        assert_eq!(AudioFormat::from_mime("audio/flac"), Some(AudioFormat::Flac));
+        assert_eq!(
+            AudioFormat::from_mime("audio/flac"),
+            Some(AudioFormat::Flac)
+        );
     }
-    
+
     #[test]
     fn test_resample() {
         let samples: Vec<f32> = (0..32000).map(|i| (i as f32 / 100.0).sin()).collect();
         let resampled = resample(&samples, 32000, 16000);
         assert!(resampled.len() > 15000 && resampled.len() < 17000);
-        
+
         // No-op resample
         let same = resample(&samples, 16000, 16000);
         assert_eq!(same.len(), samples.len());
     }
-    
+
     #[test]
     fn test_vad() {
         // Use lower smoothing by creating with lower threshold
         let mut vad = VoiceActivityDetector::new(0.01, 1.0, 16000);
-        
+
         // Silent samples
         let silence: Vec<f32> = vec![0.0; 1600];
         assert!(!vad.process(&silence));
-        
+
         // Loud samples - high amplitude to overcome smoothing
         let speech: Vec<f32> = (0..1600).map(|i| (i as f32 / 50.0).sin()).collect();
         // Process multiple times to overcome 0.95 smoothing factor
@@ -2066,17 +2147,23 @@ mod tests {
             vad.process(&speech);
         }
         // After 20 iterations of loud audio, level should exceed threshold
-        assert!(vad.process(&speech), "VAD should detect speech after warm-up");
-        
+        assert!(
+            vad.process(&speech),
+            "VAD should detect speech after warm-up"
+        );
+
         // Silence timeout - need enough samples
         vad.reset();
         // 1 second at 16kHz = 16000 samples, we process 1600 per call = 10 calls
         for _ in 0..12 {
             vad.process(&silence);
         }
-        assert!(vad.is_silence_timeout(), "Should timeout after 1+ second of silence");
+        assert!(
+            vad.is_silence_timeout(),
+            "Should timeout after 1+ second of silence"
+        );
     }
-    
+
     #[test]
     fn test_raw_to_f32() {
         // 16-bit signed little-endian: 0, 16384 (half max)
@@ -2086,84 +2173,84 @@ mod tests {
         assert!((samples[0] - 0.0).abs() < 0.001);
         assert!((samples[1] - 0.5).abs() < 0.01);
     }
-    
+
     #[test]
     fn test_raw_pcm_formats() {
         // 8-bit unsigned
-        let bytes_8u = [128u8, 255, 0];  // 0, max, min
+        let bytes_8u = [128u8, 255, 0]; // 0, max, min
         let samples_8u = convert_raw_pcm(&bytes_8u, 8, false, true).unwrap();
         assert_eq!(samples_8u.len(), 3);
         assert!((samples_8u[0] - 0.0).abs() < 0.01);
-        
+
         // 16-bit signed big-endian
-        let bytes_16be = [0x40, 0x00];  // 16384 in big-endian
+        let bytes_16be = [0x40, 0x00]; // 16384 in big-endian
         let samples_16be = convert_raw_pcm(&bytes_16be, 16, true, false).unwrap();
         assert_eq!(samples_16be.len(), 1);
         assert!((samples_16be[0] - 0.5).abs() < 0.01);
     }
-    
+
     #[test]
     fn test_voice_command_parse() {
         assert_eq!(VoiceCommand::parse("cancel"), VoiceCommand::Cancel);
         assert_eq!(VoiceCommand::parse("stop"), VoiceCommand::Cancel);
         assert_eq!(VoiceCommand::parse("yes"), VoiceCommand::Confirm);
         assert_eq!(VoiceCommand::parse("confirm"), VoiceCommand::Confirm);
-        
+
         match VoiceCommand::parse("open google.com") {
-            VoiceCommand::Navigate(_) => {},
+            VoiceCommand::Navigate(_) => {}
             _ => panic!("Expected Navigate command"),
         }
-        
+
         match VoiceCommand::parse("create file test.rs") {
-            VoiceCommand::File(_) => {},
+            VoiceCommand::File(_) => {}
             _ => panic!("Expected File command"),
         }
-        
+
         match VoiceCommand::parse("what is the weather?") {
-            VoiceCommand::Query(_) => {},
+            VoiceCommand::Query(_) => {}
             _ => panic!("Expected Query command"),
         }
     }
-    
+
     #[test]
     fn test_voice_command_content() {
         let cmd = VoiceCommand::Query("test query".to_string());
         assert_eq!(cmd.content(), "test query");
         assert_eq!(cmd.description(), "Ask a question");
         assert!(!cmd.is_local());
-        
+
         assert!(VoiceCommand::Cancel.is_local());
         assert!(VoiceCommand::Confirm.is_local());
     }
-    
+
     #[test]
     fn test_microphone_capture() {
         let config = VoiceConfig::default();
         let mic = MicrophoneCapture::new(config);
-        
+
         assert!(!mic.is_recording());
         assert_eq!(mic.duration_secs(), 0.0);
         assert_eq!(mic.sample_count(), 0);
-        
+
         // Simulate push samples
         mic.start().unwrap();
         assert!(mic.is_recording());
-        
+
         mic.push_samples(&[0.5, -0.5, 0.3, -0.3]);
         assert_eq!(mic.sample_count(), 4);
-        
+
         let samples = mic.stop();
         assert_eq!(samples.len(), 4);
         assert!(!mic.is_recording());
     }
-    
+
     #[test]
     fn test_audio_device_listing() {
         let devices = list_audio_devices().unwrap();
         assert!(!devices.is_empty());
         assert!(devices.iter().any(|d| d.is_default));
     }
-    
+
     #[test]
     fn test_hotkey_modifiers() {
         let mods = HotkeyModifiers::ctrl_shift();
@@ -2172,10 +2259,10 @@ mod tests {
         assert!(!mods.alt);
         assert!(mods.matches(true, false, true, false));
         assert!(!mods.matches(true, true, true, false));
-        
+
         assert_eq!(mods.display(), "Ctrl+Shift");
     }
-    
+
     #[test]
     fn test_key_names() {
         assert_eq!(key_name(0x14), "Caps Lock");
@@ -2183,16 +2270,16 @@ mod tests {
         assert_eq!(key_name(0x7B), "F12");
         assert_eq!(key_name(0x20), "Space");
     }
-    
+
     #[test]
     fn test_cloud_provider_endpoints() {
         assert!(CloudProvider::OpenAI.endpoint().contains("openai.com"));
         assert!(CloudProvider::Google.endpoint().contains("googleapis.com"));
         assert!(CloudProvider::Deepgram.endpoint().contains("deepgram.com"));
-        
+
         assert_eq!(CloudProvider::OpenAI.name(), "OpenAI Whisper");
     }
-    
+
     #[test]
     fn test_whisper_params_default() {
         let params = WhisperParams::default();
@@ -2201,7 +2288,7 @@ mod tests {
         assert_eq!(params.beam_size, 5);
         assert!(params.suppress_non_speech);
     }
-    
+
     #[test]
     fn test_transcript_segment() {
         let segment = TranscriptSegment {

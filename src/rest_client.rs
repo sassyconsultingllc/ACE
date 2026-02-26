@@ -3,7 +3,6 @@
 //! Test APIs directly in the browser - like Postman built-in.
 //! The killer feature for developers.
 
- 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -39,7 +38,7 @@ impl Method {
             Method::Options => "OPTIONS",
         }
     }
-    
+
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "GET" => Some(Method::Get),
@@ -52,7 +51,7 @@ impl Method {
             _ => None,
         }
     }
-    
+
     pub fn has_body(&self) -> bool {
         matches!(self, Method::Post | Method::Put | Method::Patch)
     }
@@ -149,8 +148,13 @@ pub struct RequestCollection {
 impl RequestCollection {
     /// Summary of the collection
     pub fn describe(&self) -> String {
-        format!("RequestCollection[id={}, name={}, requests={}, vars={}]",
-            self.id, self.name, self.requests.len(), self.variables.len())
+        format!(
+            "RequestCollection[id={}, name={}, requests={}, vars={}]",
+            self.id,
+            self.name,
+            self.requests.len(),
+            self.variables.len()
+        )
     }
 
     pub fn new(name: &str) -> Self {
@@ -161,7 +165,7 @@ impl RequestCollection {
             variables: HashMap::new(),
         }
     }
-    
+
     pub fn add_request(&mut self, request: SavedRequest) {
         self.requests.push(request);
     }
@@ -186,21 +190,22 @@ impl RestResponse {
         let value: serde_json::Value = serde_json::from_str(text).ok()?;
         serde_json::to_string_pretty(&value).ok()
     }
-    
+
     /// Get content type from headers
     pub fn content_type(&self) -> Option<&str> {
-        self.headers.iter()
+        self.headers
+            .iter()
             .find(|(k, _)| crate::fontcase::ascii_lower(k) == "content-type")
             .map(|(_, v)| v.as_str())
     }
-    
+
     /// Is this a JSON response?
     pub fn is_json(&self) -> bool {
         self.content_type()
             .map(|ct| ct.contains("json"))
             .unwrap_or(false)
     }
-    
+
     /// Is this HTML?
     pub fn is_html(&self) -> bool {
         self.content_type()
@@ -213,9 +218,19 @@ impl RestResponse {
         let body_preview = if self.is_json() {
             self.json_pretty().unwrap_or_default()
         } else if self.is_html() {
-            self.body_text.as_deref().unwrap_or("").chars().take(100).collect()
+            self.body_text
+                .as_deref()
+                .unwrap_or("")
+                .chars()
+                .take(100)
+                .collect()
         } else {
-            self.body_text.as_deref().unwrap_or("(binary)").chars().take(100).collect()
+            self.body_text
+                .as_deref()
+                .unwrap_or("(binary)")
+                .chars()
+                .take(100)
+                .collect()
         };
         format!("RestResponse[status={} {}, headers={}, size={}, raw_body={}, duration={}ms, type={}, preview={}]",
             self.status, self.status_text, self.headers.len(),
@@ -230,21 +245,21 @@ pub struct RestClient {
     /// Current request being built
     pub method: Method,
     pub url: String,
-    pub headers: Vec<(String, String, bool)>,  // name, value, enabled
+    pub headers: Vec<(String, String, bool)>, // name, value, enabled
     pub body: String,
     pub content_type: ContentType,
-    
+
     /// Response
     pub response: Option<RestResponse>,
     pub error: Option<String>,
     pub is_loading: bool,
-    
+
     /// Saved collections
     pub collections: Vec<RequestCollection>,
-    
+
     /// Environment variables
     pub environment: HashMap<String, String>,
-    
+
     /// History
     pub history: Vec<SavedRequest>,
     pub max_history: usize,
@@ -256,7 +271,11 @@ impl RestClient {
             method: Method::Get,
             url: String::new(),
             headers: vec![
-                ("Content-Type".to_string(), "application/json".to_string(), true),
+                (
+                    "Content-Type".to_string(),
+                    "application/json".to_string(),
+                    true,
+                ),
                 ("Accept".to_string(), "application/json".to_string(), true),
             ],
             body: String::new(),
@@ -270,42 +289,42 @@ impl RestClient {
             max_history: 100,
         }
     }
-    
+
     /// Substitute environment variables in a string
     pub fn substitute_vars(&self, text: &str) -> String {
         let mut result = text.to_string();
-        
+
         for (key, value) in &self.environment {
-            let pattern = format!("{{{{{}}}}}", key);  // {{key}}
+            let pattern = format!("{{{{{}}}}}", key); // {{key}}
             result = result.replace(&pattern, value);
         }
-        
+
         result
     }
-    
+
     /// Execute the current request
     pub fn execute(&mut self) {
         self.error = None;
         self.response = None;
         self.is_loading = true;
-        
+
         let url = self.substitute_vars(&self.url);
-        
+
         // Validate URL
         if url.is_empty() {
             self.error = Some("URL is required".to_string());
             self.is_loading = false;
             return;
         }
-        
+
         if !url.starts_with("http://") && !url.starts_with("https://") {
             self.error = Some("URL must start with http:// or https://".to_string());
             self.is_loading = false;
             return;
         }
-        
+
         let start = std::time::Instant::now();
-        
+
         // Build request
         let mut request = match self.method {
             Method::Get => ureq::get(&url),
@@ -316,7 +335,7 @@ impl RestClient {
             Method::Head => ureq::head(&url),
             Method::Options => ureq::request("OPTIONS", &url),
         };
-        
+
         // Add headers
         for (name, value, enabled) in &self.headers {
             if *enabled {
@@ -325,7 +344,7 @@ impl RestClient {
                 request = request.set(&name_sub, &value_sub);
             }
         }
-        
+
         // Send request
         let result = if self.method.has_body() && !self.body.is_empty() {
             let body = self.substitute_vars(&self.body);
@@ -333,14 +352,14 @@ impl RestClient {
         } else {
             request.call()
         };
-        
+
         let duration = start.elapsed().as_millis() as u64;
-        
+
         match result {
             Ok(response) => {
                 let status = response.status();
                 let status_text = response.status_text().to_string();
-                
+
                 // Collect headers
                 let mut headers = Vec::new();
                 for name in response.headers_names() {
@@ -348,7 +367,7 @@ impl RestClient {
                         headers.push((name, value.to_string()));
                     }
                 }
-                
+
                 // Read body
                 let mut body = Vec::new();
                 if response.into_reader().read_to_end(&mut body).is_err() {
@@ -356,10 +375,10 @@ impl RestClient {
                     self.is_loading = false;
                     return;
                 }
-                
+
                 let body_text = String::from_utf8(body.clone()).ok();
                 let size_bytes = body.len();
-                
+
                 self.response = Some(RestResponse {
                     status,
                     status_text,
@@ -369,70 +388,76 @@ impl RestClient {
                     duration_ms: duration,
                     size_bytes,
                 });
-                
+
                 // Add to history
                 let saved = SavedRequest {
                     id: uuid_v4(),
                     name: format!("{} {}", self.method.as_str(), self.url),
                     method: self.method,
                     url: self.url.clone(),
-                    headers: self.headers.iter()
+                    headers: self
+                        .headers
+                        .iter()
                         .filter(|(_, _, e)| *e)
                         .map(|(n, v, _)| (n.clone(), v.clone()))
                         .collect(),
-                    body: if self.body.is_empty() { None } else { Some(self.body.clone()) },
+                    body: if self.body.is_empty() {
+                        None
+                    } else {
+                        Some(self.body.clone())
+                    },
                     content_type: self.content_type,
                     created: chrono::Utc::now(),
                     updated: chrono::Utc::now(),
                 };
-                
+
                 self.history.insert(0, saved);
                 if self.history.len() > self.max_history {
                     self.history.pop();
                 }
             }
-            Err(e) => {
-                match e {
-                    ureq::Error::Status(code, response) => {
-                        let status_text = response.status_text().to_string();
-                        
-                        let mut headers = Vec::new();
-                        for name in response.headers_names() {
-                            if let Some(value) = response.header(&name) {
-                                headers.push((name, value.to_string()));
-                            }
+            Err(e) => match e {
+                ureq::Error::Status(code, response) => {
+                    let status_text = response.status_text().to_string();
+
+                    let mut headers = Vec::new();
+                    for name in response.headers_names() {
+                        if let Some(value) = response.header(&name) {
+                            headers.push((name, value.to_string()));
                         }
-                        
-                        let mut body = Vec::new();
-                        let _ = response.into_reader().read_to_end(&mut body);
-                        let body_text = String::from_utf8(body.clone()).ok();
-                        let size_bytes = body.len();
-                        
-                        self.response = Some(RestResponse {
-                            status: code,
-                            status_text,
-                            headers,
-                            body,
-                            body_text,
-                            duration_ms: duration,
-                            size_bytes,
-                        });
                     }
-                    ureq::Error::Transport(t) => {
-                        self.error = Some(format!("Transport error: {}", t));
-                    }
+
+                    let mut body = Vec::new();
+                    let _ = response.into_reader().read_to_end(&mut body);
+                    let body_text = String::from_utf8(body.clone()).ok();
+                    let size_bytes = body.len();
+
+                    self.response = Some(RestResponse {
+                        status: code,
+                        status_text,
+                        headers,
+                        body,
+                        body_text,
+                        duration_ms: duration,
+                        size_bytes,
+                    });
                 }
-            }
+                ureq::Error::Transport(t) => {
+                    self.error = Some(format!("Transport error: {}", t));
+                }
+            },
         }
-        
+
         self.is_loading = false;
     }
-    
+
     /// Load a saved request
     pub fn load_request(&mut self, request: &SavedRequest) {
         self.method = request.method;
         self.url = request.url.clone();
-        self.headers = request.headers.iter()
+        self.headers = request
+            .headers
+            .iter()
             .map(|(n, v)| (n.clone(), v.clone(), true))
             .collect();
         self.body = request.body.clone().unwrap_or_default();
@@ -440,43 +465,48 @@ impl RestClient {
         self.response = None;
         self.error = None;
     }
-    
+
     /// Clear the current request
     pub fn clear(&mut self) {
         self.method = Method::Get;
         self.url.clear();
         self.headers = vec![
-            ("Content-Type".to_string(), "application/json".to_string(), true),
+            (
+                "Content-Type".to_string(),
+                "application/json".to_string(),
+                true,
+            ),
             ("Accept".to_string(), "application/json".to_string(), true),
         ];
         self.body.clear();
         self.response = None;
         self.error = None;
     }
-    
+
     /// Add a header
     pub fn add_header(&mut self, name: &str, value: &str) {
-        self.headers.push((name.to_string(), value.to_string(), true));
+        self.headers
+            .push((name.to_string(), value.to_string(), true));
     }
-    
+
     /// Remove a header
     pub fn remove_header(&mut self, index: usize) {
         if index < self.headers.len() {
             self.headers.remove(index);
         }
     }
-    
+
     /// Toggle header enabled state
     pub fn toggle_header(&mut self, index: usize) {
         if let Some(header) = self.headers.get_mut(index) {
             header.2 = !header.2;
         }
     }
-    
+
     /// Generate cURL command for current request
     pub fn to_curl(&self) -> String {
         let mut parts = vec![format!("curl -X {}", self.method.as_str())];
-        
+
         for (name, value, enabled) in &self.headers {
             if *enabled {
                 let name_sub = self.substitute_vars(name);
@@ -484,49 +514,53 @@ impl RestClient {
                 parts.push(format!("-H '{}: {}'", name_sub, value_sub));
             }
         }
-        
+
         if self.method.has_body() && !self.body.is_empty() {
             let body = self.substitute_vars(&self.body);
             parts.push(format!("-d '{}'", body.replace("'", "\\'")));
         }
-        
+
         let url = self.substitute_vars(&self.url);
         parts.push(format!("'{}'", url));
-        
+
         parts.join(" \\\n  ")
     }
-    
+
     /// Generate JavaScript fetch code
     pub fn to_fetch(&self) -> String {
         let url = self.substitute_vars(&self.url);
         let mut lines = vec![format!("fetch('{}', {{", url)];
-        
+
         lines.push(format!("  method: '{}',", self.method.as_str()));
-        
+
         // Headers
         lines.push("  headers: {".to_string());
         for (i, (name, value, enabled)) in self.headers.iter().enumerate() {
             if *enabled {
                 let name_sub = self.substitute_vars(name);
                 let value_sub = self.substitute_vars(value);
-                let comma = if i < self.headers.iter().filter(|(_, _, e)| *e).count() - 1 { "," } else { "" };
+                let comma = if i < self.headers.iter().filter(|(_, _, e)| *e).count() - 1 {
+                    ","
+                } else {
+                    ""
+                };
                 lines.push(format!("    '{}': '{}'{}", name_sub, value_sub, comma));
             }
         }
         lines.push("  },".to_string());
-        
+
         // Body
         if self.method.has_body() && !self.body.is_empty() {
             let body = self.substitute_vars(&self.body);
             let escaped = body.replace("'", "\\'").replace("\n", "\\n");
             lines.push(format!("  body: '{}'", escaped));
         }
-        
+
         lines.push("})".to_string());
         lines.push(".then(response => response.json())".to_string());
         lines.push(".then(data => console.log(data))".to_string());
         lines.push(".catch(error => console.error(error));".to_string());
-        
+
         lines.join("\n")
     }
 }
@@ -534,23 +568,35 @@ impl RestClient {
 impl RestClient {
     /// Summary of the client state for diagnostics
     pub fn describe(&self) -> String {
-        let resp_desc = self.response.as_ref().map(|r| r.describe()).unwrap_or_default();
+        let resp_desc = self
+            .response
+            .as_ref()
+            .map(|r| r.describe())
+            .unwrap_or_default();
         let fetch_code = self.to_fetch();
         let curl_code = self.to_curl();
-        let collection_descs: Vec<_> = self.collections.iter()
-            .map(|c| c.describe()).collect();
-        let history_descs: Vec<_> = self.history.iter().take(3)
-            .map(|h| h.describe()).collect();
-        format!("RestClient[method={}, url={}, headers={}, body={}, type={}, \
+        let collection_descs: Vec<_> = self.collections.iter().map(|c| c.describe()).collect();
+        let history_descs: Vec<_> = self.history.iter().take(3).map(|h| h.describe()).collect();
+        format!(
+            "RestClient[method={}, url={}, headers={}, body={}, type={}, \
                  response={}, error={:?}, loading={}, collections=[{}], \
                  env={}, history={}/{}, recent=[{}], curl_len={}, fetch_len={}]",
-            self.method.as_str(), self.url, self.headers.len(), self.body.len(),
+            self.method.as_str(),
+            self.url,
+            self.headers.len(),
+            self.body.len(),
             self.content_type.mime_type(),
-            resp_desc, self.error, self.is_loading,
+            resp_desc,
+            self.error,
+            self.is_loading,
             collection_descs.join("; "),
-            self.environment.len(), self.history.len(), self.max_history,
+            self.environment.len(),
+            self.history.len(),
+            self.max_history,
             history_descs.join("; "),
-            curl_code.len(), fetch_code.len())
+            curl_code.len(),
+            fetch_code.len()
+        )
     }
 
     /// Save current request to a collection, creating it if needed
@@ -560,7 +606,9 @@ impl RestClient {
             self.method,
             &self.url,
         );
-        let collection = self.collections.iter_mut()
+        let collection = self
+            .collections
+            .iter_mut()
             .find(|c| c.name == collection_name);
         if let Some(col) = collection {
             col.add_request(request);
@@ -585,7 +633,7 @@ fn uuid_v4() -> String {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let bytes: [u8; 16] = rng.r#gen();
-    
+
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
         bytes[0], bytes[1], bytes[2], bytes[3],
@@ -599,24 +647,28 @@ fn uuid_v4() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_substitute_vars() {
         let mut client = RestClient::new();
-        client.environment.insert("host".to_string(), "api.example.com".to_string());
-        client.environment.insert("version".to_string(), "v1".to_string());
-        
+        client
+            .environment
+            .insert("host".to_string(), "api.example.com".to_string());
+        client
+            .environment
+            .insert("version".to_string(), "v1".to_string());
+
         let result = client.substitute_vars("https://{{host}}/{{version}}/users");
         assert_eq!(result, "https://api.example.com/v1/users");
     }
-    
+
     #[test]
     fn test_to_curl() {
         let mut client = RestClient::new();
         client.method = Method::Post;
         client.url = "https://api.example.com/users".to_string();
         client.body = r#"{"name": "test"}"#.to_string();
-        
+
         let curl = client.to_curl();
         assert!(curl.contains("curl"));
         assert!(curl.contains("POST"));

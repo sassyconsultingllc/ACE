@@ -40,7 +40,7 @@ impl TextInput {
             max_history: 50,
         }
     }
-    
+
     pub fn with_text(text: String) -> Self {
         let cursor = text.len();
         Self {
@@ -52,7 +52,7 @@ impl TextInput {
             max_history: 50,
         }
     }
-    
+
     /// Get selection range (start, end) normalized
     pub fn selection(&self) -> Option<(usize, usize)> {
         self.selection_start.map(|start| {
@@ -63,17 +63,17 @@ impl TextInput {
             }
         })
     }
-    
+
     /// Insert character at cursor
     pub fn insert_char(&mut self, c: char) {
         // Delete selection first if any
         self.delete_selection();
-        
+
         self.text.insert(self.cursor, c);
         self.cursor += c.len_utf8();
         self.save_history();
     }
-    
+
     /// Insert string at cursor
     pub fn insert_str(&mut self, s: &str) {
         self.delete_selection();
@@ -81,7 +81,7 @@ impl TextInput {
         self.cursor += s.len();
         self.save_history();
     }
-    
+
     /// Delete selection if any, returns true if deleted
     pub fn delete_selection(&mut self) -> bool {
         if let Some((start, end)) = self.selection() {
@@ -92,14 +92,14 @@ impl TextInput {
         }
         false
     }
-    
+
     /// Backspace - delete char before cursor
     pub fn backspace(&mut self) {
         if self.delete_selection() {
             self.save_history();
             return;
         }
-        
+
         if self.cursor > 0 {
             // Find previous char boundary
             let prev = self.text[..self.cursor]
@@ -107,20 +107,20 @@ impl TextInput {
                 .last()
                 .map(|(i, _)| i)
                 .unwrap_or(0);
-            
+
             self.text.drain(prev..self.cursor);
             self.cursor = prev;
             self.save_history();
         }
     }
-    
+
     /// Delete - delete char after cursor
     pub fn delete(&mut self) {
         if self.delete_selection() {
             self.save_history();
             return;
         }
-        
+
         if self.cursor < self.text.len() {
             // Find next char boundary
             let next = self.text[self.cursor..]
@@ -128,12 +128,12 @@ impl TextInput {
                 .nth(1)
                 .map(|(i, _)| self.cursor + i)
                 .unwrap_or(self.text.len());
-            
+
             self.text.drain(self.cursor..next);
             self.save_history();
         }
     }
-    
+
     /// Move cursor left
     pub fn move_left(&mut self, select: bool) {
         if !select {
@@ -144,7 +144,7 @@ impl TextInput {
                 return;
             }
         }
-        
+
         if self.cursor > 0 {
             // Start selection if shift held
             if select && self.selection_start.is_none() {
@@ -152,7 +152,7 @@ impl TextInput {
             } else if !select {
                 self.selection_start = None;
             }
-            
+
             // Find previous char boundary
             self.cursor = self.text[..self.cursor]
                 .char_indices()
@@ -161,7 +161,7 @@ impl TextInput {
                 .unwrap_or(0);
         }
     }
-    
+
     /// Move cursor right
     pub fn move_right(&mut self, select: bool) {
         if !select {
@@ -172,14 +172,14 @@ impl TextInput {
                 return;
             }
         }
-        
+
         if self.cursor < self.text.len() {
             if select && self.selection_start.is_none() {
                 self.selection_start = Some(self.cursor);
             } else if !select {
                 self.selection_start = None;
             }
-            
+
             // Find next char boundary
             self.cursor = self.text[self.cursor..]
                 .char_indices()
@@ -188,7 +188,7 @@ impl TextInput {
                 .unwrap_or(self.text.len());
         }
     }
-    
+
     /// Move to start
     pub fn move_home(&mut self, select: bool) {
         if select && self.selection_start.is_none() {
@@ -198,7 +198,7 @@ impl TextInput {
         }
         self.cursor = 0;
     }
-    
+
     /// Move to end
     pub fn move_end(&mut self, select: bool) {
         if select && self.selection_start.is_none() {
@@ -208,23 +208,23 @@ impl TextInput {
         }
         self.cursor = self.text.len();
     }
-    
+
     /// Select all
     pub fn select_all(&mut self) {
         self.selection_start = Some(0);
         self.cursor = self.text.len();
     }
-    
+
     /// Clear selection
     pub fn clear_selection(&mut self) {
         self.selection_start = None;
     }
-    
+
     /// Get selected text
     pub fn selected_text(&self) -> Option<&str> {
         self.selection().map(|(start, end)| &self.text[start..end])
     }
-    
+
     /// Cut selected text
     pub fn cut(&mut self) -> Option<String> {
         self.selection().map(|(start, end)| {
@@ -234,7 +234,7 @@ impl TextInput {
             cut
         })
     }
-    
+
     /// Set text (replaces all)
     pub fn set_text(&mut self, text: String) {
         self.text = text;
@@ -242,7 +242,7 @@ impl TextInput {
         self.selection_start = None;
         self.save_history();
     }
-    
+
     /// Save current state to history
     fn save_history(&mut self) {
         // Only save if different from last
@@ -254,7 +254,7 @@ impl TextInput {
             self.history_index = self.history.len();
         }
     }
-    
+
     /// Undo
     pub fn undo(&mut self) {
         if self.history_index > 0 {
@@ -266,7 +266,7 @@ impl TextInput {
             }
         }
     }
-    
+
     /// Is empty
     pub fn is_empty(&self) -> bool {
         self.text.is_empty()
@@ -297,24 +297,24 @@ impl FocusManager {
             tab_search: TextInput::new(),
         }
     }
-    
+
     /// Focus the address bar
     pub fn focus_address_bar(&mut self, url: &str) {
         self.address_bar.set_text(url.to_string());
         self.address_bar.select_all();
         self.current = FocusTarget::AddressBar;
     }
-    
+
     /// Blur (unfocus) everything
     pub fn blur(&mut self) {
         self.current = FocusTarget::None;
     }
-    
+
     /// Check if address bar has focus
     pub fn is_address_bar_focused(&self) -> bool {
         self.current == FocusTarget::AddressBar
     }
-    
+
     /// Get current input target
     pub fn current_input(&mut self) -> Option<&mut TextInput> {
         match self.current {
@@ -324,7 +324,7 @@ impl FocusManager {
             _ => None,
         }
     }
-    
+
     /// Handle character input
     pub fn handle_char(&mut self, c: char) {
         if let Some(input) = self.current_input() {

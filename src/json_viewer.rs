@@ -3,7 +3,6 @@
 //! Pretty-print and navigate JSON responses.
 //! Collapsible tree view with syntax highlighting.
 
- 
 use crate::style::Color;
 
 /// JSON value type (simplified for our use)
@@ -14,7 +13,7 @@ pub enum JsonValue {
     Number(f64),
     String(String),
     Array(Vec<JsonValue>),
-    Object(Vec<(String, JsonValue)>),  // Preserves order
+    Object(Vec<(String, JsonValue)>), // Preserves order
 }
 
 impl JsonValue {
@@ -24,20 +23,20 @@ impl JsonValue {
         if trimmed.is_empty() {
             return Err("Empty input".to_string());
         }
-        
+
         let (value, _) = Self::parse_value(trimmed)?;
         Ok(value)
     }
-    
+
     fn parse_value(s: &str) -> Result<(JsonValue, &str), String> {
         let s = s.trim_start();
-        
+
         if s.is_empty() {
             return Err("Unexpected end of input".to_string());
         }
-        
+
         let first = s.chars().next().unwrap();
-        
+
         match first {
             'n' => Self::parse_null(s),
             't' | 'f' => Self::parse_bool(s),
@@ -48,7 +47,7 @@ impl JsonValue {
             _ => Err(format!("Unexpected character: {}", first)),
         }
     }
-    
+
     fn parse_null(s: &str) -> Result<(JsonValue, &str), String> {
         if let Some(stripped) = s.strip_prefix("null") {
             Ok((JsonValue::Null, stripped))
@@ -56,7 +55,7 @@ impl JsonValue {
             Err("Expected 'null'".to_string())
         }
     }
-    
+
     fn parse_bool(s: &str) -> Result<(JsonValue, &str), String> {
         if let Some(stripped) = s.strip_prefix("true") {
             Ok((JsonValue::Bool(true), stripped))
@@ -66,37 +65,45 @@ impl JsonValue {
             Err("Expected 'true' or 'false'".to_string())
         }
     }
-    
+
     fn parse_number(s: &str) -> Result<(JsonValue, &str), String> {
         let mut end = 0;
         let chars: Vec<char> = s.chars().collect();
-        
+
         // Optional minus
         if end < chars.len() && chars[end] == '-' {
             end += 1;
         }
-        
+
         // Digits
-        while end < chars.len() && (chars[end].is_ascii_digit() || chars[end] == '.' || chars[end] == 'e' || chars[end] == 'E' || chars[end] == '+' || chars[end] == '-') {
+        while end < chars.len()
+            && (chars[end].is_ascii_digit()
+                || chars[end] == '.'
+                || chars[end] == 'e'
+                || chars[end] == 'E'
+                || chars[end] == '+'
+                || chars[end] == '-')
+        {
             end += 1;
         }
-        
+
         let num_str = &s[..end];
-        let num = num_str.parse::<f64>()
+        let num = num_str
+            .parse::<f64>()
             .map_err(|e| format!("Invalid number: {}", e))?;
-        
+
         Ok((JsonValue::Number(num), &s[end..]))
     }
-    
+
     fn parse_string(s: &str) -> Result<(JsonValue, &str), String> {
         if !s.starts_with('"') {
             return Err("Expected string".to_string());
         }
-        
+
         let chars: Vec<char> = s.chars().collect();
         let mut result = String::new();
         let mut i = 1;
-        
+
         while i < chars.len() {
             match chars[i] {
                 '"' => {
@@ -116,7 +123,7 @@ impl JsonValue {
                         'u' => {
                             // Unicode escape
                             if i + 4 < chars.len() {
-                                let hex: String = chars[i+1..i+5].iter().collect();
+                                let hex: String = chars[i + 1..i + 5].iter().collect();
                                 if let Ok(code) = u32::from_str_radix(&hex, 16) {
                                     if let Some(c) = char::from_u32(code) {
                                         result.push(c);
@@ -135,27 +142,27 @@ impl JsonValue {
             }
             i += 1;
         }
-        
+
         Err("Unterminated string".to_string())
     }
-    
+
     fn parse_array(s: &str) -> Result<(JsonValue, &str), String> {
         if !s.starts_with('[') {
             return Err("Expected array".to_string());
         }
-        
+
         let mut rest = s[1..].trim_start();
         let mut items = Vec::new();
-        
+
         if let Some(stripped) = rest.strip_prefix(']') {
             return Ok((JsonValue::Array(items), stripped));
         }
-        
+
         loop {
             let (value, r) = Self::parse_value(rest)?;
             items.push(value);
             rest = r.trim_start();
-            
+
             if let Some(stripped) = rest.strip_prefix(']') {
                 return Ok((JsonValue::Array(items), stripped));
             } else if let Some(stripped) = rest.strip_prefix(',') {
@@ -165,19 +172,19 @@ impl JsonValue {
             }
         }
     }
-    
+
     fn parse_object(s: &str) -> Result<(JsonValue, &str), String> {
         if !s.starts_with('{') {
             return Err("Expected object".to_string());
         }
-        
+
         let mut rest = s[1..].trim_start();
         let mut pairs = Vec::new();
-        
+
         if let Some(stripped) = rest.strip_prefix('}') {
             return Ok((JsonValue::Object(pairs), stripped));
         }
-        
+
         loop {
             // Parse key
             let (key, r) = Self::parse_string(rest)?;
@@ -185,19 +192,19 @@ impl JsonValue {
                 JsonValue::String(s) => s,
                 _ => return Err("Expected string key".to_string()),
             };
-            
+
             rest = r.trim_start();
-            
+
             if !rest.starts_with(':') {
                 return Err("Expected ':'".to_string());
             }
             rest = rest[1..].trim_start();
-            
+
             // Parse value
             let (value, r) = Self::parse_value(rest)?;
             pairs.push((key_str, value));
             rest = r.trim_start();
-            
+
             if let Some(stripped) = rest.strip_prefix('}') {
                 return Ok((JsonValue::Object(pairs), stripped));
             } else if let Some(stripped) = rest.strip_prefix(',') {
@@ -207,11 +214,11 @@ impl JsonValue {
             }
         }
     }
-    
+
     /// Pretty print with indentation
     pub fn pretty_print(&self, indent: usize) -> String {
         let spaces = "  ".repeat(indent);
-        
+
         match self {
             JsonValue::Null => "null".to_string(),
             JsonValue::Bool(b) => if *b { "true" } else { "false" }.to_string(),
@@ -228,9 +235,7 @@ impl JsonValue {
                     "[]".to_string()
                 } else if items.len() <= 3 && self.is_simple_array() {
                     // Single line for simple short arrays
-                    let inner: Vec<String> = items.iter()
-                        .map(|v| v.pretty_print(0))
-                        .collect();
+                    let inner: Vec<String> = items.iter().map(|v| v.pretty_print(0)).collect();
                     format!("[{}]", inner.join(", "))
                 } else {
                     let inner_spaces = "  ".repeat(indent + 1);
@@ -270,16 +275,22 @@ impl JsonValue {
             }
         }
     }
-    
+
     fn is_simple_array(&self) -> bool {
         match self {
-            JsonValue::Array(items) => items.iter().all(|v| matches!(v, 
-                JsonValue::Null | JsonValue::Bool(_) | JsonValue::Number(_) | JsonValue::String(_)
-            )),
+            JsonValue::Array(items) => items.iter().all(|v| {
+                matches!(
+                    v,
+                    JsonValue::Null
+                        | JsonValue::Bool(_)
+                        | JsonValue::Number(_)
+                        | JsonValue::String(_)
+                )
+            }),
             _ => false,
         }
     }
-    
+
     fn escape_string(s: &str) -> String {
         let mut result = String::new();
         for c in s.chars() {
@@ -295,7 +306,7 @@ impl JsonValue {
         }
         result
     }
-    
+
     /// Get type name
     pub fn type_name(&self) -> &'static str {
         match self {
@@ -307,7 +318,7 @@ impl JsonValue {
             JsonValue::Object(_) => "object",
         }
     }
-    
+
     /// Get child count for arrays/objects
     pub fn child_count(&self) -> usize {
         match self {
@@ -338,7 +349,7 @@ impl JsonTreeNode {
             path: Vec::new(),
         }
     }
-    
+
     pub fn with_key(mut self, key: String) -> Self {
         self.key = Some(key);
         self
@@ -378,7 +389,7 @@ impl JsonViewer {
             current_search_index: 0,
         }
     }
-    
+
     /// Load JSON from string
     pub fn load(&mut self, json: &str) -> Result<(), String> {
         let value = JsonValue::parse(json)?;
@@ -388,7 +399,7 @@ impl JsonViewer {
         self.selected_path = None;
         Ok(())
     }
-    
+
     /// Toggle expand/collapse at path
     pub fn toggle_expand(&mut self, path: &str) {
         if self.expanded_paths.contains(path) {
@@ -397,14 +408,14 @@ impl JsonViewer {
             self.expanded_paths.insert(path.to_string());
         }
     }
-    
+
     /// Expand all
     pub fn expand_all(&mut self) {
         if let Some(root) = self.root.clone() {
             self.expand_recursive(&root, "$".to_string());
         }
     }
-    
+
     fn expand_recursive(&mut self, value: &JsonValue, path: String) {
         self.expanded_paths.insert(path.clone());
         match value {
@@ -421,29 +432,29 @@ impl JsonViewer {
             _ => {}
         }
     }
-    
+
     /// Collapse all
     pub fn collapse_all(&mut self) {
         self.expanded_paths.clear();
         self.expanded_paths.insert("$".to_string());
     }
-    
+
     /// Search for text in JSON
     pub fn search(&mut self, query: &str) {
         self.search_query = query.to_string();
         self.search_results.clear();
         self.current_search_index = 0;
-        
+
         if query.is_empty() {
             return;
         }
-        
+
         if let Some(root) = self.root.clone() {
             let query_lower = crate::fontcase::ascii_lower(query);
             self.search_recursive(&root, "$".to_string(), &query_lower);
         }
     }
-    
+
     fn search_recursive(&mut self, value: &JsonValue, path: String, query: &str) {
         match value {
             JsonValue::String(s) if crate::fontcase::ascii_lower(s).contains(query) => {
@@ -468,19 +479,19 @@ impl JsonViewer {
             _ => {}
         }
     }
-    
+
     /// Go to next search result
     pub fn next_result(&mut self) {
         if !self.search_results.is_empty() {
             self.current_search_index = (self.current_search_index + 1) % self.search_results.len();
             let path = self.search_results[self.current_search_index].clone();
             self.selected_path = Some(path.clone());
-            
+
             // Expand path to selected
             self.expand_path_to(&path);
         }
     }
-    
+
     /// Go to previous search result
     pub fn prev_result(&mut self) {
         if !self.search_results.is_empty() {
@@ -491,11 +502,11 @@ impl JsonViewer {
             };
             let path = self.search_results[self.current_search_index].clone();
             self.selected_path = Some(path.clone());
-            
+
             self.expand_path_to(&path);
         }
     }
-    
+
     fn expand_path_to(&mut self, path: &str) {
         let mut current = String::new();
         for part in path.split(['.', '[']) {
@@ -509,34 +520,38 @@ impl JsonViewer {
             self.expanded_paths.insert(current.clone());
         }
     }
-    
+
     /// Copy value at path to clipboard format
     pub fn copy_value(&self, path: &str) -> Option<String> {
         self.get_value_at_path(path).map(|v| v.pretty_print(0))
     }
-    
+
     /// Copy path
     pub fn copy_path(&self, path: &str) -> String {
         path.to_string()
     }
-    
+
     fn get_value_at_path(&self, path: &str) -> Option<&JsonValue> {
         let root = self.root.as_ref()?;
-        
+
         if path == "$" {
             return Some(root);
         }
-        
+
         let mut current = root;
-        let parts: Vec<&str> = path.trim_start_matches('$').trim_start_matches('.').split(['.', '[']).collect();
-        
+        let parts: Vec<&str> = path
+            .trim_start_matches('$')
+            .trim_start_matches('.')
+            .split(['.', '['])
+            .collect();
+
         for part in parts {
             if part.is_empty() {
                 continue;
             }
-            
+
             let part = part.trim_end_matches(']');
-            
+
             match current {
                 JsonValue::Array(items) => {
                     let idx: usize = part.parse().ok()?;
@@ -548,7 +563,7 @@ impl JsonViewer {
                 _ => return None,
             }
         }
-        
+
         Some(current)
     }
 }
@@ -558,7 +573,10 @@ impl JsonViewer {
     pub fn describe(&mut self) -> String {
         let root_type = self.root.as_ref().map(|v| v.type_name()).unwrap_or("empty");
         let expanded_count = self.expanded_paths.len();
-        let selected = self.selected_path.clone().unwrap_or_else(|| "none".to_string());
+        let selected = self
+            .selected_path
+            .clone()
+            .unwrap_or_else(|| "none".to_string());
         let search_count = self.search_results.len();
         let copy_path_str = self.copy_path("$");
         let copy_val = self.copy_value("$").unwrap_or_else(|| "null".to_string());
@@ -622,13 +640,13 @@ impl JsonColors {
 impl Default for JsonColors {
     fn default() -> Self {
         JsonColors {
-            key: Color::new(224, 108, 117, 255),    // Red
-            string: Color::new(152, 195, 121, 255), // Green
-            number: Color::new(209, 154, 102, 255), // Orange
-            bool_true: Color::new(86, 182, 194, 255), // Cyan
+            key: Color::new(224, 108, 117, 255),        // Red
+            string: Color::new(152, 195, 121, 255),     // Green
+            number: Color::new(209, 154, 102, 255),     // Orange
+            bool_true: Color::new(86, 182, 194, 255),   // Cyan
             bool_false: Color::new(198, 120, 221, 255), // Purple
-            null: Color::new(92, 99, 112, 255),     // Gray
-            bracket: Color::new(171, 178, 191, 255), // Light gray
+            null: Color::new(92, 99, 112, 255),         // Gray
+            bracket: Color::new(171, 178, 191, 255),    // Light gray
             colon: Color::new(171, 178, 191, 255),
         }
     }
@@ -757,7 +775,9 @@ mod tests {
     #[test]
     fn test_json_viewer_load_and_navigate() {
         let mut viewer = JsonViewer::new();
-        viewer.load(r#"{"name":"test","items":[1,2,3],"nested":{"a":"b"}}"#).unwrap();
+        viewer
+            .load(r#"{"name":"test","items":[1,2,3],"nested":{"a":"b"}}"#)
+            .unwrap();
         assert!(viewer.root.is_some());
 
         // toggle_expand
@@ -880,7 +900,9 @@ mod tests {
     #[test]
     fn test_json_value_get_at_path() {
         let mut viewer = JsonViewer::new();
-        viewer.load(r#"{"items":[10,20,30],"nested":{"deep":"val"}}"#).unwrap();
+        viewer
+            .load(r#"{"items":[10,20,30],"nested":{"deep":"val"}}"#)
+            .unwrap();
 
         let root_val = viewer.copy_value("$");
         assert!(root_val.is_some());

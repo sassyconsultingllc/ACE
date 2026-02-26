@@ -1,5 +1,5 @@
 //! CSS Layout Engine - Bridges cssparser -> taffy -> egui
-//! 
+//!
 //! This module integrates:
 //! - html5ever for DOM parsing (already have)
 //! - cssparser for CSS parsing (already have)
@@ -21,7 +21,7 @@ use taffy::{Overflow, Point};
 pub struct ComputedStyle {
     // Display
     pub display: Display,
-    
+
     // Flexbox
     pub flex_direction: FlexDirection,
     pub flex_wrap: FlexWrap,
@@ -32,14 +32,14 @@ pub struct ComputedStyle {
     pub flex_grow: f32,
     pub flex_shrink: f32,
     pub flex_basis: Dimension,
-    
+
     // Grid
     pub grid_template_columns: Vec<TrackSizingFunction>,
     pub grid_template_rows: Vec<TrackSizingFunction>,
     pub grid_column: Line<GridPlacement>,
     pub grid_row: Line<GridPlacement>,
     pub gap: Size<LengthPercentage>,
-    
+
     // Sizing
     pub width: Dimension,
     pub height: Dimension,
@@ -47,16 +47,16 @@ pub struct ComputedStyle {
     pub min_height: Dimension,
     pub max_width: Dimension,
     pub max_height: Dimension,
-    
+
     // Spacing
     pub margin: Rect<LengthPercentageAuto>,
     pub padding: Rect<LengthPercentage>,
     pub border: Rect<LengthPercentage>,
-    
+
     // Position
     pub position: Position,
     pub inset: Rect<LengthPercentageAuto>,
-    
+
     // Text
     pub color: [u8; 4],
     pub background_color: [u8; 4],
@@ -64,7 +64,7 @@ pub struct ComputedStyle {
     pub font_weight: u16,
     pub text_align: TextAlign,
     pub line_height: f32,
-    
+
     // Overflow
     pub overflow_x: Overflow,
     pub overflow_y: Overflow,
@@ -85,9 +85,18 @@ impl Default for ComputedStyle {
             flex_basis: Dimension::Auto,
             grid_template_columns: Vec::new(),
             grid_template_rows: Vec::new(),
-            grid_column: Line { start: GridPlacement::Auto, end: GridPlacement::Auto },
-            grid_row: Line { start: GridPlacement::Auto, end: GridPlacement::Auto },
-            gap: Size { width: LengthPercentage::Length(0.0), height: LengthPercentage::Length(0.0) },
+            grid_column: Line {
+                start: GridPlacement::Auto,
+                end: GridPlacement::Auto,
+            },
+            grid_row: Line {
+                start: GridPlacement::Auto,
+                end: GridPlacement::Auto,
+            },
+            gap: Size {
+                width: LengthPercentage::Length(0.0),
+                height: LengthPercentage::Length(0.0),
+            },
             width: Dimension::Auto,
             height: Dimension::Auto,
             min_width: Dimension::Auto,
@@ -166,15 +175,27 @@ impl ComputedStyle {
             flex_grow: self.flex_grow,
             flex_shrink: self.flex_shrink,
             flex_basis: self.flex_basis,
-            size: Size { width: self.width, height: self.height },
-            min_size: Size { width: self.min_width, height: self.min_height },
-            max_size: Size { width: self.max_width, height: self.max_height },
+            size: Size {
+                width: self.width,
+                height: self.height,
+            },
+            min_size: Size {
+                width: self.min_width,
+                height: self.min_height,
+            },
+            max_size: Size {
+                width: self.max_width,
+                height: self.max_height,
+            },
             margin: self.margin,
             padding: self.padding,
             border: self.border,
             inset: self.inset,
             gap: self.gap,
-            overflow: Point { x: self.overflow_x, y: self.overflow_y },
+            overflow: Point {
+                x: self.overflow_x,
+                y: self.overflow_y,
+            },
             grid_template_columns: self.grid_template_columns.clone(),
             grid_template_rows: self.grid_template_rows.clone(),
             grid_column: self.grid_column,
@@ -191,104 +212,104 @@ impl ComputedStyle {
 /// Parse CSS value to taffy Dimension
 pub fn parse_dimension(value: &str) -> Dimension {
     let value = value.trim();
-    
+
     if value == "auto" {
         return Dimension::Auto;
     }
-    
+
     if let Some(stripped) = value.strip_suffix("px") {
         if let Ok(v) = stripped.trim().parse::<f32>() {
             return Dimension::Length(v);
         }
     }
-    
+
     if let Some(stripped) = value.strip_suffix('%') {
         if let Ok(v) = stripped.trim().parse::<f32>() {
             return Dimension::Percent(v / 100.0);
         }
     }
-    
+
     if let Some(stripped) = value.strip_suffix("em") {
         if let Ok(v) = stripped.trim().parse::<f32>() {
             // Convert em to px (assume 16px base)
             return Dimension::Length(v * 16.0);
         }
     }
-    
+
     if let Some(stripped) = value.strip_suffix("rem") {
         if let Ok(v) = stripped.trim().parse::<f32>() {
             return Dimension::Length(v * 16.0);
         }
     }
-    
+
     if let Some(stripped) = value.strip_suffix("vw") {
         if let Ok(v) = stripped.trim().parse::<f32>() {
             // Viewport width - approximate
             return Dimension::Percent(v / 100.0);
         }
     }
-    
+
     if let Some(stripped) = value.strip_suffix("vh") {
         if let Ok(v) = stripped.trim().parse::<f32>() {
             return Dimension::Percent(v / 100.0);
         }
     }
-    
+
     // Try parsing as raw number (treat as px)
     if let Ok(v) = value.parse::<f32>() {
         return Dimension::Length(v);
     }
-    
+
     Dimension::Auto
 }
 
 /// Parse CSS length/percentage value
 pub fn parse_length_percentage(value: &str) -> LengthPercentage {
     let value = value.trim();
-    
+
     if let Some(stripped) = value.strip_suffix("px") {
         if let Ok(v) = stripped.trim().parse::<f32>() {
             return LengthPercentage::Length(v);
         }
     }
-    
+
     if let Some(stripped) = value.strip_suffix('%') {
         if let Ok(v) = stripped.trim().parse::<f32>() {
             return LengthPercentage::Percent(v / 100.0);
         }
     }
-    
+
     if let Ok(v) = value.parse::<f32>() {
         return LengthPercentage::Length(v);
     }
-    
+
     LengthPercentage::Length(0.0)
 }
 
 /// Parse CSS length/percentage/auto value
 pub fn parse_length_percentage_auto(value: &str) -> LengthPercentageAuto {
     let value = value.trim();
-    
+
     if value == "auto" {
         return LengthPercentageAuto::Auto;
     }
-    
+
     if let Some(stripped) = value.strip_suffix("px") {
         if let Ok(v) = stripped.trim().parse::<f32>() {
             return LengthPercentageAuto::Length(v);
         }
     }
-    
+
     if let Some(stripped) = value.strip_suffix('%') {
         if let Ok(v) = stripped.trim().parse::<f32>() {
             return LengthPercentageAuto::Percent(v / 100.0);
         }
     }
-    
+
     if let Ok(v) = value.parse::<f32>() {
         return LengthPercentageAuto::Length(v);
     }
-    
+
     LengthPercentageAuto::Auto
 }
 
@@ -374,7 +395,7 @@ pub fn parse_overflow(value: &str) -> Overflow {
 /// Parse color (returns RGBA)
 pub fn parse_color(value: &str) -> [u8; 4] {
     let value = value.trim().to_lowercase();
-    
+
     // Named colors
     let named = match value.as_str() {
         "black" => Some([0, 0, 0, 255]),
@@ -398,28 +419,28 @@ pub fn parse_color(value: &str) -> [u8; 4] {
         "inherit" | "initial" | "unset" => None,
         _ => None,
     };
-    
+
     if let Some(c) = named {
         return c;
     }
-    
+
     // Hex colors
     if let Some(hex) = value.strip_prefix('#') {
         return parse_hex_color(hex);
     }
-    
+
     // rgb() / rgba()
     if value.starts_with("rgb") {
         return parse_rgb_color(&value);
     }
-    
+
     // Default: black
     [0, 0, 0, 255]
 }
 
 fn parse_hex_color(hex: &str) -> [u8; 4] {
     let hex = hex.trim();
-    
+
     match hex.len() {
         3 => {
             // #RGB -> #RRGGBB
@@ -460,21 +481,33 @@ fn parse_rgb_color(value: &str) -> [u8; 4] {
     let start = value.find('(').unwrap_or(0) + 1;
     let end = value.find(')').unwrap_or(value.len());
     let inner = &value[start..end];
-    
+
     let parts: Vec<&str> = inner.split(',').collect();
-    
-    let r = parts.get(0).and_then(|s| s.trim().parse::<u8>().ok()).unwrap_or(0);
-    let g = parts.get(1).and_then(|s| s.trim().parse::<u8>().ok()).unwrap_or(0);
-    let b = parts.get(2).and_then(|s| s.trim().parse::<u8>().ok()).unwrap_or(0);
-    let a = parts.get(3).and_then(|s| {
-        let s = s.trim();
-        if s.contains('.') {
-            s.parse::<f32>().ok().map(|f| (f * 255.0) as u8)
-        } else {
-            s.parse::<u8>().ok()
-        }
-    }).unwrap_or(255);
-    
+
+    let r = parts
+        .get(0)
+        .and_then(|s| s.trim().parse::<u8>().ok())
+        .unwrap_or(0);
+    let g = parts
+        .get(1)
+        .and_then(|s| s.trim().parse::<u8>().ok())
+        .unwrap_or(0);
+    let b = parts
+        .get(2)
+        .and_then(|s| s.trim().parse::<u8>().ok())
+        .unwrap_or(0);
+    let a = parts
+        .get(3)
+        .and_then(|s| {
+            let s = s.trim();
+            if s.contains('.') {
+                s.parse::<f32>().ok().map(|f| (f * 255.0) as u8)
+            } else {
+                s.parse::<u8>().ok()
+            }
+        })
+        .unwrap_or(255);
+
     [r, g, b, a]
 }
 
@@ -487,11 +520,11 @@ impl ComputedStyle {
     pub fn apply_property(&mut self, property: &str, value: &str) {
         let prop = property.trim().to_lowercase();
         let val = value.trim();
-        
+
         match prop.as_str() {
             // Display
             "display" => self.display = parse_display(val),
-            
+
             // Flexbox
             "flex-direction" => self.flex_direction = parse_flex_direction(val),
             "flex-wrap" => self.flex_wrap = parse_flex_wrap(val),
@@ -536,15 +569,18 @@ impl ComputedStyle {
                     self.flex_basis = parse_dimension(parts[2]);
                 }
             }
-            
+
             // Gap
             "gap" | "grid-gap" => {
                 let lp = parse_length_percentage(val);
-                self.gap = Size { width: lp, height: lp };
+                self.gap = Size {
+                    width: lp,
+                    height: lp,
+                };
             }
             "row-gap" => self.gap.height = parse_length_percentage(val),
             "column-gap" => self.gap.width = parse_length_percentage(val),
-            
+
             // Sizing
             "width" => self.width = parse_dimension(val),
             "height" => self.height = parse_dimension(val),
@@ -552,18 +588,23 @@ impl ComputedStyle {
             "min-height" => self.min_height = parse_dimension(val),
             "max-width" => self.max_width = parse_dimension(val),
             "max-height" => self.max_height = parse_dimension(val),
-            
+
             // Margin
             "margin" => {
                 let parts: Vec<&str> = val.split_whitespace().collect();
                 let (top, right, bottom, left) = parse_box_shorthand(&parts);
-                self.margin = Rect { top, right, bottom, left };
+                self.margin = Rect {
+                    top,
+                    right,
+                    bottom,
+                    left,
+                };
             }
             "margin-top" => self.margin.top = parse_length_percentage_auto(val),
             "margin-right" => self.margin.right = parse_length_percentage_auto(val),
             "margin-bottom" => self.margin.bottom = parse_length_percentage_auto(val),
             "margin-left" => self.margin.left = parse_length_percentage_auto(val),
-            
+
             // Padding
             "padding" => {
                 let parts: Vec<&str> = val.split_whitespace().collect();
@@ -573,22 +614,27 @@ impl ComputedStyle {
                     LengthPercentageAuto::Auto => LengthPercentage::Length(0.0),
                 };
                 let (top, right, bottom, left) = parse_box_shorthand(&parts);
-                self.padding = Rect { 
-                    top: lp(top), 
-                    right: lp(right), 
-                    bottom: lp(bottom), 
-                    left: lp(left) 
+                self.padding = Rect {
+                    top: lp(top),
+                    right: lp(right),
+                    bottom: lp(bottom),
+                    left: lp(left),
                 };
             }
             "padding-top" => self.padding.top = parse_length_percentage(val),
             "padding-right" => self.padding.right = parse_length_percentage(val),
             "padding-bottom" => self.padding.bottom = parse_length_percentage(val),
             "padding-left" => self.padding.left = parse_length_percentage(val),
-            
+
             // Border (width only for layout)
             "border-width" => {
                 let lp = parse_length_percentage(val);
-                self.border = Rect { top: lp, right: lp, bottom: lp, left: lp };
+                self.border = Rect {
+                    top: lp,
+                    right: lp,
+                    bottom: lp,
+                    left: lp,
+                };
             }
             "border" => {
                 // Extract width from shorthand (e.g., "1px solid black")
@@ -596,19 +642,24 @@ impl ComputedStyle {
                 for part in parts {
                     if part.ends_with("px") || part.parse::<f32>().is_ok() {
                         let lp = parse_length_percentage(part);
-                        self.border = Rect { top: lp, right: lp, bottom: lp, left: lp };
+                        self.border = Rect {
+                            top: lp,
+                            right: lp,
+                            bottom: lp,
+                            left: lp,
+                        };
                         break;
                     }
                 }
             }
-            
+
             // Position
             "position" => self.position = parse_position(val),
             "top" => self.inset.top = parse_length_percentage_auto(val),
             "right" => self.inset.right = parse_length_percentage_auto(val),
             "bottom" => self.inset.bottom = parse_length_percentage_auto(val),
             "left" => self.inset.left = parse_length_percentage_auto(val),
-            
+
             // Overflow
             "overflow" => {
                 let o = parse_overflow(val);
@@ -617,7 +668,7 @@ impl ComputedStyle {
             }
             "overflow-x" => self.overflow_x = parse_overflow(val),
             "overflow-y" => self.overflow_y = parse_overflow(val),
-            
+
             // Text/Visual (not for layout, but for rendering)
             "color" => self.color = parse_color(val),
             "background-color" | "background" => self.background_color = parse_color(val),
@@ -668,14 +719,21 @@ impl ComputedStyle {
                     val.parse().unwrap_or(1.2)
                 };
             }
-            
+
             _ => {} // Ignore unknown properties
         }
     }
 }
 
 /// Parse box model shorthand (margin, padding, etc.)
-fn parse_box_shorthand(parts: &[&str]) -> (LengthPercentageAuto, LengthPercentageAuto, LengthPercentageAuto, LengthPercentageAuto) {
+fn parse_box_shorthand(
+    parts: &[&str],
+) -> (
+    LengthPercentageAuto,
+    LengthPercentageAuto,
+    LengthPercentageAuto,
+    LengthPercentageAuto,
+) {
     match parts.len() {
         1 => {
             let v = parse_length_percentage_auto(parts[0]);
@@ -723,7 +781,8 @@ pub struct LayoutNode {
 impl LayoutNode {
     /// Summary for diagnostics - reads tag, text, and style fields
     pub fn describe(&self) -> String {
-        format!("LayoutNode[tag={}, text={}, font_size={}, display={:?}]",
+        format!(
+            "LayoutNode[tag={}, text={}, font_size={}, display={:?}]",
             self.tag,
             self.text.as_deref().unwrap_or("(none)"),
             self.style.font_size,
@@ -747,12 +806,17 @@ impl LayoutTree {
             root: None,
         }
     }
-    
+
     /// Add a node to the tree
-    pub fn add_node(&mut self, tag: &str, text: Option<String>, style: ComputedStyle) -> (usize, NodeId) {
+    pub fn add_node(
+        &mut self,
+        tag: &str,
+        text: Option<String>,
+        style: ComputedStyle,
+    ) -> (usize, NodeId) {
         let taffy_style = style.to_taffy_style();
         let node_id = self.taffy.new_leaf(taffy_style).expect("create taffy node");
-        
+
         let idx = self.nodes.len();
         self.nodes.push(LayoutNode {
             node_id,
@@ -761,26 +825,29 @@ impl LayoutTree {
             style,
             children: Vec::new(),
         });
-        
+
         (idx, node_id)
     }
-    
+
     /// Set children of a node
     pub fn set_children(&mut self, parent_idx: usize, child_indices: &[usize]) {
-        let child_ids: Vec<NodeId> = child_indices.iter()
+        let child_ids: Vec<NodeId> = child_indices
+            .iter()
             .map(|&i| self.nodes[i].node_id)
             .collect();
-        
+
         let parent_id = self.nodes[parent_idx].node_id;
-        self.taffy.set_children(parent_id, &child_ids).expect("set children");
+        self.taffy
+            .set_children(parent_id, &child_ids)
+            .expect("set children");
         self.nodes[parent_idx].children = child_indices.to_vec();
     }
-    
+
     /// Set root node
     pub fn set_root(&mut self, idx: usize) {
         self.root = Some(self.nodes[idx].node_id);
     }
-    
+
     /// Compute layout
     pub fn compute(&mut self, available_width: f32, available_height: f32) {
         if let Some(root) = self.root {
@@ -788,21 +855,27 @@ impl LayoutTree {
                 width: AvailableSpace::Definite(available_width),
                 height: AvailableSpace::Definite(available_height),
             };
-            self.taffy.compute_layout(root, size).expect("compute layout");
+            self.taffy
+                .compute_layout(root, size)
+                .expect("compute layout");
         }
     }
-    
+
     /// Get computed layout for a node
     pub fn get_layout(&self, idx: usize) -> Option<&Layout> {
         let node_id = self.nodes.get(idx)?.node_id;
         self.taffy.layout(node_id).ok()
     }
-    
+
     /// Get all layouts as flat list (for rendering)
     pub fn flatten_layouts(&self) -> Vec<(usize, Layout, &LayoutNode)> {
         let mut result = Vec::new();
 
-        fn walk<'a>(tree: &'a LayoutTree, idx: usize, result: &mut Vec<(usize, Layout, &'a LayoutNode)>) {
+        fn walk<'a>(
+            tree: &'a LayoutTree,
+            idx: usize,
+            result: &mut Vec<(usize, Layout, &'a LayoutNode)>,
+        ) {
             if let Some(node) = tree.nodes.get(idx) {
                 if let Some(layout) = tree.get_layout(idx) {
                     result.push((idx, *layout, node));
@@ -824,7 +897,8 @@ impl LayoutTree {
     pub fn describe(&self) -> String {
         let flat = self.flatten_layouts();
         let descs: Vec<String> = flat.iter().map(|(_, _, node)| node.describe()).collect();
-        format!("LayoutTree[nodes={}, root={:?}, items=[{}]]",
+        format!(
+            "LayoutTree[nodes={}, root={:?}, items=[{}]]",
             self.nodes.len(),
             self.root,
             descs.join(", "),
@@ -845,15 +919,17 @@ impl Default for LayoutTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_dimension() {
-        assert!(matches!(parse_dimension("100px"), Dimension::Length(v) if (v - 100.0).abs() < 0.01));
+        assert!(
+            matches!(parse_dimension("100px"), Dimension::Length(v) if (v - 100.0).abs() < 0.01)
+        );
         assert!(matches!(parse_dimension("50%"), Dimension::Percent(v) if (v - 0.5).abs() < 0.01));
         assert!(matches!(parse_dimension("auto"), Dimension::Auto));
         assert!(matches!(parse_dimension("2em"), Dimension::Length(v) if (v - 32.0).abs() < 0.01));
     }
-    
+
     #[test]
     fn test_parse_color() {
         assert_eq!(parse_color("red"), [255, 0, 0, 255]);
@@ -862,33 +938,33 @@ mod tests {
         assert_eq!(parse_color("rgb(255, 128, 0)"), [255, 128, 0, 255]);
         assert_eq!(parse_color("rgba(255, 128, 0, 0.5)"), [255, 128, 0, 127]);
     }
-    
+
     #[test]
     fn test_layout_tree() {
         let mut tree = LayoutTree::new();
-        
+
         let mut root_style = ComputedStyle::default();
         root_style.display = Display::Flex;
         root_style.flex_direction = FlexDirection::Column;
         root_style.width = Dimension::Length(800.0);
         root_style.height = Dimension::Length(600.0);
-        
+
         let (root_idx, _) = tree.add_node("div", None, root_style);
-        
+
         let mut child_style = ComputedStyle::default();
         child_style.width = Dimension::Length(200.0);
         child_style.height = Dimension::Length(100.0);
-        
+
         let (child_idx, _) = tree.add_node("div", None, child_style);
-        
+
         tree.set_children(root_idx, &[child_idx]);
         tree.set_root(root_idx);
         tree.compute(800.0, 600.0);
-        
+
         let root_layout = tree.get_layout(root_idx).unwrap();
         assert_eq!(root_layout.size.width, 800.0);
         assert_eq!(root_layout.size.height, 600.0);
-        
+
         let child_layout = tree.get_layout(child_idx).unwrap();
         assert_eq!(child_layout.size.width, 200.0);
         assert_eq!(child_layout.size.height, 100.0);

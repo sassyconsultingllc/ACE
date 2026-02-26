@@ -1,25 +1,26 @@
 //! UI system for Sassy Browser
 //! Modular, themeable, four-edge sidebar layout
 
-
-pub mod theme;
-pub mod sidebar;
-pub mod tabs;
+pub mod app;
 pub mod input;
 pub mod network_bar;
 pub mod popup;
 pub mod render;
-pub mod app;
+pub mod sidebar;
+pub mod tabs;
+pub mod theme;
 
-pub use theme::{Theme, ThemeManager, SidebarState};
-pub use sidebar::{SidebarLayout, Edge, Rect};
-pub use tabs::{TabManager, TileLayout, TabSandbox, TrustLevel, MeaningfulInteraction, SandboxAction};
-pub use input::{InputManager, InputAction, Focus, Key, UiBounds, Rect as InputRect};
+pub use input::{Focus, InputAction, InputManager, Key, Rect as InputRect, UiBounds};
 pub use network_bar::{NetworkBar, RequestState};
-pub use popup::{PopupManager, InteractionType};
+pub use popup::{InteractionType, PopupManager};
+pub use sidebar::{Edge, Rect, SidebarLayout};
+pub use tabs::{
+    MeaningfulInteraction, SandboxAction, TabManager, TabSandbox, TileLayout, TrustLevel,
+};
+pub use theme::{SidebarState, Theme, ThemeManager};
 
-use crate::sync::{SyncServer, SyncEvent};
 use crate::ai::AiConfig;
+use crate::sync::{SyncEvent, SyncServer};
 
 /// Main UI state
 pub struct UI {
@@ -33,13 +34,13 @@ pub struct UI {
     pub help_response: Option<String>,
     pub help_error: Option<String>,
     pub help_inflight: bool,
-    
+
     // Window state
     pub width: u32,
     pub height: u32,
     pub focused: bool,
     pub fullscreen: bool,
-    
+
     // Interaction state
     pub mouse_x: i32,
     pub mouse_y: i32,
@@ -70,7 +71,10 @@ impl DragState {
             DragState::SidebarResize { edge, start_size } => {
                 format!("sidebar-resize edge={:?} start_size={}", edge, start_size)
             }
-            DragState::TabMove { tab_id, start_index } => {
+            DragState::TabMove {
+                tab_id,
+                start_index,
+            } => {
                 format!("tab-move id={} start={}", tab_id, start_index)
             }
             DragState::PanelMove { panel_id } => {
@@ -117,7 +121,7 @@ impl UI {
         let sidebar_layout = SidebarLayout::from_theme(&theme);
         let tab_manager = TabManager::new();
         let ai = AiConfig::default();
-        
+
         Self {
             theme_manager,
             sidebar_layout,
@@ -139,7 +143,7 @@ impl UI {
             hover_element: None,
         }
     }
-    
+
     /// Initialize phone sync server
     pub fn start_sync(&mut self, port: u16) -> Result<(), String> {
         let mut server = SyncServer::new(port);
@@ -147,14 +151,14 @@ impl UI {
         self.sync_server = Some(server);
         Ok(())
     }
-    
+
     pub fn stop_sync(&mut self) {
         if let Some(ref mut server) = self.sync_server {
             server.stop();
         }
         self.sync_server = None;
     }
-    
+
     pub fn process_sync(&mut self) {
         if let Some(ref server) = self.sync_server {
             let mut pending = Vec::new();
@@ -166,10 +170,10 @@ impl UI {
             }
         }
     }
-    
+
     fn handle_sync_command(&mut self, _client_id: u64, cmd: crate::sync::SyncCommand) {
         use crate::sync::SyncCommand::*;
-        
+
         match cmd {
             TabCreate { url } => {
                 self.tab_manager.create_tab(url);
@@ -198,14 +202,14 @@ impl UI {
             }
         }
     }
-    
+
     /// Broadcast event to connected phones
     pub fn broadcast(&self, event: SyncEvent) {
         if let Some(ref server) = self.sync_server {
             server.broadcast_event(event);
         }
     }
-    
+
     /// Resize UI (only applies when not fullscreen)
     pub fn resize(&mut self, width: u32, height: u32) {
         if self.fullscreen {
@@ -214,12 +218,12 @@ impl UI {
         self.width = width;
         self.height = height;
     }
-    
+
     /// Get content area bounds (excluding sidebars)
     pub fn content_rect(&self) -> Rect {
         self.sidebar_layout.content_rect(self.width, self.height)
     }
-    
+
     /// Handle mouse move, returns the current cursor style
     pub fn mouse_move(&mut self, x: i32, y: i32) -> CursorStyle {
         let dx = x - self.mouse_x;
@@ -248,7 +252,7 @@ impl UI {
             self.cursor()
         }
     }
-    
+
     fn update_hover(&mut self, x: u32, y: u32) {
         // Check sidebars for resize handles
         for edge in Edge::all() {
@@ -290,7 +294,9 @@ impl UI {
             let theme = self.theme_manager.current();
             let tabs = self.tab_manager.filtered_tabs();
             let tile_layout = TileLayout::calculate(
-                content.width, content.height, tabs.len(),
+                content.width,
+                content.height,
+                tabs.len(),
                 theme.layout.tab_tile_min_width,
                 theme.layout.tab_tile_max_width,
                 theme.layout.tab_tile_aspect_ratio,
@@ -320,7 +326,7 @@ impl UI {
 
         self.hover_element = Some(HoverElement::None);
     }
-    
+
     /// Handle mouse button down
     pub fn mouse_down(&mut self, x: i32, y: i32, button: MouseButton) {
         // Ignore clicks when window is not focused
@@ -330,7 +336,8 @@ impl UI {
         // Record context menu interaction on right-click
         if button == MouseButton::Right {
             if let Some(tab) = self.tab_manager.active_tab_mut() {
-                tab.sandbox.record_interaction(MeaningfulInteraction::ContextMenu);
+                tab.sandbox
+                    .record_interaction(MeaningfulInteraction::ContextMenu);
             }
             return;
         }
@@ -341,7 +348,8 @@ impl UI {
 
         // Record link click interaction for the active tab
         if let Some(tab) = self.tab_manager.active_tab_mut() {
-            tab.sandbox.record_interaction(MeaningfulInteraction::LinkClick);
+            tab.sandbox
+                .record_interaction(MeaningfulInteraction::LinkClick);
         }
 
         // Check for sidebar resize start
@@ -388,12 +396,12 @@ impl UI {
             }
         }
     }
-    
+
     /// Handle mouse button up
     pub fn mouse_up(&mut self, _x: i32, _y: i32, _button: MouseButton) {
         self.dragging = None;
     }
-    
+
     /// Handle keyboard
     pub fn key_press(&mut self, key: Key, modifiers: Modifiers) {
         // Log modifier description for accessibility
@@ -437,11 +445,12 @@ impl UI {
             }
             return;
         }
-        
+
         // Record keyboard shortcut interaction on active tab
         if modifiers.ctrl || modifiers.alt {
             if let Some(tab) = self.tab_manager.active_tab_mut() {
-                tab.sandbox.record_interaction(MeaningfulInteraction::KeyboardShortcut);
+                tab.sandbox
+                    .record_interaction(MeaningfulInteraction::KeyboardShortcut);
             }
         }
 
@@ -472,11 +481,11 @@ impl UI {
             _ => {}
         }
     }
-    
+
     fn calculate_tile_columns(&self) -> u32 {
         let content = self.content_rect();
         let theme = self.theme_manager.current();
-        
+
         TileLayout::calculate(
             content.width,
             content.height,
@@ -485,9 +494,10 @@ impl UI {
             theme.layout.tab_tile_max_width,
             theme.layout.tab_tile_aspect_ratio,
             theme.layout.tab_tile_gap,
-        ).columns
+        )
+        .columns
     }
-    
+
     pub fn toggle_theme(&mut self) {
         let current = self.theme_manager.current().meta.name.clone();
         if current.contains("Dark") {
@@ -496,18 +506,33 @@ impl UI {
             let _ = self.theme_manager.switch("dark");
         }
     }
-    
+
     /// Describe the current UI state for debugging
     pub fn status(&self) -> String {
         let cursor = self.cursor();
-        let drag_desc = self.dragging.as_ref().map(|d| d.describe()).unwrap_or_else(|| "none".into());
-        let hover_label = self.hover_element.as_ref().map(|h| h.label()).unwrap_or("none");
-        let mods = Modifiers { ctrl: false, alt: false, shift: false, meta: self.focused };
+        let drag_desc = self
+            .dragging
+            .as_ref()
+            .map(|d| d.describe())
+            .unwrap_or_else(|| "none".into());
+        let hover_label = self
+            .hover_element
+            .as_ref()
+            .map(|h| h.label())
+            .unwrap_or("none");
+        let mods = Modifiers {
+            ctrl: false,
+            alt: false,
+            shift: false,
+            meta: self.focused,
+        };
         let mods_desc = mods.describe();
         format!(
             "{}x{} focused={} fullscreen={} tabs={} cursor={} drag={} hover={} mods={}",
-            self.width, self.height,
-            self.focused, self.fullscreen,
+            self.width,
+            self.height,
+            self.focused,
+            self.fullscreen,
             self.tab_manager.tab_count(),
             cursor.css_name(),
             drag_desc,
@@ -522,8 +547,12 @@ impl UI {
             Some(HoverElement::SidebarResize(Edge::Top | Edge::Bottom)) => CursorStyle::NsResize,
             Some(HoverElement::TabClose(_)) => CursorStyle::Pointer,
             Some(HoverElement::AddressBar) => CursorStyle::Text,
-            Some(HoverElement::NavigationBack | HoverElement::NavigationForward
-                 | HoverElement::NavigationRefresh | HoverElement::SidebarToggle(_)) => CursorStyle::Pointer,
+            Some(
+                HoverElement::NavigationBack
+                | HoverElement::NavigationForward
+                | HoverElement::NavigationRefresh
+                | HoverElement::SidebarToggle(_),
+            ) => CursorStyle::Pointer,
             Some(HoverElement::Tab(_)) if self.dragging.is_some() => CursorStyle::Move,
             Some(HoverElement::None) => CursorStyle::Default,
             _ => CursorStyle::Default,
@@ -536,7 +565,10 @@ impl UI {
     /// Get the cursor style for a specific drag or hover scenario
     pub fn drag_cursor(&self) -> CursorStyle {
         match &self.dragging {
-            Some(DragState::SidebarResize { edge, start_size: _ }) => match edge {
+            Some(DragState::SidebarResize {
+                edge,
+                start_size: _,
+            }) => match edge {
                 Edge::Left | Edge::Right => CursorStyle::EwResize,
                 Edge::Top | Edge::Bottom => CursorStyle::NsResize,
             },
@@ -555,11 +587,19 @@ impl UI {
                     CursorStyle::NwseResize
                 } else if (in_top && in_right) || (in_bottom && in_left) {
                     CursorStyle::NeswResize
-                } else if self.tab_manager.active_tab().map(|t| t.loading).unwrap_or(false) {
+                } else if self
+                    .tab_manager
+                    .active_tab()
+                    .map(|t| t.loading)
+                    .unwrap_or(false)
+                {
                     CursorStyle::Wait
-                } else if !self.tab_manager.active_tab()
+                } else if !self
+                    .tab_manager
+                    .active_tab()
                     .map(|t| t.sandbox.can_perform(SandboxAction::Clipboard))
-                    .unwrap_or(true) {
+                    .unwrap_or(true)
+                {
                     CursorStyle::NotAllowed
                 } else {
                     CursorStyle::Default
@@ -571,48 +611,58 @@ impl UI {
     /// Handle scroll events - records scroll interaction on active tab
     pub fn mouse_scroll(&mut self, delta: i32) {
         if let Some(tab) = self.tab_manager.active_tab_mut() {
-            tab.sandbox.record_interaction(MeaningfulInteraction::Scroll { distance: delta });
+            tab.sandbox
+                .record_interaction(MeaningfulInteraction::Scroll { distance: delta });
         }
         // Update scroll_offset for tab list scrolling
         if delta > 0 {
-            self.tab_manager.scroll_offset = self.tab_manager.scroll_offset.saturating_add(delta as u32);
+            self.tab_manager.scroll_offset =
+                self.tab_manager.scroll_offset.saturating_add(delta as u32);
         } else {
-            self.tab_manager.scroll_offset = self.tab_manager.scroll_offset.saturating_sub((-delta) as u32);
+            self.tab_manager.scroll_offset = self
+                .tab_manager
+                .scroll_offset
+                .saturating_sub((-delta) as u32);
         }
     }
 
     /// Record a form input interaction on the active tab
     pub fn record_form_input(&mut self) {
         if let Some(tab) = self.tab_manager.active_tab_mut() {
-            tab.sandbox.record_interaction(MeaningfulInteraction::FormInput);
+            tab.sandbox
+                .record_interaction(MeaningfulInteraction::FormInput);
         }
     }
 
     /// Record a form submit interaction on the active tab
     pub fn record_form_submit(&mut self) {
         if let Some(tab) = self.tab_manager.active_tab_mut() {
-            tab.sandbox.record_interaction(MeaningfulInteraction::FormSubmit);
+            tab.sandbox
+                .record_interaction(MeaningfulInteraction::FormSubmit);
         }
     }
 
     /// Record a text selection interaction on the active tab
     pub fn record_text_selection(&mut self) {
         if let Some(tab) = self.tab_manager.active_tab_mut() {
-            tab.sandbox.record_interaction(MeaningfulInteraction::TextSelection);
+            tab.sandbox
+                .record_interaction(MeaningfulInteraction::TextSelection);
         }
     }
 
     /// Record a media play interaction on the active tab
     pub fn record_media_play(&mut self) {
         if let Some(tab) = self.tab_manager.active_tab_mut() {
-            tab.sandbox.record_interaction(MeaningfulInteraction::MediaPlay);
+            tab.sandbox
+                .record_interaction(MeaningfulInteraction::MediaPlay);
         }
     }
 
     /// Record a video interaction on the active tab
     pub fn record_video_interaction(&mut self) {
         if let Some(tab) = self.tab_manager.active_tab_mut() {
-            tab.sandbox.record_interaction(MeaningfulInteraction::VideoInteraction);
+            tab.sandbox
+                .record_interaction(MeaningfulInteraction::VideoInteraction);
         }
     }
 
@@ -658,7 +708,8 @@ impl UI {
 
     /// Check if active tab can perform a sandboxed action
     pub fn can_perform(&self, action: SandboxAction) -> bool {
-        self.tab_manager.active_tab()
+        self.tab_manager
+            .active_tab()
             .map(|t| t.sandbox.can_perform(action))
             .unwrap_or(false)
     }
@@ -675,7 +726,8 @@ impl UI {
 
     /// Get active tab status string (exercises Tab::status)
     pub fn active_tab_status(&self) -> String {
-        self.tab_manager.active_tab()
+        self.tab_manager
+            .active_tab()
             .map(|t| t.status())
             .unwrap_or_default()
     }
@@ -746,10 +798,18 @@ impl Modifiers {
     /// Describe active modifier keys
     pub fn describe(&self) -> String {
         let mut parts = Vec::new();
-        if self.ctrl { parts.push("Ctrl"); }
-        if self.alt { parts.push("Alt"); }
-        if self.shift { parts.push("Shift"); }
-        if self.meta { parts.push("Meta"); }
+        if self.ctrl {
+            parts.push("Ctrl");
+        }
+        if self.alt {
+            parts.push("Alt");
+        }
+        if self.shift {
+            parts.push("Shift");
+        }
+        if self.meta {
+            parts.push("Meta");
+        }
         if parts.is_empty() {
             "none".to_string()
         } else {
@@ -773,7 +833,9 @@ mod tests {
         // Exercise stop_sync / process_sync / broadcast
         ui.stop_sync();
         ui.process_sync();
-        ui.broadcast(crate::sync::SyncEvent::Disconnected { reason: "test".into() });
+        ui.broadcast(crate::sync::SyncEvent::Disconnected {
+            reason: "test".into(),
+        });
 
         // Exercise resize
         ui.resize(800, 600);
@@ -820,9 +882,17 @@ mod tests {
     #[test]
     fn test_drag_state_variants() {
         let drags = vec![
-            DragState::SidebarResize { edge: Edge::Left, start_size: 200 },
-            DragState::TabMove { tab_id: 1, start_index: 0 },
-            DragState::PanelMove { panel_id: "devtools".into() },
+            DragState::SidebarResize {
+                edge: Edge::Left,
+                start_size: 200,
+            },
+            DragState::TabMove {
+                tab_id: 1,
+                start_index: 0,
+            },
+            DragState::PanelMove {
+                panel_id: "devtools".into(),
+            },
         ];
         for d in &drags {
             assert!(!d.label().is_empty());
@@ -869,7 +939,12 @@ mod tests {
 
     #[test]
     fn test_modifiers_describe() {
-        let mods = Modifiers { ctrl: true, alt: false, shift: true, meta: true };
+        let mods = Modifiers {
+            ctrl: true,
+            alt: false,
+            shift: true,
+            meta: true,
+        };
         let desc = mods.describe();
         assert!(desc.contains("Ctrl"));
         assert!(desc.contains("Shift"));

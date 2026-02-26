@@ -19,20 +19,20 @@
 //! - Device ID (random, for sync)
 //! - Recovery key (for PIN reset)
 
-use ring::rand::{SecureRandom, SystemRandom};
-use ring::signature::{Ed25519KeyPair, KeyPair};
-use ring::digest::{digest, SHA256};
-use ring::hkdf;
+use argon2::password_hash::{PasswordHash, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
-use argon2::password_hash::{SaltString, PasswordHash};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
     ChaCha20Poly1305, Nonce,
 };
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use ring::digest::{digest, SHA256};
+use ring::hkdf;
+use ring::rand::{SecureRandom, SystemRandom};
+use ring::signature::{Ed25519KeyPair, KeyPair};
 use serde::{Deserialize, Serialize};
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Size constants
 const MASTER_SECRET_LEN: usize = 32;
@@ -85,7 +85,7 @@ impl MasterSecret {
         let prk = salt.extract(&self.0);
         let info = [purpose.as_bytes()];
         let okm = prk.expand(&info, KeyLen).expect("HKDF expand failed");
-        
+
         let mut key = [0u8; KEY_LEN];
         okm.fill(&mut key).expect("HKDF fill failed");
         key
@@ -111,13 +111,16 @@ impl UserIdentity {
     pub fn generate(master: &MasterSecret) -> Result<Self, String> {
         // Derive seed for Ed25519 from master secret
         let seed = master.derive_key("identity-ed25519");
-        
+
         let key_pair = Ed25519KeyPair::from_seed_unchecked(&seed)
             .map_err(|e| format!("Failed to create key pair: {:?}", e))?;
-        
+
         let public_key = key_pair.public_key().as_ref().to_vec();
-        
-        Ok(Self { key_pair, public_key })
+
+        Ok(Self {
+            key_pair,
+            public_key,
+        })
     }
 
     /// Get public key bytes
@@ -157,14 +160,15 @@ impl EncryptionKey {
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, String> {
         let cipher = ChaCha20Poly1305::new_from_slice(&self.0)
             .map_err(|e| format!("Cipher init failed: {:?}", e))?;
-        
+
         // Generate random nonce
         let nonce_bytes = random_bytes(NONCE_LEN);
         let nonce = Nonce::from_slice(&nonce_bytes);
-        
-        let ciphertext = cipher.encrypt(nonce, plaintext)
+
+        let ciphertext = cipher
+            .encrypt(nonce, plaintext)
             .map_err(|e| format!("Encryption failed: {:?}", e))?;
-        
+
         // Prepend nonce to ciphertext
         let mut result = nonce_bytes;
         result.extend(ciphertext);
@@ -179,11 +183,12 @@ impl EncryptionKey {
 
         let cipher = ChaCha20Poly1305::new_from_slice(&self.0)
             .map_err(|e| format!("Cipher init failed: {:?}", e))?;
-        
+
         let nonce = Nonce::from_slice(&data[..NONCE_LEN]);
         let ciphertext = &data[NONCE_LEN..];
-        
-        cipher.decrypt(nonce, ciphertext)
+
+        cipher
+            .decrypt(nonce, ciphertext)
             .map_err(|e| format!("Decryption failed: {:?}", e))
     }
 }
@@ -196,8 +201,9 @@ impl PinHasher {
     pub fn hash(pin: &str) -> Result<String, String> {
         let salt = SaltString::generate(&mut rand::thread_rng());
         let argon2 = Argon2::default();
-        
-        argon2.hash_password(pin.as_bytes(), &salt)
+
+        argon2
+            .hash_password(pin.as_bytes(), &salt)
             .map(|hash| hash.to_string())
             .map_err(|e| format!("Hash failed: {:?}", e))
     }
@@ -208,7 +214,7 @@ impl PinHasher {
             Ok(h) => h,
             Err(_) => return false,
         };
-        
+
         Argon2::default()
             .verify_password(pin.as_bytes(), &parsed)
             .is_ok()
@@ -218,10 +224,11 @@ impl PinHasher {
     pub fn derive_key(pin: &str, salt: &[u8]) -> Result<[u8; KEY_LEN], String> {
         let argon2 = Argon2::default();
         let mut key = [0u8; KEY_LEN];
-        
-        argon2.hash_password_into(pin.as_bytes(), salt, &mut key)
+
+        argon2
+            .hash_password_into(pin.as_bytes(), salt, &mut key)
             .map_err(|e| format!("Key derivation failed: {:?}", e))?;
-        
+
         Ok(key)
     }
 }
@@ -263,12 +270,15 @@ impl RecoveryKey {
         // Recovery key is derived deterministically
         let recovery_bytes = master.derive_key("recovery-key");
         let encoded = BASE64.encode(recovery_bytes);
-        
+
         // Create verification hash
         let hash = digest(&SHA256, &recovery_bytes);
         let verification_hash = BASE64.encode(hash.as_ref());
-        
-        Self { encoded, verification_hash }
+
+        Self {
+            encoded,
+            verification_hash,
+        }
     }
 
     /// Verify a recovery key
@@ -287,22 +297,22 @@ impl RecoveryKey {
 pub struct UserCrypto {
     /// Device ID (not secret)
     pub device_id: DeviceId,
-    
+
     /// Public key (not secret)
     pub public_key: String,
-    
+
     /// Encrypted master secret (encrypted with PIN-derived key if PIN set)
     pub encrypted_master: String,
-    
+
     /// Salt for PIN key derivation
     pub pin_salt: String,
-    
+
     /// PIN hash (for verification)
     pub pin_hash: Option<String>,
-    
+
     /// Recovery key info
     pub recovery: RecoveryKey,
-    
+
     /// Created timestamp
     pub created_at: u64,
 }
@@ -314,42 +324,40 @@ impl UserCrypto {
         let identity = UserIdentity::generate(&master)?;
         let device_id = DeviceId::generate();
         let recovery = RecoveryKey::generate(&master);
-        
+
         // Generate salt for PIN key derivation
         let pin_salt = random_bytes(16);
         let pin_salt_b64 = BASE64.encode(&pin_salt);
-        
+
         // Encrypt master secret
         let (encrypted_master, pin_hash) = if let Some(pin) = pin {
             // PIN provided - encrypt master with PIN-derived key
             let pin_key = PinHasher::derive_key(pin, &pin_salt)?;
             let cipher = ChaCha20Poly1305::new_from_slice(&pin_key)
                 .map_err(|e| format!("Cipher init failed: {:?}", e))?;
-            
+
             let nonce_bytes = random_bytes(NONCE_LEN);
             let nonce = Nonce::from_slice(&nonce_bytes);
-            
-            let ciphertext = cipher.encrypt(nonce, master.as_bytes())
+
+            let ciphertext = cipher
+                .encrypt(nonce, master.as_bytes())
                 .map_err(|e| format!("Encryption failed: {:?}", e))?;
-            
+
             let mut encrypted = nonce_bytes;
             encrypted.extend(ciphertext);
-            
-            (
-                BASE64.encode(&encrypted),
-                Some(PinHasher::hash(pin)?),
-            )
+
+            (BASE64.encode(&encrypted), Some(PinHasher::hash(pin)?))
         } else {
             // No PIN - store master directly (base64 encoded)
             // Still protected by OS filesystem permissions
             (BASE64.encode(master.as_bytes()), None)
         };
-        
+
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        
+
         let user_crypto = Self {
             device_id,
             public_key: identity.public_key_b64(),
@@ -359,7 +367,7 @@ impl UserCrypto {
             recovery,
             created_at: now,
         };
-        
+
         Ok((user_crypto, master))
     }
 
@@ -368,40 +376,44 @@ impl UserCrypto {
         if self.pin_hash.is_some() {
             // PIN required
             let pin = pin.ok_or("PIN required")?;
-            
+
             // Verify PIN hash first (fast fail)
             if !PinHasher::verify(pin, self.pin_hash.as_ref().unwrap()) {
                 return Err("Incorrect PIN".into());
             }
-            
+
             // Derive key and decrypt
-            let pin_salt = BASE64.decode(&self.pin_salt)
+            let pin_salt = BASE64
+                .decode(&self.pin_salt)
                 .map_err(|e| format!("Salt decode failed: {:?}", e))?;
             let pin_key = PinHasher::derive_key(pin, &pin_salt)?;
-            
-            let encrypted = BASE64.decode(&self.encrypted_master)
+
+            let encrypted = BASE64
+                .decode(&self.encrypted_master)
                 .map_err(|e| format!("Encrypted master decode failed: {:?}", e))?;
-            
+
             if encrypted.len() < NONCE_LEN {
                 return Err("Invalid encrypted data".into());
             }
-            
+
             let cipher = ChaCha20Poly1305::new_from_slice(&pin_key)
                 .map_err(|e| format!("Cipher init failed: {:?}", e))?;
-            
+
             let nonce = Nonce::from_slice(&encrypted[..NONCE_LEN]);
             let ciphertext = &encrypted[NONCE_LEN..];
-            
-            let master_bytes = cipher.decrypt(nonce, ciphertext)
+
+            let master_bytes = cipher
+                .decrypt(nonce, ciphertext)
                 .map_err(|_| "Decryption failed - wrong PIN")?;
-            
+
             MasterSecret::from_bytes(&master_bytes)
                 .ok_or_else(|| "Invalid master secret length".into())
         } else {
             // No PIN - just decode
-            let master_bytes = BASE64.decode(&self.encrypted_master)
+            let master_bytes = BASE64
+                .decode(&self.encrypted_master)
                 .map_err(|e| format!("Master decode failed: {:?}", e))?;
-            
+
             MasterSecret::from_bytes(&master_bytes)
                 .ok_or_else(|| "Invalid master secret length".into())
         }
@@ -413,26 +425,31 @@ impl UserCrypto {
     }
 
     /// Change PIN (requires current unlock)
-    pub fn change_pin(&mut self, master: &MasterSecret, new_pin: Option<&str>) -> Result<(), String> {
+    pub fn change_pin(
+        &mut self,
+        master: &MasterSecret,
+        new_pin: Option<&str>,
+    ) -> Result<(), String> {
         // Generate new salt
         let pin_salt = random_bytes(16);
         self.pin_salt = BASE64.encode(&pin_salt);
-        
+
         if let Some(pin) = new_pin {
             // Encrypt with new PIN
             let pin_key = PinHasher::derive_key(pin, &pin_salt)?;
             let cipher = ChaCha20Poly1305::new_from_slice(&pin_key)
                 .map_err(|e| format!("Cipher init failed: {:?}", e))?;
-            
+
             let nonce_bytes = random_bytes(NONCE_LEN);
             let nonce = Nonce::from_slice(&nonce_bytes);
-            
-            let ciphertext = cipher.encrypt(nonce, master.as_bytes())
+
+            let ciphertext = cipher
+                .encrypt(nonce, master.as_bytes())
                 .map_err(|e| format!("Encryption failed: {:?}", e))?;
-            
+
             let mut encrypted = nonce_bytes;
             encrypted.extend(ciphertext);
-            
+
             self.encrypted_master = BASE64.encode(&encrypted);
             self.pin_hash = Some(PinHasher::hash(pin)?);
         } else {
@@ -440,7 +457,7 @@ impl UserCrypto {
             self.encrypted_master = BASE64.encode(master.as_bytes());
             self.pin_hash = None;
         }
-        
+
         Ok(())
     }
 
@@ -472,10 +489,10 @@ mod tests {
     #[test]
     fn test_user_crypto_no_pin() {
         let (crypto, master) = UserCrypto::create(None).unwrap();
-        
+
         assert!(!crypto.requires_pin());
         assert!(!crypto.public_key.is_empty());
-        
+
         // Unlock without PIN
         let unlocked = crypto.unlock(None).unwrap();
         assert_eq!(master.as_bytes(), unlocked.as_bytes());
@@ -484,13 +501,13 @@ mod tests {
     #[test]
     fn test_user_crypto_with_pin() {
         let (crypto, master) = UserCrypto::create(Some("1234")).unwrap();
-        
+
         assert!(crypto.requires_pin());
-        
+
         // Wrong PIN fails
         assert!(crypto.unlock(Some("0000")).is_err());
         assert!(crypto.unlock(None).is_err());
-        
+
         // Correct PIN works
         let unlocked = crypto.unlock(Some("1234")).unwrap();
         assert_eq!(master.as_bytes(), unlocked.as_bytes());
@@ -500,27 +517,35 @@ mod tests {
     fn test_identity_signing() {
         let (crypto, master) = UserCrypto::create(None).unwrap();
         let identity = crypto.identity(&master).unwrap();
-        
+
         let message = b"Hello, World!";
         let signature = identity.sign(message);
-        
+
         // Verify with public key
-        assert!(UserIdentity::verify(identity.public_key(), message, &signature));
-        
+        assert!(UserIdentity::verify(
+            identity.public_key(),
+            message,
+            &signature
+        ));
+
         // Wrong message fails
-        assert!(!UserIdentity::verify(identity.public_key(), b"Wrong", &signature));
+        assert!(!UserIdentity::verify(
+            identity.public_key(),
+            b"Wrong",
+            &signature
+        ));
     }
 
     #[test]
     fn test_encryption() {
         let (crypto, master) = UserCrypto::create(None).unwrap();
         let key = crypto.data_key(&master);
-        
+
         let plaintext = b"Sensitive user data";
         let encrypted = key.encrypt(plaintext).unwrap();
-        
+
         assert_ne!(&encrypted, plaintext);
-        
+
         let decrypted = key.decrypt(&encrypted).unwrap();
         assert_eq!(&decrypted, plaintext);
     }
@@ -528,13 +553,13 @@ mod tests {
     #[test]
     fn test_pin_change() {
         let (mut crypto, master) = UserCrypto::create(Some("old")).unwrap();
-        
+
         // Change to new PIN
         crypto.change_pin(&master, Some("new")).unwrap();
-        
+
         // Old PIN no longer works
         assert!(crypto.unlock(Some("old")).is_err());
-        
+
         // New PIN works
         assert!(crypto.unlock(Some("new")).is_ok());
     }
@@ -542,7 +567,7 @@ mod tests {
     #[test]
     fn test_recovery_key() {
         let (crypto, _master) = UserCrypto::create(None).unwrap();
-        
+
         let recovery = crypto.recovery_key();
         assert!(crypto.recovery.verify(recovery));
         assert!(!crypto.recovery.verify("wrong"));

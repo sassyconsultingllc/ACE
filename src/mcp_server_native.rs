@@ -24,14 +24,15 @@
 //! The server runs on a tokio runtime in a background thread.
 //! Commands and responses are bridged to the egui render loop via channels.
 
-use crate::mcp_codec::{build_frame_body, parse_frame_body};
-use crate::mcp_protocol::{
-    McpCommand, McpResponse, ErrorCode, NotificationType, PROTOCOL_VERSION,
-};
 use crate::detection::DetectionAlertPayload;
+use crate::mcp_codec::{build_frame_body, parse_frame_body};
+use crate::mcp_protocol::{ErrorCode, McpCommand, McpResponse, NotificationType, PROTOCOL_VERSION};
 use futures::{SinkExt, StreamExt};
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
@@ -137,7 +138,9 @@ impl McpBridge {
 
     /// Push detection alerts for forwarding
     pub fn push_detection_alerts(&self, alerts: Vec<DetectionAlertPayload>) {
-        if alerts.is_empty() { return; }
+        if alerts.is_empty() {
+            return;
+        }
         if let Ok(mut queue) = self.detection_alerts.lock() {
             queue.extend(alerts);
             // Cap at 100 pending
@@ -215,7 +218,11 @@ impl McpNativeServer {
             .map_err(|e| format!("failed to spawn server thread: {}", e))?;
 
         self.thread_handle = Some(handle);
-        tracing::info!("Native MCP server starting on {}:{}", self.config.bind_addr, self.config.port);
+        tracing::info!(
+            "Native MCP server starting on {}:{}",
+            self.config.bind_addr,
+            self.config.port
+        );
         Ok(())
     }
 
@@ -263,10 +270,8 @@ async fn run_server(config: NativeServerConfig, bridge: Arc<McpBridge>) {
 
     while bridge.running.load(Ordering::SeqCst) {
         // Accept connections with a timeout so we can check the running flag
-        let accept_result = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            listener.accept(),
-        ).await;
+        let accept_result =
+            tokio::time::timeout(std::time::Duration::from_secs(1), listener.accept()).await;
 
         match accept_result {
             Ok(Ok((stream, peer_addr))) => {
@@ -276,7 +281,10 @@ async fn run_server(config: NativeServerConfig, bridge: Arc<McpBridge>) {
                     *c
                 };
                 if count >= config.max_clients {
-                    tracing::warn!("Rejecting connection from {} — max clients reached", peer_addr);
+                    tracing::warn!(
+                        "Rejecting connection from {} — max clients reached",
+                        peer_addr
+                    );
                     continue;
                 }
 
@@ -334,25 +342,25 @@ async fn handle_client(
     let (mut ws_sink, mut ws_stream) = ws_stream.split();
 
     // Wait for Hello handshake
-    let hello_msg = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        ws_stream.next(),
-    )
-    .await
-    .map_err(|_| "handshake timeout".to_string())?
-    .ok_or("connection closed before handshake")?
-    .map_err(|e| format!("handshake error: {}", e))?;
+    let hello_msg = tokio::time::timeout(std::time::Duration::from_secs(10), ws_stream.next())
+        .await
+        .map_err(|_| "handshake timeout".to_string())?
+        .ok_or("connection closed before handshake")?
+        .map_err(|e| format!("handshake error: {}", e))?;
 
     let hello_bytes = match hello_msg {
         WsMessage::Binary(b) => b,
         _ => return Err("expected binary Hello message".into()),
     };
 
-    let hello: McpCommand = parse_frame_body(&hello_bytes)
-        .map_err(|e| format!("Hello parse error: {}", e))?;
+    let hello: McpCommand =
+        parse_frame_body(&hello_bytes).map_err(|e| format!("Hello parse error: {}", e))?;
 
     match hello {
-        McpCommand::Hello { client_name, protocol_version } => {
+        McpCommand::Hello {
+            client_name,
+            protocol_version,
+        } => {
             if protocol_version != PROTOCOL_VERSION {
                 let err_resp = McpResponse::Error {
                     code: ErrorCode::VersionMismatch,
@@ -366,7 +374,11 @@ async fn handle_client(
                 return Err("protocol version mismatch".into());
             }
 
-            tracing::info!("MCP client '{}' connected (v{})", client_name, protocol_version);
+            tracing::info!(
+                "MCP client '{}' connected (v{})",
+                client_name,
+                protocol_version
+            );
 
             // Send Welcome
             let welcome = McpResponse::Welcome {
@@ -384,7 +396,9 @@ async fn handle_client(
                 ],
             };
             let body = build_frame_body(&welcome).map_err(|e| e.to_string())?;
-            ws_sink.send(WsMessage::Binary(body.into())).await
+            ws_sink
+                .send(WsMessage::Binary(body.into()))
+                .await
                 .map_err(|e| format!("Welcome send failed: {}", e))?;
         }
         _ => {

@@ -7,14 +7,23 @@ use crate::style::Color;
 /// Markdown block element
 #[derive(Debug, Clone)]
 pub enum MdBlock {
-    Heading { level: u8, content: Vec<MdInline> },
+    Heading {
+        level: u8,
+        content: Vec<MdInline>,
+    },
     Paragraph(Vec<MdInline>),
-    CodeBlock { language: Option<String>, code: String },
+    CodeBlock {
+        language: Option<String>,
+        code: String,
+    },
     UnorderedList(Vec<Vec<MdInline>>),
     OrderedList(Vec<Vec<MdInline>>),
     Blockquote(Vec<MdBlock>),
     HorizontalRule,
-    Table { headers: Vec<String>, rows: Vec<Vec<String>> },
+    Table {
+        headers: Vec<String>,
+        rows: Vec<Vec<String>>,
+    },
 }
 
 /// Markdown inline element
@@ -43,23 +52,28 @@ impl MarkdownParser {
         let mut blocks = Vec::new();
         let lines: Vec<&str> = input.lines().collect();
         let mut i = 0;
-        
+
         while i < lines.len() {
             let line = lines[i];
-            
+
             // Empty line
             if line.trim().is_empty() {
                 i += 1;
                 continue;
             }
-            
+
             // Horizontal rule
-            if line.trim().chars().all(|c| c == '-' || c == '*' || c == '_') && line.trim().len() >= 3 {
+            if line
+                .trim()
+                .chars()
+                .all(|c| c == '-' || c == '*' || c == '_')
+                && line.trim().len() >= 3
+            {
                 blocks.push(MdBlock::HorizontalRule);
                 i += 1;
                 continue;
             }
-            
+
             // Heading
             if line.starts_with('#') {
                 let level = line.chars().take_while(|&c| c == '#').count() as u8;
@@ -71,12 +85,16 @@ impl MarkdownParser {
                 i += 1;
                 continue;
             }
-            
+
             // Code block
             if line.starts_with("```") {
                 let language = line.trim_start_matches('`').trim();
-                let language = if language.is_empty() { None } else { Some(language.to_string()) };
-                
+                let language = if language.is_empty() {
+                    None
+                } else {
+                    Some(language.to_string())
+                };
+
                 let mut code = String::new();
                 i += 1;
                 while i < lines.len() && !lines[i].starts_with("```") {
@@ -87,11 +105,11 @@ impl MarkdownParser {
                     i += 1;
                 }
                 i += 1; // Skip closing ```
-                
+
                 blocks.push(MdBlock::CodeBlock { language, code });
                 continue;
             }
-            
+
             // Blockquote
             if line.starts_with('>') {
                 let mut quote_lines = Vec::new();
@@ -104,7 +122,7 @@ impl MarkdownParser {
                 blocks.push(MdBlock::Blockquote(inner));
                 continue;
             }
-            
+
             // Unordered list
             if line.trim_start().starts_with("- ") || line.trim_start().starts_with("* ") {
                 let mut items = Vec::new();
@@ -128,15 +146,26 @@ impl MarkdownParser {
                 blocks.push(MdBlock::UnorderedList(items));
                 continue;
             }
-            
+
             // Ordered list
-            if line.trim_start().chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+            if line
+                .trim_start()
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+            {
                 let first_char = line.trim_start();
                 if first_char.contains(". ") {
                     let mut items = Vec::new();
                     while i < lines.len() {
                         let l = lines[i].trim_start();
-                        if l.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) && l.contains(". ") {
+                        if l.chars()
+                            .next()
+                            .map(|c| c.is_ascii_digit())
+                            .unwrap_or(false)
+                            && l.contains(". ")
+                        {
                             let dot = l.find(". ").unwrap();
                             let content = &l[dot + 2..];
                             items.push(Self::parse_inline(content));
@@ -149,7 +178,7 @@ impl MarkdownParser {
                     continue;
                 }
             }
-            
+
             // Table
             if line.contains('|') {
                 let mut table_lines = Vec::new();
@@ -157,16 +186,18 @@ impl MarkdownParser {
                     table_lines.push(lines[i]);
                     i += 1;
                 }
-                
+
                 if table_lines.len() >= 2 {
                     let headers: Vec<String> = table_lines[0]
                         .split('|')
                         .filter(|s| !s.trim().is_empty())
                         .map(|s| s.trim().to_string())
                         .collect();
-                    
+
                     // Skip separator line (line with ---)
-                    let rows: Vec<Vec<String>> = table_lines.iter().skip(2)
+                    let rows: Vec<Vec<String>> = table_lines
+                        .iter()
+                        .skip(2)
                         .map(|line| {
                             line.split('|')
                                 .filter(|s| !s.trim().is_empty())
@@ -174,15 +205,16 @@ impl MarkdownParser {
                                 .collect()
                         })
                         .collect();
-                    
+
                     blocks.push(MdBlock::Table { headers, rows });
                 }
                 continue;
             }
-            
+
             // Regular paragraph
             let mut para_lines = Vec::new();
-            while i < lines.len() && !lines[i].trim().is_empty() 
+            while i < lines.len()
+                && !lines[i].trim().is_empty()
                 && !lines[i].starts_with('#')
                 && !lines[i].starts_with("```")
                 && !lines[i].starts_with('>')
@@ -192,33 +224,36 @@ impl MarkdownParser {
                 para_lines.push(lines[i]);
                 i += 1;
             }
-            
+
             let text = para_lines.join(" ");
             blocks.push(MdBlock::Paragraph(Self::parse_inline(&text)));
         }
-        
+
         blocks
     }
-    
+
     pub fn parse_inline(input: &str) -> Vec<MdInline> {
         let mut result = Vec::new();
         let chars: Vec<char> = input.chars().collect();
         let mut i = 0;
         let mut current_text = String::new();
-        
+
         while i < chars.len() {
             // Bold: **text** or __text__
-            if i + 1 < chars.len() && ((chars[i] == '*' && chars[i+1] == '*') || (chars[i] == '_' && chars[i+1] == '_')) {
+            if i + 1 < chars.len()
+                && ((chars[i] == '*' && chars[i + 1] == '*')
+                    || (chars[i] == '_' && chars[i + 1] == '_'))
+            {
                 let marker = chars[i];
-                
+
                 if !current_text.is_empty() {
                     result.push(MdInline::Text(current_text.clone()));
                     current_text.clear();
                 }
-                
+
                 i += 2;
                 let start = i;
-                while i + 1 < chars.len() && !(chars[i] == marker && chars[i+1] == marker) {
+                while i + 1 < chars.len() && !(chars[i] == marker && chars[i + 1] == marker) {
                     i += 1;
                 }
                 let inner: String = chars[start..i].iter().collect();
@@ -226,16 +261,16 @@ impl MarkdownParser {
                 i += 2;
                 continue;
             }
-            
+
             // Italic: *text* or _text_
-            if (chars[i] == '*' || chars[i] == '_') && i + 1 < chars.len() && chars[i+1] != ' ' {
+            if (chars[i] == '*' || chars[i] == '_') && i + 1 < chars.len() && chars[i + 1] != ' ' {
                 let marker = chars[i];
-                
+
                 if !current_text.is_empty() {
                     result.push(MdInline::Text(current_text.clone()));
                     current_text.clear();
                 }
-                
+
                 i += 1;
                 let start = i;
                 while i < chars.len() && chars[i] != marker {
@@ -252,14 +287,14 @@ impl MarkdownParser {
                 }
                 continue;
             }
-            
+
             // Inline code: `code`
             if chars[i] == '`' {
                 if !current_text.is_empty() {
                     result.push(MdInline::Text(current_text.clone()));
                     current_text.clear();
                 }
-                
+
                 i += 1;
                 let start = i;
                 while i < chars.len() && chars[i] != '`' {
@@ -272,17 +307,17 @@ impl MarkdownParser {
                 }
                 continue;
             }
-            
+
             // Strikethrough: ~~text~~
-            if i + 1 < chars.len() && chars[i] == '~' && chars[i+1] == '~' {
+            if i + 1 < chars.len() && chars[i] == '~' && chars[i + 1] == '~' {
                 if !current_text.is_empty() {
                     result.push(MdInline::Text(current_text.clone()));
                     current_text.clear();
                 }
-                
+
                 i += 2;
                 let start = i;
-                while i + 1 < chars.len() && !(chars[i] == '~' && chars[i+1] == '~') {
+                while i + 1 < chars.len() && !(chars[i] == '~' && chars[i + 1] == '~') {
                     i += 1;
                 }
                 let inner: String = chars[start..i].iter().collect();
@@ -290,34 +325,38 @@ impl MarkdownParser {
                 i += 2;
                 continue;
             }
-            
+
             // Link: [text](url)
             if chars[i] == '[' {
                 let bracket_start = i;
                 i += 1;
                 let text_start = i;
                 let mut bracket_depth = 1;
-                
+
                 while i < chars.len() && bracket_depth > 0 {
-                    if chars[i] == '[' { bracket_depth += 1; }
-                    if chars[i] == ']' { bracket_depth -= 1; }
+                    if chars[i] == '[' {
+                        bracket_depth += 1;
+                    }
+                    if chars[i] == ']' {
+                        bracket_depth -= 1;
+                    }
                     i += 1;
                 }
-                
+
                 if i < chars.len() && chars[i] == '(' {
-                    let text: String = chars[text_start..i-1].iter().collect();
+                    let text: String = chars[text_start..i - 1].iter().collect();
                     i += 1;
                     let url_start = i;
                     while i < chars.len() && chars[i] != ')' {
                         i += 1;
                     }
                     let url: String = chars[url_start..i].iter().collect();
-                    
+
                     if !current_text.is_empty() {
                         result.push(MdInline::Text(current_text.clone()));
                         current_text.clear();
                     }
-                    
+
                     result.push(MdInline::Link { text, url });
                     if i < chars.len() {
                         i += 1;
@@ -328,29 +367,29 @@ impl MarkdownParser {
                     i = bracket_start;
                 }
             }
-            
+
             // Image: ![alt](url)
-            if chars[i] == '!' && i + 1 < chars.len() && chars[i+1] == '[' {
+            if chars[i] == '!' && i + 1 < chars.len() && chars[i + 1] == '[' {
                 i += 2;
                 let alt_start = i;
                 while i < chars.len() && chars[i] != ']' {
                     i += 1;
                 }
                 let alt: String = chars[alt_start..i].iter().collect();
-                
-                if i + 1 < chars.len() && chars[i] == ']' && chars[i+1] == '(' {
+
+                if i + 1 < chars.len() && chars[i] == ']' && chars[i + 1] == '(' {
                     i += 2;
                     let url_start = i;
                     while i < chars.len() && chars[i] != ')' {
                         i += 1;
                     }
                     let url: String = chars[url_start..i].iter().collect();
-                    
+
                     if !current_text.is_empty() {
                         result.push(MdInline::Text(current_text.clone()));
                         current_text.clear();
                     }
-                    
+
                     result.push(MdInline::Image { alt, url });
                     if i < chars.len() {
                         i += 1;
@@ -358,15 +397,15 @@ impl MarkdownParser {
                     continue;
                 }
             }
-            
+
             current_text.push(chars[i]);
             i += 1;
         }
-        
+
         if !current_text.is_empty() {
             result.push(MdInline::Text(current_text));
         }
-        
+
         result
     }
 }
@@ -402,12 +441,12 @@ impl Default for MdStyle {
     fn default() -> Self {
         MdStyle {
             heading_colors: [
-                Color::new(229, 192, 123, 255),  // h1 - golden
-                Color::new(97, 175, 239, 255),   // h2 - blue
-                Color::new(152, 195, 121, 255),  // h3 - green
-                Color::new(198, 120, 221, 255),  // h4 - purple
-                Color::new(86, 182, 194, 255),   // h5 - cyan
-                Color::new(224, 108, 117, 255),  // h6 - red
+                Color::new(229, 192, 123, 255), // h1 - golden
+                Color::new(97, 175, 239, 255),  // h2 - blue
+                Color::new(152, 195, 121, 255), // h3 - green
+                Color::new(198, 120, 221, 255), // h4 - purple
+                Color::new(86, 182, 194, 255),  // h5 - cyan
+                Color::new(224, 108, 117, 255), // h6 - red
             ],
             text_color: Color::new(220, 220, 220, 255),
             link_color: Color::new(97, 175, 239, 255),
@@ -422,7 +461,7 @@ impl Default for MdStyle {
 /// Simple plaintext renderer (for testing)
 pub fn render_to_text(blocks: &[MdBlock]) -> String {
     let mut output = String::new();
-    
+
     for block in blocks {
         match block {
             MdBlock::Heading { level, content } => {
@@ -488,13 +527,13 @@ pub fn render_to_text(blocks: &[MdBlock]) -> String {
             }
         }
     }
-    
+
     output
 }
 
 fn inline_to_text(inlines: &[MdInline]) -> String {
     let mut output = String::new();
-    
+
     for inline in inlines {
         match inline {
             MdInline::Text(t) => output.push_str(t),
@@ -520,14 +559,14 @@ fn inline_to_text(inlines: &[MdInline]) -> String {
             }
         }
     }
-    
+
     output
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_heading() {
         let blocks = MarkdownParser::parse("# Hello World");
@@ -537,7 +576,7 @@ mod tests {
             _ => panic!("Expected heading"),
         }
     }
-    
+
     #[test]
     fn test_code_block() {
         let blocks = MarkdownParser::parse("```rust\nfn main() {}\n```");
@@ -550,7 +589,7 @@ mod tests {
             _ => panic!("Expected code block"),
         }
     }
-    
+
     #[test]
     fn test_inline_bold() {
         let inlines = MarkdownParser::parse_inline("Hello **world**!");

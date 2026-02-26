@@ -16,15 +16,15 @@ pub struct AiConfig {
     pub enabled: bool,
     pub provider: AiProvider,
     pub api_key: Option<String>,
-    pub show_help_button: bool,  // The "?" button
+    pub show_help_button: bool, // The "?" button
     pub easter_eggs_found: Vec<String>,
-    pub learning_mode: bool,  // Extra explanations
+    pub learning_mode: bool, // Extra explanations
 }
 
 impl Default for AiConfig {
     fn default() -> Self {
         Self {
-            enabled: true,  // OFF by default
+            enabled: true, // OFF by default
             provider: AiProvider::None,
             api_key: None,
             show_help_button: true,
@@ -37,11 +37,11 @@ impl Default for AiConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AiProvider {
     None,
-    Anthropic,  // Claude
+    Anthropic, // Claude
     OpenAI,
-    XAI,        // Grok
-    Google,     // Gemini
-    Local,      // Ollama/local models
+    XAI,    // Grok
+    Google, // Gemini
+    Local,  // Ollama/local models
 }
 
 /// Runtime view of AI config + secrets
@@ -59,24 +59,56 @@ pub struct AiRuntime {
 /// Quick analysis requests - minimal, contextual
 #[derive(Debug)]
 pub enum HelpQuery {
-    WhatIsThis { element: String },      // "?" on any UI element
-    ExplainPage { url: String },          // "What is this site?"
-    IsThisSafe { url: String },           // Quick safety check
-    HowDoI { action: String },            // "How do I..."
-    EasterEgg { trigger: String },        // Hidden discoveries
+    WhatIsThis { element: String }, // "?" on any UI element
+    ExplainPage { url: String },    // "What is this site?"
+    IsThisSafe { url: String },     // Quick safety check
+    HowDoI { action: String },      // "How do I..."
+    EasterEgg { trigger: String },  // Hidden discoveries
 }
 
 /// Easter eggs - local food discounts + Foodie Finder promo
 pub const EASTER_EGGS: &[(&str, &str, &str)] = &[
     // (trigger, message, reward_code)
-    ("konami", "->-><-<-<--><-->BA - Classic gamer! Here's 15% off at participating local restaurants.", "SASSY-KONAMI-15"),
-    ("night_owl", "Browsing at 3am? Night owls get 10% off late-night eats.", "SASSY-NIGHTOWL-10"),
-    ("first_block", "First popup blocked! Celebrate with $5 off your next local meal.", "SASSY-BLOCKED-5"),
-    ("speed_reader", "500 pages today! Fuel up with 20% off local coffee shops.", "SASSY-READER-20"),
-    ("trust_watcher", "You get security. Get 15% off farm-to-table spots.", "SASSY-TRUST-15"),
-    ("week_streak", "7 days secure browsing! Free appetizer at local favorites.", "SASSY-STREAK-APP"),
-    ("family_setup", "Family protected! $10 off family-style restaurants.", "SASSY-FAMILY-10"),
-    ("zero_malware", "30 days malware-free! Dessert's on us at local bakeries.", "SASSY-CLEAN-DESSERT"),
+    (
+        "konami",
+        "->-><-<-<--><-->BA - Classic gamer! Here's 15% off at participating local restaurants.",
+        "SASSY-KONAMI-15",
+    ),
+    (
+        "night_owl",
+        "Browsing at 3am? Night owls get 10% off late-night eats.",
+        "SASSY-NIGHTOWL-10",
+    ),
+    (
+        "first_block",
+        "First popup blocked! Celebrate with $5 off your next local meal.",
+        "SASSY-BLOCKED-5",
+    ),
+    (
+        "speed_reader",
+        "500 pages today! Fuel up with 20% off local coffee shops.",
+        "SASSY-READER-20",
+    ),
+    (
+        "trust_watcher",
+        "You get security. Get 15% off farm-to-table spots.",
+        "SASSY-TRUST-15",
+    ),
+    (
+        "week_streak",
+        "7 days secure browsing! Free appetizer at local favorites.",
+        "SASSY-STREAK-APP",
+    ),
+    (
+        "family_setup",
+        "Family protected! $10 off family-style restaurants.",
+        "SASSY-FAMILY-10",
+    ),
+    (
+        "zero_malware",
+        "30 days malware-free! Dessert's on us at local bakeries.",
+        "SASSY-CLEAN-DESSERT",
+    ),
 ];
 
 /// Foodie Finder integration
@@ -93,7 +125,10 @@ pub struct EasterEggReward {
 impl EasterEggReward {
     /// Summary of the reward
     pub fn describe(&self) -> String {
-        format!("EasterEggReward[msg={}, code={}, url={}]", self.message, self.code, self.redeem_url)
+        format!(
+            "EasterEggReward[msg={}, code={}, url={}]",
+            self.message, self.code, self.redeem_url
+        )
     }
 }
 
@@ -118,12 +153,12 @@ impl AiConfig {
         self.api_key = Some(key);
         self.enabled = true;
     }
-    
+
     pub fn discover_easter_egg(&mut self, id: &str) -> Option<EasterEggReward> {
         if self.easter_eggs_found.contains(&id.to_string()) {
             return None;
         }
-        
+
         if let Some((_, message, code)) = EASTER_EGGS.iter().find(|(eid, _, _)| *eid == id) {
             self.easter_eggs_found.push(id.to_string());
             Some(EasterEggReward {
@@ -135,7 +170,7 @@ impl AiConfig {
             None
         }
     }
-    
+
     pub fn eggs_found(&self) -> usize {
         self.easter_eggs_found.len()
     }
@@ -144,7 +179,7 @@ impl AiConfig {
     pub fn foodie_finder_url() -> &'static str {
         FOODIE_FINDER_URL
     }
-    
+
     pub fn total_eggs() -> usize {
         EASTER_EGGS.len()
     }
@@ -196,15 +231,26 @@ pub fn load_runtime() -> AiRuntime {
     let parsed: AiFile = toml::from_str(&content).unwrap_or_default();
 
     // Resolve keys: [ai.keys] takes priority, then fall back to [mcp.keys]
-    let anthropic_key = parsed.ai.keys.anthropic.clone()
+    let anthropic_key = parsed
+        .ai
+        .keys
+        .anthropic
+        .clone()
         .filter(|s| !s.is_empty())
         .or_else(|| parsed.mcp.keys.anthropic.clone().filter(|s| !s.is_empty()));
-    let openai_key = parsed.ai.keys.openai.clone()
-        .filter(|s| !s.is_empty());
-    let xai_key = parsed.ai.keys.xai.clone()
+    let openai_key = parsed.ai.keys.openai.clone().filter(|s| !s.is_empty());
+    let xai_key = parsed
+        .ai
+        .keys
+        .xai
+        .clone()
         .filter(|s| !s.is_empty())
         .or_else(|| parsed.mcp.keys.xai.clone().filter(|s| !s.is_empty()));
-    let google_key = parsed.ai.keys.google.clone()
+    let google_key = parsed
+        .ai
+        .keys
+        .google
+        .clone()
         .filter(|s| !s.is_empty())
         .or_else(|| parsed.mcp.keys.google.clone().filter(|s| !s.is_empty()));
 
@@ -216,11 +262,17 @@ pub fn load_runtime() -> AiRuntime {
         "local" | "ollama" => AiProvider::Local,
         // Auto-detect: if provider is "auto" or "none" but keys exist, pick the first available
         "auto" => {
-            if xai_key.is_some() { AiProvider::XAI }
-            else if anthropic_key.is_some() { AiProvider::Anthropic }
-            else if google_key.is_some() { AiProvider::Google }
-            else if openai_key.is_some() { AiProvider::OpenAI }
-            else { AiProvider::None }
+            if xai_key.is_some() {
+                AiProvider::XAI
+            } else if anthropic_key.is_some() {
+                AiProvider::Anthropic
+            } else if google_key.is_some() {
+                AiProvider::Google
+            } else if openai_key.is_some() {
+                AiProvider::OpenAI
+            } else {
+                AiProvider::None
+            }
         }
         _ => AiProvider::None,
     };
@@ -254,8 +306,12 @@ pub fn load_runtime() -> AiRuntime {
         eprintln!("Easter egg notifications enabled");
     }
 
-    tracing::info!("AI sidebar: provider={:?}, enabled={}, has_key={}", 
-        config.provider, config.enabled, config.api_key.is_some());
+    tracing::info!(
+        "AI sidebar: provider={:?}, enabled={}, has_key={}",
+        config.provider,
+        config.enabled,
+        config.api_key.is_some()
+    );
 
     AiRuntime {
         config,
@@ -272,15 +328,25 @@ pub fn load_runtime() -> AiRuntime {
 pub fn help_query_for_context(context: &str, url: &str) -> HelpQuery {
     let lower = crate::fontcase::ascii_lower(context);
     if lower.starts_with("what is") || lower.starts_with("explain") {
-        HelpQuery::WhatIsThis { element: context.to_string() }
+        HelpQuery::WhatIsThis {
+            element: context.to_string(),
+        }
     } else if lower.starts_with("safe") || lower.starts_with("is this safe") {
-        HelpQuery::IsThisSafe { url: url.to_string() }
+        HelpQuery::IsThisSafe {
+            url: url.to_string(),
+        }
     } else if lower.starts_with("how do i") || lower.starts_with("how to") {
-        HelpQuery::HowDoI { action: context.to_string() }
+        HelpQuery::HowDoI {
+            action: context.to_string(),
+        }
     } else if lower.starts_with("egg:") || lower.starts_with("easter") {
-        HelpQuery::EasterEgg { trigger: context.to_string() }
+        HelpQuery::EasterEgg {
+            trigger: context.to_string(),
+        }
     } else {
-        HelpQuery::ExplainPage { url: url.to_string() }
+        HelpQuery::ExplainPage {
+            url: url.to_string(),
+        }
     }
 }
 
@@ -340,16 +406,25 @@ fn build_prompt(query: &HelpQuery) -> String {
             format!("Explain this UI element concisely: {}", element)
         }
         HelpQuery::ExplainPage { url } => {
-            format!("Explain what this page is and any trust/safety notes. URL: {}", url)
+            format!(
+                "Explain what this page is and any trust/safety notes. URL: {}",
+                url
+            )
         }
         HelpQuery::IsThisSafe { url } => {
-            format!("Assess safety risks (phishing/malware/trackers) for {}. Give concise guidance.", url)
+            format!(
+                "Assess safety risks (phishing/malware/trackers) for {}. Give concise guidance.",
+                url
+            )
         }
         HelpQuery::HowDoI { action } => {
             format!("How do I {} in a browser? Keep it short and safe.", action)
         }
         HelpQuery::EasterEgg { trigger } => {
-            format!("User triggered easter egg: {}. Respond playfully in one line.", trigger)
+            format!(
+                "User triggered easter egg: {}. Respond playfully in one line.",
+                trigger
+            )
         }
     }
 }
@@ -389,7 +464,7 @@ fn call_anthropic(key: &str, prompt: &str) -> Result<String, String> {
         "model": "claude-3-5-haiku-latest",
         "max_tokens": 256,
         "messages": [{"role": "user", "content": prompt}],
-        "system": "You are a concise browser assistant. Be safe; avoid code that could execute." 
+        "system": "You are a concise browser assistant. Be safe; avoid code that could execute."
     });
 
     let resp = ureq::post("https://api.anthropic.com/v1/messages")
@@ -402,7 +477,10 @@ fn call_anthropic(key: &str, prompt: &str) -> Result<String, String> {
     let json: JsonValue = resp
         .into_json()
         .map_err(|e| format!("Anthropic JSON parse failed: {}", e))?;
-    let content = json["content"][0]["text"].as_str().unwrap_or("").to_string();
+    let content = json["content"][0]["text"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
     if content.is_empty() {
         Err("Anthropic returned empty response".into())
     } else {
@@ -546,7 +624,9 @@ impl Default for AiSection {
     }
 }
 
-fn default_provider_none() -> String { "none".into() }
+fn default_provider_none() -> String {
+    "none".into()
+}
 
 #[derive(Debug, Deserialize, Default, Clone)]
 struct AiKeys {
@@ -568,8 +648,12 @@ struct AiLocal {
     model: String,
 }
 
-fn default_local_endpoint() -> String { "http://localhost:11434".into() }
-fn default_local_model() -> String { "llama2".into() }
+fn default_local_endpoint() -> String {
+    "http://localhost:11434".into()
+}
+fn default_local_model() -> String {
+    "llama2".into()
+}
 
 #[derive(Debug, Deserialize, Default)]
 struct HelpSection {
@@ -579,7 +663,9 @@ struct HelpSection {
     position: Option<String>,
 }
 
-fn default_show_button() -> bool { true }
+fn default_show_button() -> bool {
+    true
+}
 
 #[derive(Debug, Deserialize, Default)]
 struct LearningSection {
@@ -645,13 +731,27 @@ impl Default for WhisperSection {
     }
 }
 
-fn default_whisper_enabled() -> bool { true }
-fn default_whisper_model() -> String { "base".into() }
-fn default_use_gpu() -> bool { true }
-fn default_vad_threshold() -> f32 { 0.3 }
-fn default_silence_duration() -> f32 { 1.5 }
-fn default_max_duration() -> f32 { 60.0 }
-fn default_live_preview() -> bool { true }
+fn default_whisper_enabled() -> bool {
+    true
+}
+fn default_whisper_model() -> String {
+    "base".into()
+}
+fn default_use_gpu() -> bool {
+    true
+}
+fn default_vad_threshold() -> f32 {
+    0.3
+}
+fn default_silence_duration() -> f32 {
+    1.5
+}
+fn default_max_duration() -> f32 {
+    60.0
+}
+fn default_live_preview() -> bool {
+    true
+}
 
 /// Load Whisper (speech-to-text) configuration from ai.toml
 pub fn load_whisper_config() -> crate::voice::VoiceConfig {
@@ -664,7 +764,7 @@ pub fn load_whisper_config() -> crate::voice::VoiceConfig {
 
     let parsed: AiFile = toml::from_str(&content).unwrap_or_default();
     let ws = parsed.whisper;
-    
+
     let model = match crate::fontcase::ascii_lower(&ws.model).as_str() {
         "tiny" => crate::voice::WhisperModel::Tiny,
         "base" => crate::voice::WhisperModel::Base,
@@ -673,7 +773,7 @@ pub fn load_whisper_config() -> crate::voice::VoiceConfig {
         "large" => crate::voice::WhisperModel::Large,
         _ => crate::voice::WhisperModel::Base,
     };
-    
+
     crate::voice::VoiceConfig {
         enabled: ws.enabled,
         model,

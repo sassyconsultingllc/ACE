@@ -1,7 +1,6 @@
 //! Theme system for Sassy Browser
 //! Handles loading, parsing, and applying themes from TOML config
 
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -36,28 +35,28 @@ pub struct ThemeColors {
     pub surface: String,
     pub surface_elevated: String,
     pub border: String,
-    
+
     // Text
     pub text_primary: String,
     pub text_secondary: String,
     pub text_muted: String,
-    
+
     // Accent
     pub accent: String,
     pub accent_hover: String,
     pub accent_active: String,
-    
+
     // Status
     pub success: String,
     pub warning: String,
     pub error: String,
     pub info: String,
-    
+
     // Tabs
     pub tab_active: String,
     pub tab_inactive: String,
     pub tab_hover: String,
-    
+
     // Sidebar
     pub sidebar_bg: String,
     pub sidebar_border: String,
@@ -108,14 +107,14 @@ pub struct Layout {
     pub sidebar_right: SidebarState,
     pub sidebar_bottom: SidebarState,
     pub sidebar_left: SidebarState,
-    
+
     pub sidebar_top_height: u32,
     pub sidebar_bottom_height: u32,
     pub sidebar_left_width: u32,
     pub sidebar_right_width: u32,
-    
+
     pub sidebar_collapsed_size: u32,
-    
+
     pub tab_tile_min_width: u32,
     pub tab_tile_max_width: u32,
     pub tab_tile_aspect_ratio: f32,
@@ -179,20 +178,18 @@ pub enum PreviewQuality {
 impl Theme {
     /// Load theme from TOML file
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read theme file: {}", e))?;
-        toml::from_str(&content)
-            .map_err(|e| format!("Failed to parse theme: {}", e))
+        let content =
+            fs::read_to_string(path).map_err(|e| format!("Failed to read theme file: {}", e))?;
+        toml::from_str(&content).map_err(|e| format!("Failed to parse theme: {}", e))
     }
-    
+
     /// Save theme to TOML file
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
         let content = toml::to_string_pretty(self)
             .map_err(|e| format!("Failed to serialize theme: {}", e))?;
-        fs::write(path, content)
-            .map_err(|e| format!("Failed to write theme: {}", e))
+        fs::write(path, content).map_err(|e| format!("Failed to write theme: {}", e))
     }
-    
+
     /// Get default dark theme
     pub fn dark() -> Self {
         Self {
@@ -242,10 +239,19 @@ impl Theme {
                 line_height: 1.5,
             },
             spacing: Spacing {
-                xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48,
+                xs: 4,
+                sm: 8,
+                md: 16,
+                lg: 24,
+                xl: 32,
+                xxl: 48,
             },
             borders: Borders {
-                radius_sm: 4, radius_md: 8, radius_lg: 12, radius_full: 9999, width: 1,
+                radius_sm: 4,
+                radius_md: 8,
+                radius_lg: 12,
+                radius_full: 9999,
+                width: 1,
             },
             shadows: Shadows {
                 sm: "0 1px 2px rgba(0,0,0,0.3)".into(),
@@ -299,7 +305,7 @@ impl Theme {
             },
         }
     }
-    
+
     /// Get default light theme
     pub fn light() -> Self {
         let mut theme = Self::dark();
@@ -311,14 +317,14 @@ impl Theme {
             surface: "#EEEEF2".into(),
             surface_elevated: "#FFFFFF".into(),
             border: "#D0D4DE".into(),
-            text_primary: "#101E32".into(),  // Dark Blue
+            text_primary: "#101E32".into(),   // Dark Blue
             text_secondary: "#2E384B".into(), // Dark Gray
             text_muted: "#606878".into(),
-            accent: "#6C63FF".into(),         // Brand Purple
+            accent: "#6C63FF".into(), // Brand Purple
             accent_hover: "#5B53E6".into(),
             accent_active: "#4A44CC".into(),
             success: "#1a7f37".into(),
-            warning: "#B08A00".into(),        // Darker yellow for light bg
+            warning: "#B08A00".into(), // Darker yellow for light bg
             error: "#cf222e".into(),
             info: "#6C63FF".into(),
             tab_active: "#FFFFFF".into(),
@@ -329,12 +335,12 @@ impl Theme {
         };
         theme
     }
-    
+
     /// Parse hex color to RGBA
     pub fn parse_color(hex: &str) -> (u8, u8, u8, u8) {
         let hex = hex.trim_start_matches('#');
         let len = hex.len();
-        
+
         match len {
             6 => {
                 let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
@@ -358,7 +364,7 @@ impl Theme {
             _ => (0, 0, 0, 255),
         }
     }
-    
+
     /// Convert color to u32 for framebuffer
     pub fn color_to_u32(hex: &str) -> u32 {
         let (r, g, b, _) = Self::parse_color(hex);
@@ -378,14 +384,14 @@ impl ThemeManager {
         let mut themes = HashMap::new();
         themes.insert("dark".into(), Theme::dark());
         themes.insert("light".into(), Theme::light());
-        
+
         Self {
             current: Theme::dark(),
             themes,
             custom_path: None,
         }
     }
-    
+
     pub fn load_custom<P: AsRef<Path>>(&mut self, path: P) -> Result<(), String> {
         let theme = Theme::load(&path)?;
         let name = theme.meta.name.clone();
@@ -393,7 +399,7 @@ impl ThemeManager {
         self.custom_path = Some(path.as_ref().to_string_lossy().into());
         Ok(())
     }
-    
+
     pub fn switch(&mut self, name: &str) -> Result<(), String> {
         if let Some(theme) = self.themes.get(name) {
             self.current = theme.clone();
@@ -402,19 +408,19 @@ impl ThemeManager {
             Err(format!("Theme '{}' not found", name))
         }
     }
-    
+
     pub fn current(&self) -> &Theme {
         &self.current
     }
-    
+
     pub fn current_mut(&mut self) -> &mut Theme {
         &mut self.current
     }
-    
+
     pub fn list_themes(&self) -> Vec<&str> {
         self.themes.keys().map(|s| s.as_str()).collect()
     }
-    
+
     pub fn save_current(&self) -> Result<(), String> {
         if let Some(ref path) = self.custom_path {
             self.current.save(path)

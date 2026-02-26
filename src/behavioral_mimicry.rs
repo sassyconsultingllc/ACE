@@ -108,12 +108,20 @@ impl BehavioralMimic {
         }
 
         let len = self.mouse.path_buffer.len() as f32;
-        let avg_jitter_x = self.mouse.path_buffer.iter()
+        let avg_jitter_x = self
+            .mouse
+            .path_buffer
+            .iter()
             .map(|(x, _, _)| *x)
-            .sum::<f32>() / len;
-        let avg_jitter_y = self.mouse.path_buffer.iter()
+            .sum::<f32>()
+            / len;
+        let avg_jitter_y = self
+            .mouse
+            .path_buffer
+            .iter()
             .map(|(_, y, _)| *y)
-            .sum::<f32>() / len;
+            .sum::<f32>()
+            / len;
 
         let poisoned_dx = raw_dx + avg_jitter_x;
         let poisoned_dy = raw_dy + avg_jitter_y;
@@ -415,7 +423,10 @@ mod tests {
         let (dx2, _) = m2.mimic_mouse_move(10.0, 0.0);
 
         // Different seeds should produce different jitter
-        assert!((dx1 - dx2).abs() > 0.001, "Different seeds should produce different jitter");
+        assert!(
+            (dx1 - dx2).abs() > 0.001,
+            "Different seeds should produce different jitter"
+        );
     }
 
     #[test]

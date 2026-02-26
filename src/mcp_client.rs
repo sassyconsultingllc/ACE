@@ -24,7 +24,7 @@
 //! - Graceful shutdown
 
 use crate::mcp_codec::{build_frame_body, parse_frame_body};
-use crate::mcp_protocol::{McpCommand, McpResponse, PROTOCOL_VERSION, ProtocolError};
+use crate::mcp_protocol::{McpCommand, McpResponse, ProtocolError, PROTOCOL_VERSION};
 use futures::{SinkExt, StreamExt};
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -117,9 +117,11 @@ impl McpClient {
             client_name: "sassy-mcp-client".into(),
             protocol_version: PROTOCOL_VERSION,
         };
-        let body = build_frame_body(&hello)
-            .map_err(|e| McpClientError::ProtocolError(ProtocolError::DeserializeError(e.to_string())))?;
-        ws_sink.send(WsMessage::Binary(body.into()))
+        let body = build_frame_body(&hello).map_err(|e| {
+            McpClientError::ProtocolError(ProtocolError::DeserializeError(e.to_string()))
+        })?;
+        ws_sink
+            .send(WsMessage::Binary(body.into()))
             .await
             .map_err(|e| McpClientError::TransportError(e.to_string()))?;
 
@@ -132,25 +134,34 @@ impl McpClient {
 
         let welcome_bytes = match welcome_msg {
             WsMessage::Binary(b) => b,
-            _ => return Err(McpClientError::HandshakeRejected("expected binary message".into())),
+            _ => {
+                return Err(McpClientError::HandshakeRejected(
+                    "expected binary message".into(),
+                ))
+            }
         };
 
-        let welcome: McpResponse = parse_frame_body(&welcome_bytes)
-            .map_err(McpClientError::ProtocolError)?;
+        let welcome: McpResponse =
+            parse_frame_body(&welcome_bytes).map_err(McpClientError::ProtocolError)?;
 
         match &welcome {
-            McpResponse::Welcome { protocol_version, .. } => {
+            McpResponse::Welcome {
+                protocol_version, ..
+            } => {
                 if *protocol_version != PROTOCOL_VERSION {
-                    return Err(McpClientError::HandshakeRejected(
-                        format!("version mismatch: server={}, client={}", protocol_version, PROTOCOL_VERSION),
-                    ));
+                    return Err(McpClientError::HandshakeRejected(format!(
+                        "version mismatch: server={}, client={}",
+                        protocol_version, PROTOCOL_VERSION
+                    )));
                 }
             }
             McpResponse::Error { message, .. } => {
                 return Err(McpClientError::HandshakeRejected(message.clone()));
             }
             _ => {
-                return Err(McpClientError::HandshakeRejected("unexpected response type".into()));
+                return Err(McpClientError::HandshakeRejected(
+                    "unexpected response type".into(),
+                ));
             }
         }
 
@@ -225,7 +236,9 @@ impl McpClient {
         if self.state == ConnectionState::Shutdown {
             return Err(McpClientError::Shutdown);
         }
-        self.cmd_tx.send(cmd).await
+        self.cmd_tx
+            .send(cmd)
+            .await
             .map_err(|e| McpClientError::ChannelError(e.to_string()))
     }
 
@@ -233,7 +246,9 @@ impl McpClient {
     ///
     /// This blocks until a response is available or the connection is closed.
     pub async fn recv(&mut self) -> Result<McpResponse, McpClientError> {
-        self.resp_rx.recv().await
+        self.resp_rx
+            .recv()
+            .await
             .ok_or(McpClientError::ServerClosed)
     }
 

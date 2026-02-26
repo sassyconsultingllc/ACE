@@ -150,48 +150,127 @@ pub const INTERNAL_ERROR: i32 = -32603;
 #[derive(Debug, Clone)]
 pub enum McpCommand {
     // Navigation
-    Navigate { url: String, tab_id: Option<u64> },
-    NewTab { url: Option<String> },
-    CloseTab { tab_id: u64 },
+    Navigate {
+        url: String,
+        tab_id: Option<u64>,
+    },
+    NewTab {
+        url: Option<String>,
+    },
+    CloseTab {
+        tab_id: u64,
+    },
     ListTabs,
-    GoBack { tab_id: Option<u64> },
-    GoForward { tab_id: Option<u64> },
-    Reload { tab_id: Option<u64> },
+    GoBack {
+        tab_id: Option<u64>,
+    },
+    GoForward {
+        tab_id: Option<u64>,
+    },
+    Reload {
+        tab_id: Option<u64>,
+    },
 
     // Reading
-    ReadPage { tab_id: Option<u64>, depth: u32, filter: String },
-    GetText { tab_id: Option<u64>, selector: Option<String> },
-    FindElement { query: String, tab_id: Option<u64>, max_results: u32 },
+    ReadPage {
+        tab_id: Option<u64>,
+        depth: u32,
+        filter: String,
+    },
+    GetText {
+        tab_id: Option<u64>,
+        selector: Option<String>,
+    },
+    FindElement {
+        query: String,
+        tab_id: Option<u64>,
+        max_results: u32,
+    },
 
     // Interaction
-    Click { tab_id: Option<u64>, element_ref: Option<String>, x: Option<i32>, y: Option<i32>, button: String, click_count: u32 },
-    TypeText { tab_id: Option<u64>, text: String, element_ref: Option<String>, clear_first: bool },
-    PressKey { tab_id: Option<u64>, key: String },
-    Scroll { tab_id: Option<u64>, direction: String, amount: i32, element_ref: Option<String> },
-    FormInput { tab_id: Option<u64>, element_ref: String, value: JsonValue },
+    Click {
+        tab_id: Option<u64>,
+        element_ref: Option<String>,
+        x: Option<i32>,
+        y: Option<i32>,
+        button: String,
+        click_count: u32,
+    },
+    TypeText {
+        tab_id: Option<u64>,
+        text: String,
+        element_ref: Option<String>,
+        clear_first: bool,
+    },
+    PressKey {
+        tab_id: Option<u64>,
+        key: String,
+    },
+    Scroll {
+        tab_id: Option<u64>,
+        direction: String,
+        amount: i32,
+        element_ref: Option<String>,
+    },
+    FormInput {
+        tab_id: Option<u64>,
+        element_ref: String,
+        value: JsonValue,
+    },
 
     // Screenshot
-    Screenshot { tab_id: Option<u64>, element_ref: Option<String>, format: String },
+    Screenshot {
+        tab_id: Option<u64>,
+        element_ref: Option<String>,
+        format: String,
+    },
 
     // JavaScript
-    ExecuteJs { tab_id: Option<u64>, code: String },
+    ExecuteJs {
+        tab_id: Option<u64>,
+        code: String,
+    },
 
     // Security
-    GetTrustLevel { tab_id: Option<u64> },
-    GetSecurityInfo { tab_id: Option<u64> },
+    GetTrustLevel {
+        tab_id: Option<u64>,
+    },
+    GetSecurityInfo {
+        tab_id: Option<u64>,
+    },
 
     // File Viewer
-    OpenFile { path: String },
-    GetFileInfo { tab_id: Option<u64> },
+    OpenFile {
+        path: String,
+    },
+    GetFileInfo {
+        tab_id: Option<u64>,
+    },
 
     // Extended Tools
-    ActivateTab { tab_id: u64 },
-    SearchBookmarks { query: String },
-    AddBookmark { url: String, title: String, folder_id: Option<String> },
-    SearchHistory { query: String, limit: u32 },
-    StartDownload { url: String, filename: Option<String> },
+    ActivateTab {
+        tab_id: u64,
+    },
+    SearchBookmarks {
+        query: String,
+    },
+    AddBookmark {
+        url: String,
+        title: String,
+        folder_id: Option<String>,
+    },
+    SearchHistory {
+        query: String,
+        limit: u32,
+    },
+    StartDownload {
+        url: String,
+        filename: Option<String>,
+    },
     ListDownloads,
-    WebSearch { query: String },
+    WebSearch {
+        query: String,
+    },
 }
 
 /// Tab information returned from browser
@@ -234,48 +313,145 @@ pub struct ElementBounds {
 #[derive(Debug, Clone)]
 pub enum McpResponse {
     // Navigation
-    NavigateResult { success: bool, url: String, message: String },
-    NewTabResult { success: bool, tab_id: u64, url: String },
-    CloseTabResult { success: bool, closed_tab_id: u64 },
-    TabList { tabs: Vec<TabInfo>, active_tab: usize },
+    NavigateResult {
+        success: bool,
+        url: String,
+        message: String,
+    },
+    NewTabResult {
+        success: bool,
+        tab_id: u64,
+        url: String,
+    },
+    CloseTabResult {
+        success: bool,
+        closed_tab_id: u64,
+    },
+    TabList {
+        tabs: Vec<TabInfo>,
+        active_tab: usize,
+    },
 
     // Reading
-    PageTree { tree: Box<ElementInfo>, depth: u32, filter: String },
-    TextContent { text: String, length: usize },
-    FindResult { elements: Vec<ElementInfo>, query: String, count: usize },
+    PageTree {
+        tree: Box<ElementInfo>,
+        depth: u32,
+        filter: String,
+    },
+    TextContent {
+        text: String,
+        length: usize,
+    },
+    FindResult {
+        elements: Vec<ElementInfo>,
+        query: String,
+        count: usize,
+    },
 
     // Interaction
-    ClickResult { success: bool, element_ref: Option<String>, coordinates: Option<(i32, i32)> },
-    TypeResult { success: bool, typed: String },
-    KeyResult { success: bool, key: String },
-    ScrollResult { success: bool, direction: String, amount: i32 },
-    FormInputResult { success: bool, element_ref: String, value: JsonValue },
+    ClickResult {
+        success: bool,
+        element_ref: Option<String>,
+        coordinates: Option<(i32, i32)>,
+    },
+    TypeResult {
+        success: bool,
+        typed: String,
+    },
+    KeyResult {
+        success: bool,
+        key: String,
+    },
+    ScrollResult {
+        success: bool,
+        direction: String,
+        amount: i32,
+    },
+    FormInputResult {
+        success: bool,
+        element_ref: String,
+        value: JsonValue,
+    },
 
     // Screenshot
-    ScreenshotResult { success: bool, format: String, width: u32, height: u32, data: String },
+    ScreenshotResult {
+        success: bool,
+        format: String,
+        width: u32,
+        height: u32,
+        data: String,
+    },
 
     // JavaScript
-    JsResult { success: bool, result: JsonValue, console: Vec<String> },
+    JsResult {
+        success: bool,
+        result: JsonValue,
+        console: Vec<String>,
+    },
 
     // Security
-    TrustLevel { level: String, interactions: u32, required: u32, restrictions: Vec<String> },
-    SecurityInfo { ssl: JsonValue, cookies: JsonValue, trackers_blocked: u32, popups_blocked: u32 },
+    TrustLevel {
+        level: String,
+        interactions: u32,
+        required: u32,
+        restrictions: Vec<String>,
+    },
+    SecurityInfo {
+        ssl: JsonValue,
+        cookies: JsonValue,
+        trackers_blocked: u32,
+        popups_blocked: u32,
+    },
 
     // File
-    OpenFileResult { success: bool, path: String, format: String, viewer: String },
-    FileInfo { is_file: bool, path: Option<String>, format: Option<String>, metadata: JsonValue },
+    OpenFileResult {
+        success: bool,
+        path: String,
+        format: String,
+        viewer: String,
+    },
+    FileInfo {
+        is_file: bool,
+        path: Option<String>,
+        format: Option<String>,
+        metadata: JsonValue,
+    },
 
     // Extended Tools
-    ActivateTabResult { success: bool, tab_id: u64 },
-    BookmarkResults { bookmarks: Vec<JsonValue>, count: usize },
-    BookmarkAdded { success: bool, id: String },
-    HistoryResults { entries: Vec<JsonValue>, count: usize },
-    DownloadStarted { success: bool, download_id: String, url: String },
-    DownloadList { downloads: Vec<JsonValue> },
-    WebSearchResult { success: bool, url: String },
+    ActivateTabResult {
+        success: bool,
+        tab_id: u64,
+    },
+    BookmarkResults {
+        bookmarks: Vec<JsonValue>,
+        count: usize,
+    },
+    BookmarkAdded {
+        success: bool,
+        id: String,
+    },
+    HistoryResults {
+        entries: Vec<JsonValue>,
+        count: usize,
+    },
+    DownloadStarted {
+        success: bool,
+        download_id: String,
+        url: String,
+    },
+    DownloadList {
+        downloads: Vec<JsonValue>,
+    },
+    WebSearchResult {
+        success: bool,
+        url: String,
+    },
 
     // Error
-    Error { code: i32, message: String },
+    Error {
+        code: i32,
+        message: String,
+    },
 }
 
 // ==============================================================================
@@ -380,13 +556,19 @@ pub struct McpBridgeSender {
 impl McpBridgeSender {
     /// Send a command and wait for response
     pub fn send_command(&self, cmd: McpCommand) -> Result<McpResponse, String> {
-        self.command_tx.send(cmd).map_err(|e| format!("Failed to send command: {}", e))?;
-        self.response_rx.recv().map_err(|e| format!("Failed to receive response: {}", e))
+        self.command_tx
+            .send(cmd)
+            .map_err(|e| format!("Failed to send command: {}", e))?;
+        self.response_rx
+            .recv()
+            .map_err(|e| format!("Failed to receive response: {}", e))
     }
 
     /// Send a command without waiting (for notifications)
     pub fn send_command_async(&self, cmd: McpCommand) -> Result<(), String> {
-        self.command_tx.send(cmd).map_err(|e| format!("Failed to send command: {}", e))
+        self.command_tx
+            .send(cmd)
+            .map_err(|e| format!("Failed to send command: {}", e))
     }
 }
 
@@ -404,7 +586,9 @@ impl McpBridgeReceiver {
 
     /// Send a response
     pub fn send_response(&self, response: McpResponse) -> Result<(), String> {
-        self.response_tx.send(response).map_err(|e| format!("Failed to send response: {}", e))
+        self.response_tx
+            .send(response)
+            .map_err(|e| format!("Failed to send response: {}", e))
     }
 }
 
@@ -478,11 +662,11 @@ fn define_tools() -> Vec<McpTool> {
                 "properties": {}
             }),
         },
-
         // === Reading Tools ===
         McpTool {
             name: "read_page".to_string(),
-            description: "Get the accessibility tree / DOM structure of the current page".to_string(),
+            description: "Get the accessibility tree / DOM structure of the current page"
+                .to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -541,7 +725,6 @@ fn define_tools() -> Vec<McpTool> {
                 "required": ["query"]
             }),
         },
-
         // === Interaction Tools ===
         McpTool {
             name: "click".to_string(),
@@ -669,7 +852,6 @@ fn define_tools() -> Vec<McpTool> {
                 "required": ["element_ref", "value"]
             }),
         },
-
         // === Screenshot Tools ===
         McpTool {
             name: "screenshot".to_string(),
@@ -693,7 +875,6 @@ fn define_tools() -> Vec<McpTool> {
                 }
             }),
         },
-
         // === JavaScript Tools ===
         McpTool {
             name: "execute_js".to_string(),
@@ -713,7 +894,6 @@ fn define_tools() -> Vec<McpTool> {
                 "required": ["code"]
             }),
         },
-
         // === Security/Trust Tools ===
         McpTool {
             name: "get_trust_level".to_string(),
@@ -741,7 +921,6 @@ fn define_tools() -> Vec<McpTool> {
                 }
             }),
         },
-
         // === File Viewer Tools ===
         McpTool {
             name: "open_file".to_string(),
@@ -770,7 +949,6 @@ fn define_tools() -> Vec<McpTool> {
                 }
             }),
         },
-
         // === Extended Tools ===
         McpTool {
             name: "activate_tab".to_string(),
@@ -949,7 +1127,10 @@ impl McpServer {
                 stdout.flush().ok();
             }
 
-            if self.shutdown_requested.load(std::sync::atomic::Ordering::SeqCst) {
+            if self
+                .shutdown_requested
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
                 eprintln!("[MCP] Shutting down after completing pending request");
                 break;
             }
@@ -1005,7 +1186,10 @@ impl McpServer {
             "admin/gc" => self.handle_gc(),
 
             // Unknown method
-            _ => Err((METHOD_NOT_FOUND, format!("Unknown method: {}", request.method))),
+            _ => Err((
+                METHOD_NOT_FOUND,
+                format!("Unknown method: {}", request.method),
+            )),
         };
 
         Some(match result {
@@ -1044,7 +1228,11 @@ impl McpServer {
 
         // Track metrics
         self.metrics.total_requests += 1;
-        *self.metrics.tool_call_count.entry(name.to_string()).or_insert(0) += 1;
+        *self
+            .metrics
+            .tool_call_count
+            .entry(name.to_string())
+            .or_insert(0) += 1;
 
         // Log event
         self.events.push(McpEvent {
@@ -1143,13 +1331,15 @@ impl McpServer {
         };
 
         match self.bridge.send_command(cmd) {
-            Ok(McpResponse::NavigateResult { success, url, message }) => {
-                Ok(json!({
-                    "success": success,
-                    "url": url,
-                    "message": message
-                }))
-            }
+            Ok(McpResponse::NavigateResult {
+                success,
+                url,
+                message,
+            }) => Ok(json!({
+                "success": success,
+                "url": url,
+                "message": message
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1159,14 +1349,19 @@ impl McpServer {
     fn tool_new_tab(&self, args: &JsonValue) -> Result<JsonValue, (i32, String)> {
         let url = args["url"].as_str().map(String::from);
 
-        match self.bridge.send_command(McpCommand::NewTab { url: url.clone() }) {
-            Ok(McpResponse::NewTabResult { success, tab_id, url }) => {
-                Ok(json!({
-                    "success": success,
-                    "tab_id": tab_id,
-                    "url": url
-                }))
-            }
+        match self
+            .bridge
+            .send_command(McpCommand::NewTab { url: url.clone() })
+        {
+            Ok(McpResponse::NewTabResult {
+                success,
+                tab_id,
+                url,
+            }) => Ok(json!({
+                "success": success,
+                "tab_id": tab_id,
+                "url": url
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1179,12 +1374,13 @@ impl McpServer {
             .ok_or((INVALID_PARAMS, "Missing tab_id".to_string()))?;
 
         match self.bridge.send_command(McpCommand::CloseTab { tab_id }) {
-            Ok(McpResponse::CloseTabResult { success, closed_tab_id }) => {
-                Ok(json!({
-                    "success": success,
-                    "closed_tab_id": closed_tab_id
-                }))
-            }
+            Ok(McpResponse::CloseTabResult {
+                success,
+                closed_tab_id,
+            }) => Ok(json!({
+                "success": success,
+                "closed_tab_id": closed_tab_id
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1193,12 +1389,10 @@ impl McpServer {
 
     fn tool_list_tabs(&self, _args: &JsonValue) -> Result<JsonValue, (i32, String)> {
         match self.bridge.send_command(McpCommand::ListTabs) {
-            Ok(McpResponse::TabList { tabs, active_tab }) => {
-                Ok(json!({
-                    "tabs": tabs,
-                    "active_tab": active_tab
-                }))
-            }
+            Ok(McpResponse::TabList { tabs, active_tab }) => Ok(json!({
+                "tabs": tabs,
+                "active_tab": active_tab
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1210,14 +1404,20 @@ impl McpServer {
         let depth = args["depth"].as_u64().unwrap_or(10) as u32;
         let filter = args["filter"].as_str().unwrap_or("all").to_string();
 
-        match self.bridge.send_command(McpCommand::ReadPage { tab_id, depth, filter: filter.clone() }) {
-            Ok(McpResponse::PageTree { tree, depth, filter }) => {
-                Ok(json!({
-                    "tree": tree,
-                    "depth": depth,
-                    "filter": filter
-                }))
-            }
+        match self.bridge.send_command(McpCommand::ReadPage {
+            tab_id,
+            depth,
+            filter: filter.clone(),
+        }) {
+            Ok(McpResponse::PageTree {
+                tree,
+                depth,
+                filter,
+            }) => Ok(json!({
+                "tree": tree,
+                "depth": depth,
+                "filter": filter
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1228,13 +1428,14 @@ impl McpServer {
         let tab_id = args["tab_id"].as_u64();
         let selector = args["selector"].as_str().map(String::from);
 
-        match self.bridge.send_command(McpCommand::GetText { tab_id, selector }) {
-            Ok(McpResponse::TextContent { text, length }) => {
-                Ok(json!({
-                    "text": text,
-                    "length": length
-                }))
-            }
+        match self
+            .bridge
+            .send_command(McpCommand::GetText { tab_id, selector })
+        {
+            Ok(McpResponse::TextContent { text, length }) => Ok(json!({
+                "text": text,
+                "length": length
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1249,14 +1450,20 @@ impl McpServer {
         let tab_id = args["tab_id"].as_u64();
         let max_results = args["max_results"].as_u64().unwrap_or(10) as u32;
 
-        match self.bridge.send_command(McpCommand::FindElement { query: query.clone(), tab_id, max_results }) {
-            Ok(McpResponse::FindResult { elements, query, count }) => {
-                Ok(json!({
-                    "elements": elements,
-                    "query": query,
-                    "count": count
-                }))
-            }
+        match self.bridge.send_command(McpCommand::FindElement {
+            query: query.clone(),
+            tab_id,
+            max_results,
+        }) {
+            Ok(McpResponse::FindResult {
+                elements,
+                query,
+                count,
+            }) => Ok(json!({
+                "elements": elements,
+                "query": query,
+                "count": count
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1271,16 +1478,25 @@ impl McpServer {
         let button = args["button"].as_str().unwrap_or("left").to_string();
         let click_count = args["click_count"].as_u64().unwrap_or(1) as u32;
 
-        match self.bridge.send_command(McpCommand::Click { tab_id, element_ref: element_ref.clone(), x, y, button: button.clone(), click_count }) {
-            Ok(McpResponse::ClickResult { success, element_ref, coordinates }) => {
-                Ok(json!({
-                    "success": success,
-                    "element_ref": element_ref,
-                    "coordinates": coordinates,
-                    "button": button,
-                    "click_count": click_count
-                }))
-            }
+        match self.bridge.send_command(McpCommand::Click {
+            tab_id,
+            element_ref: element_ref.clone(),
+            x,
+            y,
+            button: button.clone(),
+            click_count,
+        }) {
+            Ok(McpResponse::ClickResult {
+                success,
+                element_ref,
+                coordinates,
+            }) => Ok(json!({
+                "success": success,
+                "element_ref": element_ref,
+                "coordinates": coordinates,
+                "button": button,
+                "click_count": click_count
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1296,14 +1512,17 @@ impl McpServer {
         let element_ref = args["element_ref"].as_str().map(String::from);
         let clear_first = args["clear_first"].as_bool().unwrap_or(false);
 
-        match self.bridge.send_command(McpCommand::TypeText { tab_id, text: text.clone(), element_ref, clear_first }) {
-            Ok(McpResponse::TypeResult { success, typed }) => {
-                Ok(json!({
-                    "success": success,
-                    "typed": typed,
-                    "clear_first": clear_first
-                }))
-            }
+        match self.bridge.send_command(McpCommand::TypeText {
+            tab_id,
+            text: text.clone(),
+            element_ref,
+            clear_first,
+        }) {
+            Ok(McpResponse::TypeResult { success, typed }) => Ok(json!({
+                "success": success,
+                "typed": typed,
+                "clear_first": clear_first
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1317,13 +1536,14 @@ impl McpServer {
             .to_string();
         let tab_id = args["tab_id"].as_u64();
 
-        match self.bridge.send_command(McpCommand::PressKey { tab_id, key: key.clone() }) {
-            Ok(McpResponse::KeyResult { success, key }) => {
-                Ok(json!({
-                    "success": success,
-                    "key": key
-                }))
-            }
+        match self.bridge.send_command(McpCommand::PressKey {
+            tab_id,
+            key: key.clone(),
+        }) {
+            Ok(McpResponse::KeyResult { success, key }) => Ok(json!({
+                "success": success,
+                "key": key
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1339,14 +1559,21 @@ impl McpServer {
         let amount = args["amount"].as_i64().unwrap_or(300) as i32;
         let element_ref = args["element_ref"].as_str().map(String::from);
 
-        match self.bridge.send_command(McpCommand::Scroll { tab_id, direction: direction.clone(), amount, element_ref }) {
-            Ok(McpResponse::ScrollResult { success, direction, amount }) => {
-                Ok(json!({
-                    "success": success,
-                    "direction": direction,
-                    "amount": amount
-                }))
-            }
+        match self.bridge.send_command(McpCommand::Scroll {
+            tab_id,
+            direction: direction.clone(),
+            amount,
+            element_ref,
+        }) {
+            Ok(McpResponse::ScrollResult {
+                success,
+                direction,
+                amount,
+            }) => Ok(json!({
+                "success": success,
+                "direction": direction,
+                "amount": amount
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1361,14 +1588,20 @@ impl McpServer {
         let value = args["value"].clone();
         let tab_id = args["tab_id"].as_u64();
 
-        match self.bridge.send_command(McpCommand::FormInput { tab_id, element_ref: element_ref.clone(), value: value.clone() }) {
-            Ok(McpResponse::FormInputResult { success, element_ref, value }) => {
-                Ok(json!({
-                    "success": success,
-                    "element_ref": element_ref,
-                    "value": value
-                }))
-            }
+        match self.bridge.send_command(McpCommand::FormInput {
+            tab_id,
+            element_ref: element_ref.clone(),
+            value: value.clone(),
+        }) {
+            Ok(McpResponse::FormInputResult {
+                success,
+                element_ref,
+                value,
+            }) => Ok(json!({
+                "success": success,
+                "element_ref": element_ref,
+                "value": value
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1380,16 +1613,24 @@ impl McpServer {
         let element_ref = args["element_ref"].as_str().map(String::from);
         let format = args["format"].as_str().unwrap_or("png").to_string();
 
-        match self.bridge.send_command(McpCommand::Screenshot { tab_id, element_ref, format: format.clone() }) {
-            Ok(McpResponse::ScreenshotResult { success, format, width, height, data }) => {
-                Ok(json!({
-                    "success": success,
-                    "format": format,
-                    "width": width,
-                    "height": height,
-                    "data": data
-                }))
-            }
+        match self.bridge.send_command(McpCommand::Screenshot {
+            tab_id,
+            element_ref,
+            format: format.clone(),
+        }) {
+            Ok(McpResponse::ScreenshotResult {
+                success,
+                format,
+                width,
+                height,
+                data,
+            }) => Ok(json!({
+                "success": success,
+                "format": format,
+                "width": width,
+                "height": height,
+                "data": data
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1403,15 +1644,20 @@ impl McpServer {
             .to_string();
         let tab_id = args["tab_id"].as_u64();
 
-        match self.bridge.send_command(McpCommand::ExecuteJs { tab_id, code }) {
-            Ok(McpResponse::JsResult { success, result, console }) => {
-                Ok(json!({
-                    "success": success,
-                    "result": result,
-                    "console": console,
-                    "note": "Executed via SassyScript (no V8, no JIT exploits)"
-                }))
-            }
+        match self
+            .bridge
+            .send_command(McpCommand::ExecuteJs { tab_id, code })
+        {
+            Ok(McpResponse::JsResult {
+                success,
+                result,
+                console,
+            }) => Ok(json!({
+                "success": success,
+                "result": result,
+                "console": console,
+                "note": "Executed via SassyScript (no V8, no JIT exploits)"
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1421,15 +1667,21 @@ impl McpServer {
     fn tool_get_trust_level(&self, args: &JsonValue) -> Result<JsonValue, (i32, String)> {
         let tab_id = args["tab_id"].as_u64();
 
-        match self.bridge.send_command(McpCommand::GetTrustLevel { tab_id }) {
-            Ok(McpResponse::TrustLevel { level, interactions, required, restrictions }) => {
-                Ok(json!({
-                    "trust_level": level,
-                    "interactions": interactions,
-                    "required_for_trusted": required,
-                    "restrictions": restrictions
-                }))
-            }
+        match self
+            .bridge
+            .send_command(McpCommand::GetTrustLevel { tab_id })
+        {
+            Ok(McpResponse::TrustLevel {
+                level,
+                interactions,
+                required,
+                restrictions,
+            }) => Ok(json!({
+                "trust_level": level,
+                "interactions": interactions,
+                "required_for_trusted": required,
+                "restrictions": restrictions
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1439,15 +1691,21 @@ impl McpServer {
     fn tool_get_security_info(&self, args: &JsonValue) -> Result<JsonValue, (i32, String)> {
         let tab_id = args["tab_id"].as_u64();
 
-        match self.bridge.send_command(McpCommand::GetSecurityInfo { tab_id }) {
-            Ok(McpResponse::SecurityInfo { ssl, cookies, trackers_blocked, popups_blocked }) => {
-                Ok(json!({
-                    "ssl": ssl,
-                    "cookies": cookies,
-                    "trackers_blocked": trackers_blocked,
-                    "popups_blocked": popups_blocked
-                }))
-            }
+        match self
+            .bridge
+            .send_command(McpCommand::GetSecurityInfo { tab_id })
+        {
+            Ok(McpResponse::SecurityInfo {
+                ssl,
+                cookies,
+                trackers_blocked,
+                popups_blocked,
+            }) => Ok(json!({
+                "ssl": ssl,
+                "cookies": cookies,
+                "trackers_blocked": trackers_blocked,
+                "popups_blocked": popups_blocked
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1460,15 +1718,21 @@ impl McpServer {
             .ok_or((INVALID_PARAMS, "Missing path".to_string()))?
             .to_string();
 
-        match self.bridge.send_command(McpCommand::OpenFile { path: path.clone() }) {
-            Ok(McpResponse::OpenFileResult { success, path, format, viewer }) => {
-                Ok(json!({
-                    "success": success,
-                    "path": path,
-                    "detected_format": format,
-                    "viewer": viewer
-                }))
-            }
+        match self
+            .bridge
+            .send_command(McpCommand::OpenFile { path: path.clone() })
+        {
+            Ok(McpResponse::OpenFileResult {
+                success,
+                path,
+                format,
+                viewer,
+            }) => Ok(json!({
+                "success": success,
+                "path": path,
+                "detected_format": format,
+                "viewer": viewer
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1479,14 +1743,17 @@ impl McpServer {
         let tab_id = args["tab_id"].as_u64();
 
         match self.bridge.send_command(McpCommand::GetFileInfo { tab_id }) {
-            Ok(McpResponse::FileInfo { is_file, path, format, metadata }) => {
-                Ok(json!({
-                    "is_file": is_file,
-                    "path": path,
-                    "format": format,
-                    "metadata": metadata
-                }))
-            }
+            Ok(McpResponse::FileInfo {
+                is_file,
+                path,
+                format,
+                metadata,
+            }) => Ok(json!({
+                "is_file": is_file,
+                "path": path,
+                "format": format,
+                "metadata": metadata
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1503,12 +1770,10 @@ impl McpServer {
             .ok_or((INVALID_PARAMS, "Missing tab_id".to_string()))?;
 
         match self.bridge.send_command(McpCommand::ActivateTab { tab_id }) {
-            Ok(McpResponse::ActivateTabResult { success, tab_id }) => {
-                Ok(json!({
-                    "success": success,
-                    "tab_id": tab_id
-                }))
-            }
+            Ok(McpResponse::ActivateTabResult { success, tab_id }) => Ok(json!({
+                "success": success,
+                "tab_id": tab_id
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1521,13 +1786,14 @@ impl McpServer {
             .ok_or((INVALID_PARAMS, "Missing query".to_string()))?
             .to_string();
 
-        match self.bridge.send_command(McpCommand::SearchBookmarks { query }) {
-            Ok(McpResponse::BookmarkResults { bookmarks, count }) => {
-                Ok(json!({
-                    "bookmarks": bookmarks,
-                    "count": count
-                }))
-            }
+        match self
+            .bridge
+            .send_command(McpCommand::SearchBookmarks { query })
+        {
+            Ok(McpResponse::BookmarkResults { bookmarks, count }) => Ok(json!({
+                "bookmarks": bookmarks,
+                "count": count
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1545,13 +1811,15 @@ impl McpServer {
             .to_string();
         let folder_id = args["folder_id"].as_str().map(String::from);
 
-        match self.bridge.send_command(McpCommand::AddBookmark { url, title, folder_id }) {
-            Ok(McpResponse::BookmarkAdded { success, id }) => {
-                Ok(json!({
-                    "success": success,
-                    "id": id
-                }))
-            }
+        match self.bridge.send_command(McpCommand::AddBookmark {
+            url,
+            title,
+            folder_id,
+        }) {
+            Ok(McpResponse::BookmarkAdded { success, id }) => Ok(json!({
+                "success": success,
+                "id": id
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1565,13 +1833,14 @@ impl McpServer {
             .to_string();
         let limit = args["limit"].as_u64().unwrap_or(50) as u32;
 
-        match self.bridge.send_command(McpCommand::SearchHistory { query, limit }) {
-            Ok(McpResponse::HistoryResults { entries, count }) => {
-                Ok(json!({
-                    "entries": entries,
-                    "count": count
-                }))
-            }
+        match self
+            .bridge
+            .send_command(McpCommand::SearchHistory { query, limit })
+        {
+            Ok(McpResponse::HistoryResults { entries, count }) => Ok(json!({
+                "entries": entries,
+                "count": count
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1585,14 +1854,19 @@ impl McpServer {
             .to_string();
         let filename = args["filename"].as_str().map(String::from);
 
-        match self.bridge.send_command(McpCommand::StartDownload { url: url.clone(), filename }) {
-            Ok(McpResponse::DownloadStarted { success, download_id, url }) => {
-                Ok(json!({
-                    "success": success,
-                    "download_id": download_id,
-                    "url": url
-                }))
-            }
+        match self.bridge.send_command(McpCommand::StartDownload {
+            url: url.clone(),
+            filename,
+        }) {
+            Ok(McpResponse::DownloadStarted {
+                success,
+                download_id,
+                url,
+            }) => Ok(json!({
+                "success": success,
+                "download_id": download_id,
+                "url": url
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1601,11 +1875,9 @@ impl McpServer {
 
     fn tool_list_downloads(&self, _args: &JsonValue) -> Result<JsonValue, (i32, String)> {
         match self.bridge.send_command(McpCommand::ListDownloads) {
-            Ok(McpResponse::DownloadList { downloads }) => {
-                Ok(json!({
-                    "downloads": downloads
-                }))
-            }
+            Ok(McpResponse::DownloadList { downloads }) => Ok(json!({
+                "downloads": downloads
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1618,14 +1890,14 @@ impl McpServer {
             .ok_or((INVALID_PARAMS, "Missing query".to_string()))?
             .to_string();
 
-        match self.bridge.send_command(McpCommand::WebSearch { query: query.clone() }) {
-            Ok(McpResponse::WebSearchResult { success, url }) => {
-                Ok(json!({
-                    "success": success,
-                    "url": url,
-                    "query": query
-                }))
-            }
+        match self.bridge.send_command(McpCommand::WebSearch {
+            query: query.clone(),
+        }) {
+            Ok(McpResponse::WebSearchResult { success, url }) => Ok(json!({
+                "success": success,
+                "url": url,
+                "query": query
+            })),
             Ok(McpResponse::Error { code, message }) => Err((code, message)),
             Err(e) => Err((INTERNAL_ERROR, e)),
             _ => Err((INTERNAL_ERROR, "Unexpected response".to_string())),
@@ -1637,14 +1909,18 @@ impl McpServer {
     // ==============================================================================
 
     fn handle_contexts_list(&self) -> Result<JsonValue, (i32, String)> {
-        let contexts: Vec<JsonValue> = self.contexts.values()
-            .map(|ctx| json!({
-                "id": ctx.id,
-                "title": ctx.title,
-                "created_at": ctx.created_at,
-                "last_active_at": ctx.last_active_at,
-                "message_count": ctx.messages.len(),
-            }))
+        let contexts: Vec<JsonValue> = self
+            .contexts
+            .values()
+            .map(|ctx| {
+                json!({
+                    "id": ctx.id,
+                    "title": ctx.title,
+                    "created_at": ctx.created_at,
+                    "last_active_at": ctx.last_active_at,
+                    "message_count": ctx.messages.len(),
+                })
+            })
             .collect();
 
         Ok(json!({
@@ -1739,9 +2015,7 @@ impl McpServer {
 
     fn handle_health_check(&self) -> Result<JsonValue, (i32, String)> {
         // Ping browser to verify bridge connectivity
-        let bridge_ok = self.bridge.send_command_async(
-            McpCommand::ListTabs
-        ).is_ok();
+        let bridge_ok = self.bridge.send_command_async(McpCommand::ListTabs).is_ok();
 
         Ok(json!({
             "status": if bridge_ok { "healthy" } else { "degraded" },
@@ -1769,7 +2043,13 @@ impl McpServer {
 
         let valid_levels = ["error", "warn", "info", "debug", "trace"];
         if !valid_levels.contains(&level) {
-            return Err((INVALID_PARAMS, format!("Invalid log level: {}. Must be one of: {:?}", level, valid_levels)));
+            return Err((
+                INVALID_PARAMS,
+                format!(
+                    "Invalid log level: {}. Must be one of: {:?}",
+                    level, valid_levels
+                ),
+            ));
         }
 
         self.log_level = level.to_string();
@@ -1783,7 +2063,8 @@ impl McpServer {
     fn handle_shutdown(&self) -> Result<JsonValue, (i32, String)> {
         let uptime = self.started_at.elapsed().as_secs();
         eprintln!("[MCP] Shutdown requested after {} seconds uptime", uptime);
-        self.shutdown_requested.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.shutdown_requested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         Ok(json!({
             "status": "shutting_down",
             "message": "Shutdown initiated",
@@ -1825,31 +2106,34 @@ impl McpServer {
 // ==============================================================================
 
 /// Entry point for MCP server mode (standalone, no GUI)
-/// 
+///
 /// This is used when running `sassy-browser.exe --mcp-server`
 /// It creates a simple headless browser instance and runs the MCP server.
 pub fn run_mcp_server_standalone(config: McpServerConfig) {
     eprintln!("Sassy Browser MCP Server (standalone mode)");
     eprintln!("Transport: {}", config.transport);
-    
+
     // For standalone mode, we create a minimal browser state
     // that doesn't require a GUI
     let (bridge_sender, bridge_receiver) = McpBridge::new();
-    
+
     // Start command processor in separate thread
     std::thread::spawn(move || {
         run_headless_browser(bridge_receiver);
     });
-    
+
     // Run MCP server
     let mut server = McpServer::new(config.clone(), bridge_sender);
-    
+
     match config.transport.as_str() {
         "stdio" => {
             server.run_stdio();
         }
         "socket" => {
-            eprintln!("Socket transport on port {} (not yet implemented)", config.port);
+            eprintln!(
+                "Socket transport on port {} (not yet implemented)",
+                config.port
+            );
             // TODO: Implement socket transport
         }
         _ => {
@@ -1932,10 +2216,7 @@ fn run_headless_browser(bridge: McpBridgeReceiver) {
 }
 
 /// Process a single MCP command and return a response
-fn process_command(
-    state: &mut HeadlessBrowserState,
-    cmd: McpCommand,
-) -> McpResponse {
+fn process_command(state: &mut HeadlessBrowserState, cmd: McpCommand) -> McpResponse {
     use crate::browser::{TabContent, TabId};
 
     match cmd {
@@ -1956,49 +2237,102 @@ fn process_command(
                 message: format!("Navigating to {}", url),
             }
         }
-        
+
         McpCommand::NewTab { url } => {
             let id = if let Some(ref u) = url {
                 state.engine.new_tab_with_url(u)
             } else {
                 state.engine.new_tab()
             };
-            
+
             McpResponse::NewTabResult {
                 success: true,
                 tab_id: id.0,
                 url: url.unwrap_or_else(|| "about:blank".to_string()),
             }
         }
-        
+
         McpCommand::CloseTab { tab_id } => {
             state.engine.close_tab_by_id(TabId(tab_id));
-            
+
             McpResponse::CloseTabResult {
                 success: true,
                 closed_tab_id: tab_id,
             }
         }
-        
+
         McpCommand::ListTabs => {
-            let tabs: Vec<TabInfo> = state.engine.tabs()
+            let tabs: Vec<TabInfo> = state
+                .engine
+                .tabs()
                 .iter()
                 .enumerate()
                 .map(|(idx, tab)| {
                     let (url, title, loading, is_secure, is_file, file_type) = match &tab.content {
-                        TabContent::Web { url, title, loading, is_secure, .. } => {
-                            (url.clone(), title.clone(), *loading, *is_secure, false, None)
-                        }
-                        TabContent::File(f) => {
-                            (format!("file://{}", f.path.display()), f.name.clone(), false, true, true, Some(format!("{:?}", f.file_type)))
-                        }
-                        TabContent::NewTab => ("about:blank".to_string(), "New Tab".to_string(), false, true, false, None),
-                        TabContent::Settings => ("sassy://settings".to_string(), "Settings".to_string(), false, true, false, None),
-                        TabContent::History => ("sassy://history".to_string(), "History".to_string(), false, true, false, None),
-                        TabContent::Bookmarks => ("sassy://bookmarks".to_string(), "Bookmarks".to_string(), false, true, false, None),
-                        TabContent::Downloads => ("sassy://downloads".to_string(), "Downloads".to_string(), false, true, false, None),
+                        TabContent::Web {
+                            url,
+                            title,
+                            loading,
+                            is_secure,
+                            ..
+                        } => (
+                            url.clone(),
+                            title.clone(),
+                            *loading,
+                            *is_secure,
+                            false,
+                            None,
+                        ),
+                        TabContent::File(f) => (
+                            format!("file://{}", f.path.display()),
+                            f.name.clone(),
+                            false,
+                            true,
+                            true,
+                            Some(format!("{:?}", f.file_type)),
+                        ),
+                        TabContent::NewTab => (
+                            "about:blank".to_string(),
+                            "New Tab".to_string(),
+                            false,
+                            true,
+                            false,
+                            None,
+                        ),
+                        TabContent::Settings => (
+                            "sassy://settings".to_string(),
+                            "Settings".to_string(),
+                            false,
+                            true,
+                            false,
+                            None,
+                        ),
+                        TabContent::History => (
+                            "sassy://history".to_string(),
+                            "History".to_string(),
+                            false,
+                            true,
+                            false,
+                            None,
+                        ),
+                        TabContent::Bookmarks => (
+                            "sassy://bookmarks".to_string(),
+                            "Bookmarks".to_string(),
+                            false,
+                            true,
+                            false,
+                            None,
+                        ),
+                        TabContent::Downloads => (
+                            "sassy://downloads".to_string(),
+                            "Downloads".to_string(),
+                            false,
+                            true,
+                            false,
+                            None,
+                        ),
                     };
-                    
+
                     TabInfo {
                         id: tab.id.0,
                         index: idx,
@@ -2006,59 +2340,67 @@ fn process_command(
                         title,
                         loading,
                         is_secure,
-                        trust_level: if is_secure { "acknowledged".to_string() } else { "untrusted".to_string() },
+                        trust_level: if is_secure {
+                            "acknowledged".to_string()
+                        } else {
+                            "untrusted".to_string()
+                        },
                         is_file,
                         file_type,
                     }
                 })
                 .collect();
-            
+
             McpResponse::TabList {
                 tabs,
                 active_tab: state.engine.active_tab_index(),
             }
         }
-        
+
         McpCommand::GoBack { tab_id } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
             state.engine.go_back();
-            
+
             McpResponse::NavigateResult {
                 success: true,
                 url: "back".to_string(),
                 message: "Going back".to_string(),
             }
         }
-        
+
         McpCommand::GoForward { tab_id } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
             state.engine.go_forward();
-            
+
             McpResponse::NavigateResult {
                 success: true,
                 url: "forward".to_string(),
                 message: "Going forward".to_string(),
             }
         }
-        
+
         McpCommand::Reload { tab_id } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
             state.engine.reload();
-            
+
             McpResponse::NavigateResult {
                 success: true,
                 url: "reload".to_string(),
                 message: "Reloading".to_string(),
             }
         }
-        
-        McpCommand::ReadPage { tab_id, depth, filter } => {
+
+        McpCommand::ReadPage {
+            tab_id,
+            depth,
+            filter,
+        } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
@@ -2076,7 +2418,13 @@ fn process_command(
                         let tag = n.tag_name.clone().unwrap_or_default();
                         let is_interactive = matches!(
                             tag.as_str(),
-                            "a" | "button" | "input" | "select" | "textarea" | "label" | "details" | "summary"
+                            "a" | "button"
+                                | "input"
+                                | "select"
+                                | "textarea"
+                                | "label"
+                                | "details"
+                                | "summary"
                         );
 
                         // Apply filter
@@ -2089,9 +2437,18 @@ fn process_command(
                         element_refs.insert(ref_id.clone(), tag.clone());
 
                         let children = if remaining_depth > 0 {
-                            n.children.iter().filter_map(|child| {
-                                node_to_element(child, ref_ctr, element_refs, remaining_depth - 1, filter)
-                            }).collect()
+                            n.children
+                                .iter()
+                                .filter_map(|child| {
+                                    node_to_element(
+                                        child,
+                                        ref_ctr,
+                                        element_refs,
+                                        remaining_depth - 1,
+                                        filter,
+                                    )
+                                })
+                                .collect()
                         } else {
                             vec![]
                         };
@@ -2137,26 +2494,21 @@ fn process_command(
             let doc = &state.renderer.document;
             let root = &doc.root;
             let ref_ctr = &mut state.ref_counter;
-            let tree = node_to_element(
-                root,
-                ref_ctr,
-                &mut state.element_refs,
-                depth,
-                &filter,
-            ).unwrap_or_else(|| {
-                *ref_ctr += 1;
-                ElementInfo {
-                    ref_id: format!("ref_{}", ref_ctr),
-                    tag: "html".to_string(),
-                    id: None,
-                    classes: vec![],
-                    text: Some("(empty document)".to_string()),
-                    attributes: HashMap::new(),
-                    interactive: false,
-                    bounds: None,
-                    children: vec![],
-                }
-            });
+            let tree = node_to_element(root, ref_ctr, &mut state.element_refs, depth, &filter)
+                .unwrap_or_else(|| {
+                    *ref_ctr += 1;
+                    ElementInfo {
+                        ref_id: format!("ref_{}", ref_ctr),
+                        tag: "html".to_string(),
+                        id: None,
+                        classes: vec![],
+                        text: Some("(empty document)".to_string()),
+                        attributes: HashMap::new(),
+                        interactive: false,
+                        bounds: None,
+                        children: vec![],
+                    }
+                });
 
             McpResponse::PageTree {
                 tree: Box::new(tree),
@@ -2164,7 +2516,7 @@ fn process_command(
                 filter,
             }
         }
-        
+
         McpCommand::GetText { tab_id, selector } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
@@ -2218,8 +2570,12 @@ fn process_command(
                 length: len,
             }
         }
-        
-        McpCommand::FindElement { query, tab_id, max_results } => {
+
+        McpCommand::FindElement {
+            query,
+            tab_id,
+            max_results,
+        } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
@@ -2235,7 +2591,9 @@ fn process_command(
                 results: &mut Vec<ElementInfo>,
                 max: u32,
             ) {
-                if results.len() >= max as usize { return; }
+                if results.len() >= max as usize {
+                    return;
+                }
                 let n = node.borrow();
                 if let crate::dom::NodeType::Element = n.node_type {
                     let tag = n.tag_name.as_deref().unwrap_or("");
@@ -2246,14 +2604,17 @@ fn process_command(
 
                     let tag_match = crate::fontcase::ascii_lower(tag).contains(query_lower);
                     let id_match = crate::fontcase::ascii_lower(&id).contains(query_lower);
-                    let class_match = classes.iter().any(|c| crate::fontcase::ascii_lower(c).contains(query_lower));
+                    let class_match = classes
+                        .iter()
+                        .any(|c| crate::fontcase::ascii_lower(c).contains(query_lower));
                     let text_match = text_lower.contains(query_lower);
 
                     if tag_match || id_match || class_match || text_match {
                         *ref_ctr += 1;
                         let ref_id = format!("ref_{}", ref_ctr);
                         let is_interactive = matches!(
-                            tag, "a" | "button" | "input" | "select" | "textarea" | "label"
+                            tag,
+                            "a" | "button" | "input" | "select" | "textarea" | "label"
                         );
                         element_refs.insert(ref_id.clone(), tag.to_string());
                         results.push(ElementInfo {
@@ -2284,10 +2645,21 @@ fn process_command(
                 max_results,
             );
             let count = results.len();
-            McpResponse::FindResult { elements: results, query, count }
+            McpResponse::FindResult {
+                elements: results,
+                query,
+                count,
+            }
         }
-        
-        McpCommand::Click { tab_id, element_ref, x, y, button, click_count } => {
+
+        McpCommand::Click {
+            tab_id,
+            element_ref,
+            x,
+            y,
+            button,
+            click_count,
+        } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
@@ -2344,8 +2716,13 @@ fn process_command(
                 coordinates: coords,
             }
         }
-        
-        McpCommand::TypeText { tab_id, text, element_ref, clear_first } => {
+
+        McpCommand::TypeText {
+            tab_id,
+            text,
+            element_ref,
+            clear_first,
+        } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
@@ -2360,13 +2737,13 @@ fn process_command(
                     let mut n = node.borrow_mut();
                     if let crate::dom::NodeType::Element = n.node_type {
                         // Check if this element matches the ref (by id or data-ref attribute)
-                        let matches_ref = n.get_attribute("id").map_or(false, |id| id == target_ref)
-                            || n.get_attribute("data-ref").map_or(false, |r| r == target_ref);
+                        let matches_ref =
+                            n.get_attribute("id").map_or(false, |id| id == target_ref)
+                                || n.get_attribute("data-ref")
+                                    .map_or(false, |r| r == target_ref);
 
-                        let is_input = matches!(
-                            n.tag_name.as_deref(),
-                            Some("input") | Some("textarea")
-                        );
+                        let is_input =
+                            matches!(n.tag_name.as_deref(), Some("input") | Some("textarea"));
                         if is_input && matches_ref {
                             if clear {
                                 n.set_attribute("value", value);
@@ -2399,7 +2776,7 @@ fn process_command(
                 typed: text,
             }
         }
-        
+
         McpCommand::PressKey { tab_id, key } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
@@ -2424,13 +2801,15 @@ fn process_command(
                 }
             }
 
-            McpResponse::KeyResult {
-                success: true,
-                key,
-            }
+            McpResponse::KeyResult { success: true, key }
         }
-        
-        McpCommand::Scroll { tab_id, direction, amount, element_ref } => {
+
+        McpCommand::Scroll {
+            tab_id,
+            direction,
+            amount,
+            element_ref,
+        } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
@@ -2452,8 +2831,12 @@ fn process_command(
                 amount,
             }
         }
-        
-        McpCommand::FormInput { tab_id, element_ref, value } => {
+
+        McpCommand::FormInput {
+            tab_id,
+            element_ref,
+            value,
+        } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
@@ -2465,10 +2848,7 @@ fn process_command(
                 other => other.to_string(),
             };
 
-            fn set_form_value(
-                node: &crate::dom::NodeRef,
-                val: &str,
-            ) -> bool {
+            fn set_form_value(node: &crate::dom::NodeRef, val: &str) -> bool {
                 let mut n = node.borrow_mut();
                 if let crate::dom::NodeType::Element = n.node_type {
                     let tag = n.tag_name.as_deref().unwrap_or("");
@@ -2500,8 +2880,12 @@ fn process_command(
                 value,
             }
         }
-        
-        McpCommand::Screenshot { tab_id, element_ref, format } => {
+
+        McpCommand::Screenshot {
+            tab_id,
+            element_ref,
+            format,
+        } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
@@ -2530,16 +2914,21 @@ fn process_command(
             }
 
             // Encode as PNG and then base64
-            use std::io::Cursor;
             use image::ImageEncoder;
+            use std::io::Cursor;
             let mut png_data = Cursor::new(Vec::new());
-            let encode_result = image::codecs::png::PngEncoder::new(&mut png_data)
-                .write_image(&rgba_bytes, width, height, image::ExtendedColorType::Rgba8);
+            let encode_result = image::codecs::png::PngEncoder::new(&mut png_data).write_image(
+                &rgba_bytes,
+                width,
+                height,
+                image::ExtendedColorType::Rgba8,
+            );
 
             match encode_result {
                 Ok(()) => {
                     use base64::Engine;
-                    let b64 = base64::engine::general_purpose::STANDARD.encode(png_data.into_inner());
+                    let b64 =
+                        base64::engine::general_purpose::STANDARD.encode(png_data.into_inner());
                     McpResponse::ScreenshotResult {
                         success: true,
                         format: "png".to_string(),
@@ -2557,7 +2946,7 @@ fn process_command(
                 },
             }
         }
-        
+
         McpCommand::ExecuteJs { tab_id, code } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
@@ -2570,10 +2959,13 @@ fn process_command(
                         crate::js::Value::Number(n) => json!(*n),
                         crate::js::Value::String(s) => json!(s),
                         crate::js::Value::Boolean(b) => json!(*b),
-                        crate::js::Value::Null | crate::js::Value::Undefined => serde_json::Value::Null,
+                        crate::js::Value::Null | crate::js::Value::Undefined => {
+                            serde_json::Value::Null
+                        }
                         other => json!(format!("{:?}", other)),
                     };
-                    let console_out: Vec<String> = state.js_interpreter
+                    let console_out: Vec<String> = state
+                        .js_interpreter
                         .get_console_output()
                         .iter()
                         .cloned()
@@ -2588,7 +2980,8 @@ fn process_command(
                 Err(e) => McpResponse::JsResult {
                     success: false,
                     result: json!({ "error": e }),
-                    console: state.js_interpreter
+                    console: state
+                        .js_interpreter
                         .get_console_output()
                         .iter()
                         .cloned()
@@ -2596,16 +2989,18 @@ fn process_command(
                 },
             }
         }
-        
+
         McpCommand::GetTrustLevel { tab_id } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
             // Query sandbox trust level for the current page
             // In headless mode, we use the sandbox SecurityContext defaults
-            use crate::sandbox::{TrustLevel as SbTrustLevel, ContentType, SecurityContext};
+            use crate::sandbox::{ContentType, SecurityContext, TrustLevel as SbTrustLevel};
 
-            let url = state.engine.active_tab()
+            let url = state
+                .engine
+                .active_tab()
                 .map(|t| match &t.content {
                     TabContent::Web { url, .. } => url.clone(),
                     _ => "about:blank".to_string(),
@@ -2624,16 +3019,28 @@ fn process_command(
             };
 
             let mut restrictions = Vec::new();
-            if !trust.can_execute() { restrictions.push("script_execution".to_string()); }
-            if !trust.can_write_filesystem() { restrictions.push("filesystem_write".to_string()); }
-            if !trust.can_access_network() { restrictions.push("network_access".to_string()); }
+            if !trust.can_execute() {
+                restrictions.push("script_execution".to_string());
+            }
+            if !trust.can_write_filesystem() {
+                restrictions.push("filesystem_write".to_string());
+            }
+            if !trust.can_access_network() {
+                restrictions.push("network_access".to_string());
+            }
 
             // Also check page-level permissions
             use crate::sandbox::page::PageTrust;
             let page_trust = PageTrust::Untrusted; // Default for new pages
-            if !page_trust.can_access_clipboard() { restrictions.push("clipboard_access".to_string()); }
-            if !page_trust.can_initiate_download() { restrictions.push("download_initiation".to_string()); }
-            if !page_trust.can_open_popup() { restrictions.push("popup_creation".to_string()); }
+            if !page_trust.can_access_clipboard() {
+                restrictions.push("clipboard_access".to_string());
+            }
+            if !page_trust.can_initiate_download() {
+                restrictions.push("download_initiation".to_string());
+            }
+            if !page_trust.can_open_popup() {
+                restrictions.push("popup_creation".to_string());
+            }
 
             McpResponse::TrustLevel {
                 level: level_str.to_string(),
@@ -2642,13 +3049,15 @@ fn process_command(
                 restrictions,
             }
         }
-        
+
         McpCommand::GetSecurityInfo { tab_id } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
             }
             // Gather security information from the active tab
-            let url = state.engine.active_tab()
+            let url = state
+                .engine
+                .active_tab()
                 .map(|t| match &t.content {
                     TabContent::Web { url, is_secure, .. } => (url.clone(), *is_secure),
                     _ => ("about:blank".to_string(), true),
@@ -2672,14 +3081,16 @@ fn process_command(
                 popups_blocked: 0,
             }
         }
-        
+
         McpCommand::OpenFile { path } => {
             let path_buf = std::path::PathBuf::from(&path);
             match state.engine.open_file(path_buf) {
                 Ok(_id) => {
                     // Get file type
-                    let format = crate::file_handler::FileHandler::detect_file_type(&std::path::PathBuf::from(&path));
-                    
+                    let format = crate::file_handler::FileHandler::detect_file_type(
+                        &std::path::PathBuf::from(&path),
+                    );
+
                     McpResponse::OpenFileResult {
                         success: true,
                         path,
@@ -2693,7 +3104,7 @@ fn process_command(
                 },
             }
         }
-        
+
         McpCommand::GetFileInfo { tab_id } => {
             if let Some(id) = tab_id {
                 state.engine.set_active_tab_by_id(TabId(id));
@@ -2733,21 +3144,28 @@ fn process_command(
 
         McpCommand::SearchBookmarks { query } => {
             let results = state.engine.bookmarks.search(&query);
-            let bookmarks: Vec<JsonValue> = results.iter().map(|b| {
-                json!({
-                    "id": b.id.to_string(),
-                    "title": b.title,
-                    "url": b.url,
-                    "folder_id": b.folder_id.map(|f| f.to_string()),
-                    "created_at": b.created_at,
-                    "tags": b.tags,
+            let bookmarks: Vec<JsonValue> = results
+                .iter()
+                .map(|b| {
+                    json!({
+                        "id": b.id.to_string(),
+                        "title": b.title,
+                        "url": b.url,
+                        "folder_id": b.folder_id.map(|f| f.to_string()),
+                        "created_at": b.created_at,
+                        "tags": b.tags,
+                    })
                 })
-            }).collect();
+                .collect();
             let count = bookmarks.len();
             McpResponse::BookmarkResults { bookmarks, count }
         }
 
-        McpCommand::AddBookmark { url, title, folder_id } => {
+        McpCommand::AddBookmark {
+            url,
+            title,
+            folder_id,
+        } => {
             let folder_uuid = folder_id.and_then(|fid| uuid::Uuid::parse_str(&fid).ok());
             let id = state.engine.bookmarks.add(&url, &title, folder_uuid);
             McpResponse::BookmarkAdded {
@@ -2758,7 +3176,8 @@ fn process_command(
 
         McpCommand::SearchHistory { query, limit } => {
             let results = state.engine.history.search(&query);
-            let entries: Vec<JsonValue> = results.iter()
+            let entries: Vec<JsonValue> = results
+                .iter()
                 .take(limit as usize)
                 .map(|e| {
                     json!({
@@ -2774,43 +3193,48 @@ fn process_command(
         }
 
         McpCommand::StartDownload { url, filename } => {
-            match state.engine.downloads.start_download(&url, filename.as_deref()) {
-                Ok(download_id) => {
-                    McpResponse::DownloadStarted {
-                        success: true,
-                        download_id: download_id.to_string(),
-                        url,
-                    }
-                }
-                Err(e) => {
-                    McpResponse::DownloadStarted {
-                        success: false,
-                        download_id: String::new(),
-                        url: format!("Download failed: {}", e),
-                    }
-                }
+            match state
+                .engine
+                .downloads
+                .start_download(&url, filename.as_deref())
+            {
+                Ok(download_id) => McpResponse::DownloadStarted {
+                    success: true,
+                    download_id: download_id.to_string(),
+                    url,
+                },
+                Err(e) => McpResponse::DownloadStarted {
+                    success: false,
+                    download_id: String::new(),
+                    url: format!("Download failed: {}", e),
+                },
             }
         }
 
         McpCommand::ListDownloads => {
             let all_downloads = state.engine.downloads.downloads();
-            let downloads: Vec<JsonValue> = all_downloads.iter().map(|d| {
-                json!({
-                    "id": d.id.to_string(),
-                    "url": d.url,
-                    "filename": d.filename,
-                    "status": format!("{:?}", d.state),
-                    "total_bytes": d.total_bytes,
-                    "downloaded_bytes": d.downloaded_bytes,
+            let downloads: Vec<JsonValue> = all_downloads
+                .iter()
+                .map(|d| {
+                    json!({
+                        "id": d.id.to_string(),
+                        "url": d.url,
+                        "filename": d.filename,
+                        "status": format!("{:?}", d.state),
+                        "total_bytes": d.total_bytes,
+                        "downloaded_bytes": d.downloaded_bytes,
+                    })
                 })
-            }).collect();
+                .collect();
             McpResponse::DownloadList { downloads }
         }
 
         McpCommand::WebSearch { query } => {
             // Perform web search by navigating to Google search
-            let search_url = format!("https://www.google.com/search?q={}",
-                urlencoding::encode(&query));
+            let search_url = format!(
+                "https://www.google.com/search?q={}",
+                urlencoding::encode(&query)
+            );
 
             state.engine.navigate(&search_url);
             state.refresh_renderer(&search_url);

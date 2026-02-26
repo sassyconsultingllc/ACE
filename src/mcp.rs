@@ -15,15 +15,14 @@
 //!
 //! "VS Code is a sandcastle. This is Vlad's castle."
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
 
 /// Hosting mode for MCP agents
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum HostingMode {
     /// Use cloud APIs (xAI, Anthropic, Google)
     #[default]
@@ -106,11 +105,11 @@ impl Provider {
             Provider::Custom => "Custom",
         }
     }
-    
+
     pub fn is_local(&self) -> bool {
         matches!(self, Provider::Ollama)
     }
-    
+
     pub fn is_openai_compatible(&self) -> bool {
         matches!(self, Provider::Together | Provider::OpenAI | Provider::Xai)
     }
@@ -138,7 +137,7 @@ impl AgentRole {
             AgentRole::Auditor => "Gemini",
         }
     }
-    
+
     pub fn icon(&self) -> &'static str {
         match self {
             AgentRole::Voice => "",
@@ -147,7 +146,7 @@ impl AgentRole {
             AgentRole::Auditor => "",
         }
     }
-    
+
     pub fn description(&self) -> &'static str {
         match self {
             AgentRole::Voice => "Understands your intent, speaks naturally",
@@ -184,7 +183,7 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     pub fn manus_default() -> Self {
         AgentConfig {
             role: AgentRole::Orchestrator,
@@ -197,7 +196,7 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     pub fn claude_default() -> Self {
         AgentConfig {
             role: AgentRole::Coder,
@@ -210,7 +209,7 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     pub fn gemini_default() -> Self {
         AgentConfig {
             role: AgentRole::Auditor,
@@ -223,11 +222,11 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     // ==============================================================================
     // Alternative Provider Configurations
     // ==============================================================================
-    
+
     /// Voice via Together.ai (Llama 3.3 70B)
     pub fn voice_together() -> Self {
         AgentConfig {
@@ -241,7 +240,7 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     /// Coder via Together.ai (Qwen 2.5 Coder 32B)
     pub fn coder_together() -> Self {
         AgentConfig {
@@ -255,7 +254,7 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     /// Auditor via Together.ai (DeepSeek V3)
     pub fn auditor_together() -> Self {
         AgentConfig {
@@ -269,11 +268,11 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     // ==============================================================================
     // Local Ollama Configurations
     // ==============================================================================
-    
+
     /// Voice via Ollama (Llama 3.3)
     pub fn voice_ollama() -> Self {
         AgentConfig {
@@ -287,7 +286,7 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     /// Orchestrator via Ollama (Mixtral)
     pub fn orchestrator_ollama() -> Self {
         AgentConfig {
@@ -301,7 +300,7 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     /// Coder via Ollama (Qwen 2.5 Coder)
     pub fn coder_ollama() -> Self {
         AgentConfig {
@@ -315,7 +314,7 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     /// Auditor via Ollama (DeepSeek Coder V2)
     pub fn auditor_ollama() -> Self {
         AgentConfig {
@@ -329,11 +328,11 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     // ==============================================================================
     // Hugging Face Inference Endpoint Configurations
     // ==============================================================================
-    
+
     /// Create a Hugging Face Inference Endpoint config
     pub fn huggingface(role: AgentRole, endpoint_url: &str, model: &str) -> Self {
         let (max_tokens, temperature) = match role {
@@ -342,7 +341,7 @@ impl AgentConfig {
             AgentRole::Coder => (8192, 0.3),
             AgentRole::Auditor => (32768, 0.2),
         };
-        
+
         AgentConfig {
             role,
             provider: Provider::HuggingFace,
@@ -354,19 +353,19 @@ impl AgentConfig {
             enabled: true,
         }
     }
-    
+
     /// Set custom endpoint URL (for ngrok or self-hosted)
     pub fn with_url(mut self, url: &str) -> Self {
         self.api_url = url.to_string();
         self
     }
-    
+
     /// Set API key
     pub fn with_key(mut self, key: &str) -> Self {
         self.api_key = Some(key.to_string());
         self
     }
-    
+
     /// Set custom model
     pub fn with_model(mut self, model: &str) -> Self {
         self.model = model.to_string();
@@ -435,8 +434,8 @@ impl TaskStatus {
 pub struct AuditResult {
     pub id: u64,
     pub verdict: AuditVerdict,
-    pub feasibility_score: f32,      // 0.0 - 1.0
-    pub compatibility_score: f32,    // 0.0 - 1.0
+    pub feasibility_score: f32,   // 0.0 - 1.0
+    pub compatibility_score: f32, // 0.0 - 1.0
     pub issues: Vec<AuditIssue>,
     pub suggestions: Vec<String>,
     pub affected_files: Vec<String>,
@@ -465,9 +464,12 @@ impl AuditVerdict {
             AuditVerdict::Rejected => "[X]",
         }
     }
-    
+
     pub fn can_proceed(&self) -> bool {
-        matches!(self, AuditVerdict::Approved | AuditVerdict::ApprovedWithWarnings)
+        matches!(
+            self,
+            AuditVerdict::Approved | AuditVerdict::ApprovedWithWarnings
+        )
     }
 }
 
@@ -700,32 +702,32 @@ impl McpAgentSection {
 pub struct McpOrchestrator {
     /// Agent configurations
     pub agents: HashMap<AgentRole, AgentConfig>,
-    
+
     /// Conversation history
     pub conversation: VecDeque<McpMessage>,
     pub max_history: usize,
-    
+
     /// Active tasks
     pub tasks: HashMap<u64, Task>,
     pub task_queue: VecDeque<u64>,
     pub next_task_id: u64,
-    
+
     /// Project context
     pub context: Option<ProjectContext>,
-    
+
     /// Pending code edits awaiting approval
     pub pending_edits: Vec<CodeEdit>,
-    
+
     /// Audit results from Gemini
     pub audit_history: Vec<AuditResult>,
     pub last_audit: Option<AuditResult>,
     next_audit_id: u64,
-    
+
     /// Session state
     pub session_id: String,
     pub started_at: DateTime<Utc>,
     pub is_active: bool,
-    
+
     /// Message counter
     next_message_id: u64,
     next_artifact_id: u64,
@@ -747,7 +749,7 @@ impl McpOrchestrator {
         agents.insert(AgentRole::Orchestrator, AgentConfig::manus_default());
         agents.insert(AgentRole::Coder, AgentConfig::claude_default());
         agents.insert(AgentRole::Auditor, AgentConfig::gemini_default());
-        
+
         McpOrchestrator {
             agents,
             conversation: VecDeque::new(),
@@ -770,13 +772,13 @@ impl McpOrchestrator {
             file_system: crate::mcp_fs::McpFileSystem::new(),
         }
     }
-    
+
     /// Configure an agent
     pub fn configure_agent(&mut self, config: AgentConfig) {
         self.api_client.configure(config.clone());
         self.agents.insert(config.role, config);
     }
-    
+
     /// Set API key for an agent
     pub fn set_api_key(&mut self, role: AgentRole, key: String) {
         if let Some(agent) = self.agents.get_mut(&role) {
@@ -810,7 +812,12 @@ impl McpOrchestrator {
         self.apply_agent_config(AgentRole::Auditor, &config.auditor, &config.keys);
 
         if let Some(false) = config.enabled {
-            for role in [AgentRole::Voice, AgentRole::Orchestrator, AgentRole::Coder, AgentRole::Auditor] {
+            for role in [
+                AgentRole::Voice,
+                AgentRole::Orchestrator,
+                AgentRole::Coder,
+                AgentRole::Auditor,
+            ] {
                 if let Some(existing) = self.agents.get_mut(&role) {
                     existing.enabled = false;
                     self.api_client.configure(existing.clone());
@@ -899,7 +906,7 @@ impl McpOrchestrator {
             Provider::Ollama => None,
         }
     }
-    
+
     /// Start a new session, optionally loading project context
     pub fn start_session(&mut self) {
         self.session_id = generate_session_id();
@@ -923,35 +930,40 @@ impl McpOrchestrator {
              Grok (Voice) - Ready to understand your intent\n\
              Manus (Orchestrator) - Ready to plan your workflow\n\
              * Claude Opus 5 (Coder) - Ready to write code\n\
-             Gemini (Auditor) - Ready to review feasibility"
+             Gemini (Auditor) - Ready to review feasibility",
         );
     }
-    
+
     /// Process user input - the main entry point
     pub fn process_input(&mut self, input: &str) -> Vec<McpMessage> {
         let mut responses = Vec::new();
-        
+
         // Add user message
         let user_msg = self.add_user_message(input);
         responses.push(user_msg);
-        
+
         // Phase 1: Grok understands intent
         let intent = self.voice_understand(input);
         responses.push(self.add_agent_message(
             AgentRole::Voice,
-            &format!("I understand you want to: {}", intent.summary)
+            &format!("I understand you want to: {}", intent.summary),
         ));
-        
+
         // Phase 2: Manus creates task plan
         let tasks = self.orchestrator_plan(&intent);
         responses.push(self.add_agent_message(
             AgentRole::Orchestrator,
-            &format!("I've created {} tasks to accomplish this:\n{}", 
-                tasks.len(),
-                tasks.iter().map(|t| format!("  {} {}", t.status.icon(), t.title)).collect::<Vec<_>>().join("\n")
-            )
+            &format!(
+                    "I've created {} tasks to accomplish this:\n{}",
+                    tasks.len(),
+                    tasks
+                        .iter()
+                        .map(|t| format!("  {} {}", t.status.icon(), t.title))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ),
         ));
-        
+
         // Phase 3: Claude executes code tasks
         for task in &tasks {
             if task.assigned_to == AgentRole::Coder {
@@ -960,22 +972,32 @@ impl McpOrchestrator {
                     self.pending_edits.extend(edits.clone());
                     responses.push(self.add_agent_message(
                         AgentRole::Coder,
-                        &format!("I've prepared {} code changes for task '{}':\n{}",
-                            edits.len(),
-                            task.title,
-                            edits.iter().map(|e| format!("  - {} ({})", e.file_path, format_operation(&e.operation))).collect::<Vec<_>>().join("\n")
-                        )
+                        &format!(
+                                "I've prepared {} code changes for task '{}':\n{}",
+                                edits.len(),
+                                task.title,
+                                edits
+                                    .iter()
+                                    .map(|e| format!(
+                                        "  - {} ({})",
+                                        e.file_path,
+                                        format_operation(&e.operation)
+                                    ))
+                                    .collect::<Vec<_>>()
+                                    .join("\n")
+                            ),
                     ));
                 }
             }
         }
-        
+
         // Phase 4: Gemini audits the proposed changes
         if !self.pending_edits.is_empty() {
             let audit = self.auditor_review(&self.pending_edits.clone(), &tasks);
             responses.push(self.add_agent_message(
                 AgentRole::Auditor,
-                &format!("{} Audit complete: {}\n  Feasibility: {:.0}% | Compatibility: {:.0}%\n  {}",
+                &format!(
+                    "{} Audit complete: {}\n  Feasibility: {:.0}% | Compatibility: {:.0}%\n  {}",
                     audit.verdict.icon(),
                     match audit.verdict {
                         AuditVerdict::Approved => "All clear, ready to apply",
@@ -990,13 +1012,13 @@ impl McpOrchestrator {
                     } else {
                         format!("{} issue(s) found", audit.issues.len())
                     }
-                )
+                ),
             ));
-            
+
             self.last_audit = Some(audit.clone());
             self.audit_history.push(audit);
         }
-        
+
         // Add tasks to queue
         for task in tasks {
             let id = task.id;
@@ -1013,7 +1035,7 @@ impl McpOrchestrator {
 
         responses
     }
-    
+
     /// Voice agent understands user intent
     fn voice_understand(&self, input: &str) -> UserIntent {
         // Try Grok API first for better intent classification
@@ -1052,13 +1074,25 @@ impl McpOrchestrator {
         // Fallback: local pattern matching
         let input_lower = crate::fontcase::ascii_lower(input);
 
-        let intent_type = if input_lower.contains("create") || input_lower.contains("new") || input_lower.contains("add") {
+        let intent_type = if input_lower.contains("create")
+            || input_lower.contains("new")
+            || input_lower.contains("add")
+        {
             IntentType::Create
-        } else if input_lower.contains("fix") || input_lower.contains("bug") || input_lower.contains("error") {
+        } else if input_lower.contains("fix")
+            || input_lower.contains("bug")
+            || input_lower.contains("error")
+        {
             IntentType::Fix
-        } else if input_lower.contains("refactor") || input_lower.contains("improve") || input_lower.contains("clean") {
+        } else if input_lower.contains("refactor")
+            || input_lower.contains("improve")
+            || input_lower.contains("clean")
+        {
             IntentType::Refactor
-        } else if input_lower.contains("explain") || input_lower.contains("what") || input_lower.contains("how") {
+        } else if input_lower.contains("explain")
+            || input_lower.contains("what")
+            || input_lower.contains("how")
+        {
             IntentType::Explain
         } else if input_lower.contains("test") {
             IntentType::Test
@@ -1075,42 +1109,53 @@ impl McpOrchestrator {
             confidence: 0.85,
         }
     }
-    
+
     /// Orchestrator creates task plan
     fn orchestrator_plan(&mut self, intent: &UserIntent) -> Vec<Task> {
         // Try Manus API for task planning
         if self.api_client.is_ready(AgentRole::Orchestrator) {
-            let entity_names: Vec<&str> = intent.entities.iter().map(|e| e.value.as_str()).collect();
+            let entity_names: Vec<&str> =
+                intent.entities.iter().map(|e| e.value.as_str()).collect();
             let messages = vec![crate::mcp_api::ChatMessage {
                 role: "user".to_string(),
-                content: format!("Plan tasks for: {} (type: {:?}, entities: {:?})",
-                    intent.summary, intent.intent_type, entity_names),
+                content: format!(
+                    "Plan tasks for: {} (type: {:?}, entities: {:?})",
+                    intent.summary, intent.intent_type, entity_names
+                ),
             }];
             // Build a TaskContext from our ProjectContext if available
             let task_context = self.context.as_ref().map(|c| crate::mcp_api::TaskContext {
                 project_root: c.root_path.clone(),
                 language: c.language.clone(),
                 framework: c.framework.clone(),
-                files: c.files.iter().map(|f| crate::mcp_api::FileContext {
-                    path: f.path.clone(),
-                    summary: f.summary.clone(),
-                    relevant_symbols: Vec::new(),
-                }).collect(),
+                files: c
+                    .files
+                    .iter()
+                    .map(|f| crate::mcp_api::FileContext {
+                        path: f.path.clone(),
+                        summary: f.summary.clone(),
+                        relevant_symbols: Vec::new(),
+                    })
+                    .collect(),
                 current_task: Some(intent.summary.clone()),
                 completed_tasks: Vec::new(),
             });
             if let Ok(response) = self.api_client.call_manus(&messages, task_context.as_ref()) {
                 // Parse orchestration response into tasks
-                let tasks: Vec<Task> = response.plan.iter().filter_map(|tp| {
-                    let role = match tp.agent.as_str() {
-                        "voice" => AgentRole::Voice,
-                        "orchestrator" => AgentRole::Orchestrator,
-                        "coder" => AgentRole::Coder,
-                        "auditor" => AgentRole::Auditor,
-                        _ => AgentRole::Coder,
-                    };
-                    Some(self.create_task(&tp.title, &tp.description, role))
-                }).collect();
+                let tasks: Vec<Task> = response
+                    .plan
+                    .iter()
+                    .filter_map(|tp| {
+                        let role = match tp.agent.as_str() {
+                            "voice" => AgentRole::Voice,
+                            "orchestrator" => AgentRole::Orchestrator,
+                            "coder" => AgentRole::Coder,
+                            "auditor" => AgentRole::Auditor,
+                            _ => AgentRole::Coder,
+                        };
+                        Some(self.create_task(&tp.title, &tp.description, role))
+                    })
+                    .collect();
                 if !tasks.is_empty() {
                     return tasks;
                 }
@@ -1125,99 +1170,81 @@ impl McpOrchestrator {
                 tasks.push(self.create_task(
                     "Analyze requirements",
                     "Understand what needs to be created",
-                    AgentRole::Voice
+                    AgentRole::Voice,
                 ));
                 tasks.push(self.create_task(
                     "Design structure",
                     "Plan the code structure and interfaces",
-                    AgentRole::Orchestrator
+                    AgentRole::Orchestrator,
                 ));
-                tasks.push(self.create_task(
-                    "Implement code",
-                    &intent.summary,
-                    AgentRole::Coder
-                ));
+                tasks.push(self.create_task("Implement code", &intent.summary, AgentRole::Coder));
                 tasks.push(self.create_task(
                     "Add tests",
                     "Create unit tests for new code",
-                    AgentRole::Coder
+                    AgentRole::Coder,
                 ));
             }
             IntentType::Fix => {
                 tasks.push(self.create_task(
                     "Identify bug",
                     "Locate the source of the issue",
-                    AgentRole::Voice
+                    AgentRole::Voice,
                 ));
-                tasks.push(self.create_task(
-                    "Create fix",
-                    &intent.summary,
-                    AgentRole::Coder
-                ));
+                tasks.push(self.create_task("Create fix", &intent.summary, AgentRole::Coder));
                 tasks.push(self.create_task(
                     "Verify fix",
                     "Ensure the fix works correctly",
-                    AgentRole::Coder
+                    AgentRole::Coder,
                 ));
             }
             IntentType::Refactor => {
                 tasks.push(self.create_task(
                     "Analyze current code",
                     "Understand what needs refactoring",
-                    AgentRole::Voice
+                    AgentRole::Voice,
                 ));
                 tasks.push(self.create_task(
                     "Plan refactor",
                     "Design the improved structure",
-                    AgentRole::Orchestrator
+                    AgentRole::Orchestrator,
                 ));
-                tasks.push(self.create_task(
-                    "Apply refactor",
-                    &intent.summary,
-                    AgentRole::Coder
-                ));
+                tasks.push(self.create_task("Apply refactor", &intent.summary, AgentRole::Coder));
             }
             IntentType::Test => {
                 tasks.push(self.create_task(
                     "Identify test cases",
                     "Determine what needs testing",
-                    AgentRole::Orchestrator
+                    AgentRole::Orchestrator,
                 ));
-                tasks.push(self.create_task(
-                    "Write tests",
-                    &intent.summary,
-                    AgentRole::Coder
-                ));
+                tasks.push(self.create_task("Write tests", &intent.summary, AgentRole::Coder));
             }
             IntentType::Document => {
                 tasks.push(self.create_task(
                     "Analyze code",
                     "Understand code to document",
-                    AgentRole::Voice
+                    AgentRole::Voice,
                 ));
                 tasks.push(self.create_task(
                     "Write documentation",
                     &intent.summary,
-                    AgentRole::Coder
+                    AgentRole::Coder,
                 ));
             }
             IntentType::Explain | IntentType::General => {
-                tasks.push(self.create_task(
-                    "Research",
-                    &intent.summary,
-                    AgentRole::Voice
-                ));
+                tasks.push(self.create_task("Research", &intent.summary, AgentRole::Voice));
             }
         }
-        
+
         tasks
     }
-    
+
     /// Coder executes a task and produces code edits
     fn coder_execute(&mut self, task: &Task) -> Vec<CodeEdit> {
         // Try Claude API for code generation
         if self.api_client.is_ready(AgentRole::Coder) {
-            let context_info = self.context.as_ref()
+            let context_info = self
+                .context
+                .as_ref()
                 .map(|c| format!("Project: {}, Language: {}", c.root_path, c.language))
                 .unwrap_or_else(|| "No project context".to_string());
             let system = format!(
@@ -1232,24 +1259,31 @@ impl McpOrchestrator {
             }];
             if let Ok(response) = self.api_client.call_claude(&messages, &system) {
                 // Try to parse as structured code edits
-                if let Ok(edits) = serde_json::from_str::<Vec<serde_json::Value>>(&response.content) {
-                    let code_edits: Vec<CodeEdit> = edits.iter().filter_map(|e| {
-                        Some(CodeEdit {
-                            file_path: e["file_path"].as_str()?.to_string(),
-                            operation: match e["operation"].as_str() {
-                                Some("replace") => EditOperation::Replace,
-                                Some("insert") => EditOperation::Insert,
-                                Some("delete") => EditOperation::Delete,
-                                Some("append") => EditOperation::Append,
-                                _ => EditOperation::Create,
-                            },
-                            old_content: e["old_content"].as_str().map(String::from),
-                            new_content: e["new_content"].as_str().unwrap_or("").to_string(),
-                            line_start: e["line_start"].as_u64().map(|n| n as u32),
-                            line_end: e["line_end"].as_u64().map(|n| n as u32),
-                            description: e["description"].as_str().unwrap_or("Generated by AI").to_string(),
+                if let Ok(edits) = serde_json::from_str::<Vec<serde_json::Value>>(&response.content)
+                {
+                    let code_edits: Vec<CodeEdit> = edits
+                        .iter()
+                        .filter_map(|e| {
+                            Some(CodeEdit {
+                                file_path: e["file_path"].as_str()?.to_string(),
+                                operation: match e["operation"].as_str() {
+                                    Some("replace") => EditOperation::Replace,
+                                    Some("insert") => EditOperation::Insert,
+                                    Some("delete") => EditOperation::Delete,
+                                    Some("append") => EditOperation::Append,
+                                    _ => EditOperation::Create,
+                                },
+                                old_content: e["old_content"].as_str().map(String::from),
+                                new_content: e["new_content"].as_str().unwrap_or("").to_string(),
+                                line_start: e["line_start"].as_u64().map(|n| n as u32),
+                                line_end: e["line_end"].as_u64().map(|n| n as u32),
+                                description: e["description"]
+                                    .as_str()
+                                    .unwrap_or("Generated by AI")
+                                    .to_string(),
+                            })
                         })
-                    }).collect();
+                        .collect();
                     if !code_edits.is_empty() {
                         return code_edits;
                     }
@@ -1281,7 +1315,7 @@ impl McpOrchestrator {
             description: task.description.clone(),
         }]
     }
-    
+
     /// Auditor reviews proposed changes for feasibility and compatibility
     fn auditor_review(&mut self, edits: &[CodeEdit], tasks: &[Task]) -> AuditResult {
         // Always perform local static analysis first
@@ -1289,11 +1323,19 @@ impl McpOrchestrator {
 
         // Enhance with Gemini API if available
         if self.api_client.is_ready(AgentRole::Auditor) {
-            let context = self.context.as_ref()
+            let context = self
+                .context
+                .as_ref()
                 .map(|c| format!("Project: {}", c.root_path))
                 .unwrap_or_default();
-            let edits_summary: Vec<String> = edits.iter()
-                .map(|e| format!("File: {}, Op: {:?}, Lines: {:?}", e.file_path, e.operation, e.line_start))
+            let edits_summary: Vec<String> = edits
+                .iter()
+                .map(|e| {
+                    format!(
+                        "File: {}, Op: {:?}, Lines: {:?}",
+                        e.file_path, e.operation, e.line_start
+                    )
+                })
                 .collect();
             let messages = vec![crate::mcp_api::ChatMessage {
                 role: "user".to_string(),
@@ -1305,7 +1347,8 @@ impl McpOrchestrator {
             if let Ok(response) = self.api_client.call_gemini(&messages, &context) {
                 // Merge API audit insights with local analysis
                 // Average the feasibility score with the API's score
-                result.feasibility_score = (result.feasibility_score + response.feasibility_score) / 2.0;
+                result.feasibility_score =
+                    (result.feasibility_score + response.feasibility_score) / 2.0;
                 // Add any issues from the API response
                 for issue_str in &response.issues {
                     result.issues.push(AuditIssue {
@@ -1362,7 +1405,9 @@ impl McpOrchestrator {
                     description: "Code uses .unwrap() which may panic".to_string(),
                     file_path: Some(edit.file_path.clone()),
                     line_number: None,
-                    suggestion: Some("Consider using .ok()?, .expect(), or proper error handling".to_string()),
+                    suggestion: Some(
+                        "Consider using .ok()?, .expect(), or proper error handling".to_string(),
+                    ),
                 });
                 compatibility_score -= 0.05;
             }
@@ -1375,7 +1420,9 @@ impl McpOrchestrator {
                     description: "Code contains unsafe blocks".to_string(),
                     file_path: Some(edit.file_path.clone()),
                     line_number: None,
-                    suggestion: Some("Verify unsafe code is necessary and properly documented".to_string()),
+                    suggestion: Some(
+                        "Verify unsafe code is necessary and properly documented".to_string(),
+                    ),
                 });
                 compatibility_score -= 0.15;
             }
@@ -1400,7 +1447,10 @@ impl McpOrchestrator {
                 issues.push(AuditIssue {
                     severity: IssueSeverity::Error,
                     category: IssueCategory::Syntax,
-                    description: format!("Mismatched braces: {} open vs {} close", open_braces, close_braces),
+                    description: format!(
+                        "Mismatched braces: {} open vs {} close",
+                        open_braces, close_braces
+                    ),
                     file_path: Some(edit.file_path.clone()),
                     line_number: None,
                     suggestion: Some("Check for missing or extra braces".to_string()),
@@ -1416,10 +1466,15 @@ impl McpOrchestrator {
                     issues.push(AuditIssue {
                         severity: IssueSeverity::Warning,
                         category: IssueCategory::Breaking,
-                        description: format!("Public API reduced: {} -> {} pub functions", old_pub_count, new_pub_count),
+                        description: format!(
+                            "Public API reduced: {} -> {} pub functions",
+                            old_pub_count, new_pub_count
+                        ),
                         file_path: Some(edit.file_path.clone()),
                         line_number: None,
-                        suggestion: Some("Verify removed public functions are not used elsewhere".to_string()),
+                        suggestion: Some(
+                            "Verify removed public functions are not used elsewhere".to_string(),
+                        ),
                     });
                     compatibility_score -= 0.1;
                 }
@@ -1444,10 +1499,16 @@ impl McpOrchestrator {
                 issues.push(AuditIssue {
                     severity: IssueSeverity::Info,
                     category: IssueCategory::Performance,
-                    description: format!("Multiple loops detected ({} for-loops)", content.matches("for ").count()),
+                    description: format!(
+                        "Multiple loops detected ({} for-loops)",
+                        content.matches("for ").count()
+                    ),
                     file_path: Some(edit.file_path.clone()),
                     line_number: None,
-                    suggestion: Some("Consider combining loops or using iterators for better performance".to_string()),
+                    suggestion: Some(
+                        "Consider combining loops or using iterators for better performance"
+                            .to_string(),
+                    ),
                 });
             }
 
@@ -1469,24 +1530,32 @@ impl McpOrchestrator {
                 issues.push(AuditIssue {
                     severity: IssueSeverity::Info,
                     category: IssueCategory::Architecture,
-                    description: format!("Generated code is {} lines - consider breaking into smaller functions", line_count),
+                    description: format!(
+                        "Generated code is {} lines - consider breaking into smaller functions",
+                        line_count
+                    ),
                     file_path: Some(edit.file_path.clone()),
                     line_number: None,
-                    suggestion: Some("Extract helper functions for better maintainability".to_string()),
+                    suggestion: Some(
+                        "Extract helper functions for better maintainability".to_string(),
+                    ),
                 });
             }
 
             // Check for hardcoded secrets/credentials patterns
             let secrets_patterns = ["password", "secret", "api_key", "token", "credential"];
             for pattern in secrets_patterns {
-                if crate::fontcase::ascii_lower(content).contains(pattern) && content.contains("\"") {
+                if crate::fontcase::ascii_lower(content).contains(pattern) && content.contains("\"")
+                {
                     issues.push(AuditIssue {
                         severity: IssueSeverity::Critical,
                         category: IssueCategory::Security,
                         description: format!("Possible hardcoded {} detected", pattern),
                         file_path: Some(edit.file_path.clone()),
                         line_number: None,
-                        suggestion: Some("Use environment variables or secure configuration".to_string()),
+                        suggestion: Some(
+                            "Use environment variables or secure configuration".to_string(),
+                        ),
                     });
                     compatibility_score -= 0.2;
                 }
@@ -1496,7 +1565,10 @@ impl McpOrchestrator {
         // Determine verdict based on scores and issues
         let has_critical = issues.iter().any(|i| i.severity == IssueSeverity::Critical);
         let has_errors = issues.iter().any(|i| i.severity == IssueSeverity::Error);
-        let warning_count = issues.iter().filter(|i| i.severity == IssueSeverity::Warning).count();
+        let warning_count = issues
+            .iter()
+            .filter(|i| i.severity == IssueSeverity::Warning)
+            .count();
 
         let verdict = if has_critical {
             AuditVerdict::Rejected
@@ -1547,7 +1619,7 @@ impl McpOrchestrator {
             timestamp: Utc::now(),
         }
     }
-    
+
     /// Get the last audit result
     pub fn last_audit_result(&self) -> Option<&AuditResult> {
         self.last_audit.as_ref()
@@ -1555,7 +1627,8 @@ impl McpOrchestrator {
 
     /// Check if pending edits passed audit
     pub fn edits_approved(&self) -> bool {
-        self.last_audit.as_ref()
+        self.last_audit
+            .as_ref()
             .map(|a| a.verdict.can_proceed())
             .unwrap_or(false)
     }
@@ -1563,7 +1636,11 @@ impl McpOrchestrator {
     /// Get a summary of the current session state
     pub fn session_summary(&self) -> String {
         let hosting_mode = HostingMode::detect(&self.agents);
-        let completed = self.tasks.values().filter(|t| t.status == TaskStatus::Completed).count();
+        let completed = self
+            .tasks
+            .values()
+            .filter(|t| t.status == TaskStatus::Completed)
+            .count();
         let total = self.tasks.len();
         format!(
             "Session {} | Mode: {} | Tasks: {}/{} | Messages: {} | Artifacts: {} | Audits: {}",
@@ -1576,12 +1653,12 @@ impl McpOrchestrator {
             self.audit_history.len(),
         )
     }
-    
+
     /// Create a new task
     fn create_task(&mut self, title: &str, description: &str, assigned_to: AgentRole) -> Task {
         let id = self.next_task_id;
         self.next_task_id += 1;
-        
+
         Task {
             id,
             title: title.to_string(),
@@ -1595,7 +1672,7 @@ impl McpOrchestrator {
             artifacts: Vec::new(),
         }
     }
-    
+
     /// Add a user message
     fn add_user_message(&mut self, content: &str) -> McpMessage {
         let msg = McpMessage {
@@ -1611,7 +1688,7 @@ impl McpOrchestrator {
         self.trim_history();
         msg
     }
-    
+
     /// Add an agent message
     fn add_agent_message(&mut self, agent: AgentRole, content: &str) -> McpMessage {
         let msg = McpMessage {
@@ -1627,7 +1704,7 @@ impl McpOrchestrator {
         self.trim_history();
         msg
     }
-    
+
     /// Add a system message
     fn add_system_message(&mut self, content: &str) -> McpMessage {
         let msg = McpMessage {
@@ -1642,19 +1719,21 @@ impl McpOrchestrator {
         self.conversation.push_back(msg.clone());
         msg
     }
-    
+
     fn trim_history(&mut self) {
         while self.conversation.len() > self.max_history {
             self.conversation.pop_front();
         }
     }
-    
+
     /// Approve pending edits
     pub fn approve_edits(&mut self) -> Vec<CodeEdit> {
         let edits = std::mem::take(&mut self.pending_edits);
 
         // Mark related tasks as completed using update_task_status
-        let task_ids: Vec<u64> = self.tasks.values()
+        let task_ids: Vec<u64> = self
+            .tasks
+            .values()
             .filter(|t| t.status == TaskStatus::InProgress)
             .map(|t| t.id)
             .collect();
@@ -1693,14 +1772,14 @@ impl McpOrchestrator {
         let edit = self.pending_edits.remove(index);
         self.apply_edits(vec![edit])
     }
-    
+
     /// Reject pending edits
     pub fn reject_edits(&mut self) {
         self.pending_edits.clear();
-        
+
         self.add_agent_message(
             AgentRole::Coder,
-            "Edits rejected. Let me know how you'd like me to revise them."
+            "Edits rejected. Let me know how you'd like me to revise them.",
         );
     }
 
@@ -1722,10 +1801,12 @@ impl McpOrchestrator {
         if summary.failed == 0 {
             self.add_agent_message(
                 AgentRole::Coder,
-                &format!("Applied {} edit(s).", summary.applied)
+                &format!("Applied {} edit(s).", summary.applied),
             );
         } else {
-            let details = summary.errors.iter()
+            let details = summary
+                .errors
+                .iter()
                 .take(5)
                 .map(|e| format!("- {}", e))
                 .collect::<Vec<_>>()
@@ -1734,10 +1815,8 @@ impl McpOrchestrator {
                 AgentRole::Coder,
                 &format!(
                     "Applied {} edit(s), {} failed:\n{}",
-                    summary.applied,
-                    summary.failed,
-                    details
-                )
+                    summary.applied, summary.failed, details
+                ),
             );
         }
 
@@ -1785,16 +1864,18 @@ impl McpOrchestrator {
             if !exists {
                 return Err("File not found for delete".to_string());
             }
-            let id = self.file_system.queue_delete(
-                &path_str,
-                &edit.description
-            ).map_err(|e| e.to_string())?;
+            let id = self
+                .file_system
+                .queue_delete(&path_str, &edit.description)
+                .map_err(|e| e.to_string())?;
             self.file_system.approve(id).map_err(|e| e.to_string())?;
             return Ok(());
         }
 
         let current = if exists {
-            self.file_system.read_file(&path_str).map_err(|e| e.to_string())?
+            self.file_system
+                .read_file(&path_str)
+                .map_err(|e| e.to_string())?
         } else {
             String::new()
         };
@@ -1807,18 +1888,16 @@ impl McpOrchestrator {
         };
 
         if exists {
-            let id = self.file_system.queue_update(
-                &path_str,
-                &updated,
-                description
-            ).map_err(|e| e.to_string())?;
+            let id = self
+                .file_system
+                .queue_update(&path_str, &updated, description)
+                .map_err(|e| e.to_string())?;
             self.file_system.approve(id).map_err(|e| e.to_string())?;
         } else {
-            let id = self.file_system.queue_create(
-                &path_str,
-                &updated,
-                description
-            ).map_err(|e| e.to_string())?;
+            let id = self
+                .file_system
+                .queue_create(&path_str, &updated, description)
+                .map_err(|e| e.to_string())?;
             self.file_system.approve(id).map_err(|e| e.to_string())?;
         }
 
@@ -1897,7 +1976,11 @@ impl McpOrchestrator {
 
         let start = start.max(1);
         let end = end.max(1);
-        let (start, end) = if end < start { (end, start) } else { (start, end) };
+        let (start, end) = if end < start {
+            (end, start)
+        } else {
+            (start, end)
+        };
         let start_idx = (start - 1) as usize;
         if start_idx >= lines.len() {
             return Err("Line start out of range".to_string());
@@ -1917,7 +2000,11 @@ impl McpOrchestrator {
 
         let start = start.max(1);
         let end = end.max(1);
-        let (start, end) = if end < start { (end, start) } else { (start, end) };
+        let (start, end) = if end < start {
+            (end, start)
+        } else {
+            (start, end)
+        };
         let start_idx = (start - 1) as usize;
         if start_idx >= lines.len() {
             return Err("Line start out of range".to_string());
@@ -1939,12 +2026,12 @@ impl McpOrchestrator {
         }
         output
     }
-    
+
     /// Get task by ID
     pub fn get_task(&self, id: u64) -> Option<&Task> {
         self.tasks.get(&id)
     }
-    
+
     /// Update task status
     pub fn update_task_status(&mut self, id: u64, status: TaskStatus) {
         if let Some(task) = self.tasks.get_mut(&id) {
@@ -1954,19 +2041,20 @@ impl McpOrchestrator {
             }
         }
     }
-    
+
     /// Get all pending tasks
     pub fn pending_tasks(&self) -> Vec<&Task> {
-        self.tasks.values()
+        self.tasks
+            .values()
             .filter(|t| t.status == TaskStatus::Pending || t.status == TaskStatus::InProgress)
             .collect()
     }
-    
+
     /// Get conversation history
     pub fn history(&self) -> Vec<&McpMessage> {
         self.conversation.iter().collect()
     }
-    
+
     /// Load project context
     pub fn load_context(&mut self, root_path: &str) {
         // Initialize sandboxed filesystem with project root
@@ -1988,7 +2076,10 @@ impl McpOrchestrator {
 
         // Gather recent git changes
         let recent_changes = if let Ok(commits) = self.git.log(5) {
-            commits.iter().map(|c| format!("{} {}", c.short_hash, c.message)).collect()
+            commits
+                .iter()
+                .map(|c| format!("{} {}", c.short_hash, c.message))
+                .collect()
         } else {
             Vec::new()
         };
@@ -2003,7 +2094,7 @@ impl McpOrchestrator {
             recent_changes,
         });
     }
-    
+
     /// Build API request for an agent
     pub fn build_request(&self, agent: AgentRole, messages: &[McpMessage]) -> Option<AgentRequest> {
         let config = self.agents.get(&agent)?;
@@ -2014,14 +2105,17 @@ impl McpOrchestrator {
 
         Some(AgentRequest {
             model: config.model.clone(),
-            messages: messages.iter().map(|m| RequestMessage {
-                role: match m.role {
-                    MessageRole::User => "user".to_string(),
-                    MessageRole::Agent => "assistant".to_string(),
-                    MessageRole::System => "system".to_string(),
-                },
-                content: m.content.clone(),
-            }).collect(),
+            messages: messages
+                .iter()
+                .map(|m| RequestMessage {
+                    role: match m.role {
+                        MessageRole::User => "user".to_string(),
+                        MessageRole::Agent => "assistant".to_string(),
+                        MessageRole::System => "system".to_string(),
+                    },
+                    content: m.content.clone(),
+                })
+                .collect(),
             max_tokens: config.max_tokens,
             temperature: config.temperature,
         })
@@ -2057,7 +2151,9 @@ impl McpOrchestrator {
             }
             HostingMode::SelfHosted => {
                 self.configure_agent(AgentConfig::huggingface(
-                    AgentRole::Coder, "https://api.endpoints.huggingface.cloud", "codellama/CodeLlama-34b"
+                    AgentRole::Coder,
+                    "https://api.endpoints.huggingface.cloud",
+                    "codellama/CodeLlama-34b",
                 ));
             }
             HostingMode::Hybrid => {
@@ -2091,7 +2187,10 @@ impl McpOrchestrator {
                     summary.push_str("(detached HEAD) | ");
                 }
                 if status.ahead > 0 || status.behind > 0 {
-                    summary.push_str(&format!("ahead {} behind {} | ", status.ahead, status.behind));
+                    summary.push_str(&format!(
+                        "ahead {} behind {} | ",
+                        status.ahead, status.behind
+                    ));
                 }
                 if status.has_conflicts {
                     summary.push_str("CONFLICTS | ");
@@ -2099,13 +2198,24 @@ impl McpOrchestrator {
                 // Use ChangeStatus::color() for colored status display
                 for change in &status.staged {
                     let (r, g, b) = change.status.color();
-                    summary.push_str(&format!("[{} {} rgb({},{},{})] ", change.status.icon(), change.path, r, g, b));
+                    summary.push_str(&format!(
+                        "[{} {} rgb({},{},{})] ",
+                        change.status.icon(),
+                        change.path,
+                        r,
+                        g,
+                        b
+                    ));
                     if let Some(old) = &change.old_path {
                         summary.push_str(&format!("(from {}) ", old));
                     }
                 }
-                summary.push_str(&format!("{} staged, {} unstaged, {} untracked",
-                    status.staged.len(), status.unstaged.len(), status.untracked.len()));
+                summary.push_str(&format!(
+                    "{} staged, {} unstaged, {} untracked",
+                    status.staged.len(),
+                    status.unstaged.len(),
+                    status.untracked.len()
+                ));
                 summary
             }
             Err(e) => format!("Git: {}", e),
@@ -2176,15 +2286,21 @@ impl McpOrchestrator {
     pub fn git_queue_operation(&mut self, op_type: &str, target: &str) -> u64 {
         let id = match op_type {
             "switch" => {
-                let _op = crate::mcp_git::GitOperation::SwitchBranch { name: target.to_string() };
+                let _op = crate::mcp_git::GitOperation::SwitchBranch {
+                    name: target.to_string(),
+                };
                 self.git.queue_create_branch(target, None)
             }
             "merge" => {
-                let _op = crate::mcp_git::GitOperation::Merge { branch: target.to_string() };
+                let _op = crate::mcp_git::GitOperation::Merge {
+                    branch: target.to_string(),
+                };
                 self.git.queue_commit(&format!("merge {}", target), None)
             }
             "stash" => {
-                let _op = crate::mcp_git::GitOperation::Stash { message: Some(target.to_string()) };
+                let _op = crate::mcp_git::GitOperation::Stash {
+                    message: Some(target.to_string()),
+                };
                 self.git.queue_commit("stash", None)
             }
             "stash_pop" => {
@@ -2227,8 +2343,15 @@ impl McpOrchestrator {
     }
 
     /// Read specific lines from a file
-    pub fn fs_read_lines(&mut self, path: &str, start: usize, end: usize) -> Result<Vec<String>, String> {
-        self.file_system.read_lines(path, start, end).map_err(|e| e.to_string())
+    pub fn fs_read_lines(
+        &mut self,
+        path: &str,
+        start: usize,
+        end: usize,
+    ) -> Result<Vec<String>, String> {
+        self.file_system
+            .read_lines(path, start, end)
+            .map_err(|e| e.to_string())
     }
 
     /// List directory contents
@@ -2237,33 +2360,63 @@ impl McpOrchestrator {
     }
 
     /// List directory recursively
-    pub fn fs_list_recursive(&mut self, path: &str, max_depth: usize) -> Result<Vec<crate::mcp_fs::FileInfo>, String> {
-        self.file_system.list_recursive(path, max_depth).map_err(|e| e.to_string())
+    pub fn fs_list_recursive(
+        &mut self,
+        path: &str,
+        max_depth: usize,
+    ) -> Result<Vec<crate::mcp_fs::FileInfo>, String> {
+        self.file_system
+            .list_recursive(path, max_depth)
+            .map_err(|e| e.to_string())
     }
 
     /// Search for files by name pattern
     pub fn fs_search(&mut self, pattern: &str) -> Result<Vec<crate::mcp_fs::FileInfo>, String> {
-        self.file_system.search_files(pattern).map_err(|e| e.to_string())
+        self.file_system
+            .search_files(pattern)
+            .map_err(|e| e.to_string())
     }
 
     /// Grep file contents
-    pub fn fs_grep(&mut self, pattern: &str, file_pattern: Option<&str>) -> Result<Vec<crate::mcp_fs::GrepMatch>, String> {
-        self.file_system.grep(pattern, file_pattern).map_err(|e| e.to_string())
+    pub fn fs_grep(
+        &mut self,
+        pattern: &str,
+        file_pattern: Option<&str>,
+    ) -> Result<Vec<crate::mcp_fs::GrepMatch>, String> {
+        self.file_system
+            .grep(pattern, file_pattern)
+            .map_err(|e| e.to_string())
     }
 
     /// Queue a file creation for approval
-    pub fn fs_queue_create(&mut self, path: &str, content: &str, description: &str) -> Result<u64, String> {
-        self.file_system.queue_create(path, content, description).map_err(|e| e.to_string())
+    pub fn fs_queue_create(
+        &mut self,
+        path: &str,
+        content: &str,
+        description: &str,
+    ) -> Result<u64, String> {
+        self.file_system
+            .queue_create(path, content, description)
+            .map_err(|e| e.to_string())
     }
 
     /// Queue a file update for approval
-    pub fn fs_queue_update(&mut self, path: &str, content: &str, description: &str) -> Result<u64, String> {
-        self.file_system.queue_update(path, content, description).map_err(|e| e.to_string())
+    pub fn fs_queue_update(
+        &mut self,
+        path: &str,
+        content: &str,
+        description: &str,
+    ) -> Result<u64, String> {
+        self.file_system
+            .queue_update(path, content, description)
+            .map_err(|e| e.to_string())
     }
 
     /// Queue a file deletion for approval
     pub fn fs_queue_delete(&mut self, path: &str, description: &str) -> Result<u64, String> {
-        self.file_system.queue_delete(path, description).map_err(|e| e.to_string())
+        self.file_system
+            .queue_delete(path, description)
+            .map_err(|e| e.to_string())
     }
 
     /// Get pending file changes
@@ -2302,18 +2455,29 @@ impl McpOrchestrator {
     }
 
     /// Queue a file rename for approval
-    pub fn fs_queue_rename(&mut self, path: &str, new_path: &str, description: &str) -> Result<u64, String> {
-        self.file_system.queue_rename(path, new_path, description).map_err(|e| e.to_string())
+    pub fn fs_queue_rename(
+        &mut self,
+        path: &str,
+        new_path: &str,
+        description: &str,
+    ) -> Result<u64, String> {
+        self.file_system
+            .queue_rename(path, new_path, description)
+            .map_err(|e| e.to_string())
     }
 
     /// Queue a directory creation for approval
     pub fn fs_queue_mkdir(&mut self, path: &str, description: &str) -> Result<u64, String> {
-        self.file_system.queue_mkdir(path, description).map_err(|e| e.to_string())
+        self.file_system
+            .queue_mkdir(path, description)
+            .map_err(|e| e.to_string())
     }
 
     /// Copy a file
     pub fn fs_copy_file(&mut self, src: &str, dst: &str) -> Result<(), String> {
-        self.file_system.copy_file(src, dst).map_err(|e| e.to_string())
+        self.file_system
+            .copy_file(src, dst)
+            .map_err(|e| e.to_string())
     }
 
     /// Get cached file content
@@ -2397,10 +2561,15 @@ fn generate_session_id() -> String {
 
 pub fn extract_entities(input: &str) -> Vec<Entity> {
     let mut entities = Vec::new();
-    
+
     // Extract file paths
     for (i, word) in input.split_whitespace().enumerate() {
-        if word.contains('.') && (word.ends_with(".rs") || word.ends_with(".js") || word.ends_with(".py") || word.ends_with(".ts")) {
+        if word.contains('.')
+            && (word.ends_with(".rs")
+                || word.ends_with(".js")
+                || word.ends_with(".py")
+                || word.ends_with(".ts"))
+        {
             entities.push(Entity {
                 entity_type: "file".to_string(),
                 value: word.to_string(),
@@ -2408,9 +2577,11 @@ pub fn extract_entities(input: &str) -> Vec<Entity> {
                 end: i + 1,
             });
         }
-        
+
         // Extract function names (snake_case or camelCase patterns)
-        if word.contains('_') || (word.chars().any(|c| c.is_lowercase()) && word.chars().any(|c| c.is_uppercase())) {
+        if word.contains('_')
+            || (word.chars().any(|c| c.is_lowercase()) && word.chars().any(|c| c.is_uppercase()))
+        {
             entities.push(Entity {
                 entity_type: "identifier".to_string(),
                 value: word.to_string(),
@@ -2419,7 +2590,7 @@ pub fn extract_entities(input: &str) -> Vec<Entity> {
             });
         }
     }
-    
+
     entities
 }
 
@@ -2495,7 +2666,8 @@ impl McpServer {
         let responses = self.orchestrator.process_input(request);
 
         // Format responses
-        responses.iter()
+        responses
+            .iter()
             .filter(|m| m.role == MessageRole::Agent)
             .map(|m| {
                 let agent = m.agent.map(|a| a.icon()).unwrap_or("");
@@ -2512,9 +2684,10 @@ impl McpServer {
         let approved = self.orchestrator.edits_approved();
         let last_audit = self.orchestrator.last_audit_result();
         let summary = self.orchestrator.session_summary();
-        let request_ready = self.orchestrator.build_request(
-            AgentRole::Coder, &[]
-        ).is_some();
+        let request_ready = self
+            .orchestrator
+            .build_request(AgentRole::Coder, &[])
+            .is_some();
         format!(
             "Port: {} | Running: {} | {} | History: {} | Pending: {} | Approved: {} | Audit: {} | API Ready: {}",
             self.port,
@@ -2532,7 +2705,7 @@ impl McpServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_orchestrator_creation() {
         let mcp = McpOrchestrator::new();
@@ -2540,17 +2713,17 @@ mod tests {
         assert!(mcp.agents.contains_key(&AgentRole::Orchestrator));
         assert!(mcp.agents.contains_key(&AgentRole::Coder));
     }
-    
+
     #[test]
     fn test_process_input() {
         let mut mcp = McpOrchestrator::new();
         mcp.start_session();
-        
+
         let responses = mcp.process_input("Create a new function to parse JSON");
         assert!(!responses.is_empty());
         assert!(!mcp.tasks.is_empty());
     }
-    
+
     #[test]
     fn test_intent_parsing() {
         let mcp = McpOrchestrator::new();

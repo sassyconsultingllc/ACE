@@ -21,7 +21,9 @@ struct HostRateLimit {
 
 impl HostRateLimit {
     fn new() -> Self {
-        Self { attempts: Vec::new() }
+        Self {
+            attempts: Vec::new(),
+        }
     }
 
     /// Record an attempt and return true if within limit
@@ -55,8 +57,14 @@ pub struct NetworkSandbox {
 
 /// Known-bad domain patterns (malware, phishing, crypto-mining)
 const BLOCKED_PATTERNS: &[&str] = &[
-    "coinhive.com", "coin-hive.com", "jsecoin.com", "cryptoloot.pro",
-    "minero.cc", "webminepool.com", "ppoi.org", "monerominer.rocks",
+    "coinhive.com",
+    "coin-hive.com",
+    "jsecoin.com",
+    "cryptoloot.pro",
+    "minero.cc",
+    "webminepool.com",
+    "ppoi.org",
+    "monerominer.rocks",
 ];
 
 impl NetworkSandbox {
@@ -86,8 +94,8 @@ impl NetworkSandbox {
         }
 
         // Allowlisted hosts bypass trust check (but not blocklist or rate limit)
-        let trust_ok = self.allowed_hosts.iter().any(|h| h == origin_host)
-            || trust.can_access_network();
+        let trust_ok =
+            self.allowed_hosts.iter().any(|h| h == origin_host) || trust.can_access_network();
 
         if !trust_ok {
             self.connections_blocked += 1;
@@ -96,7 +104,8 @@ impl NetworkSandbox {
 
         // Rate limiting for non-allowlisted hosts
         if !self.allowed_hosts.iter().any(|h| h == origin_host) {
-            let limiter = self.rate_limits
+            let limiter = self
+                .rate_limits
                 .entry(origin_host.to_string())
                 .or_insert_with(HostRateLimit::new);
             if !limiter.check_and_record() {
@@ -111,7 +120,9 @@ impl NetworkSandbox {
 
     /// Check if a host matches the blocklist
     pub fn is_blocked(&self, host: &str) -> bool {
-        self.blocked_hosts.iter().any(|blocked| host.contains(blocked))
+        self.blocked_hosts
+            .iter()
+            .any(|blocked| host.contains(blocked))
     }
 
     /// Add a host to the allowlist
@@ -132,9 +143,8 @@ impl NetworkSandbox {
     pub fn cleanup(&mut self) {
         let now = Instant::now();
         let window = std::time::Duration::from_secs(5);
-        self.rate_limits.retain(|_, rl| {
-            rl.attempts.iter().any(|t| now.duration_since(*t) < window)
-        });
+        self.rate_limits
+            .retain(|_, rl| rl.attempts.iter().any(|t| now.duration_since(*t) < window));
     }
 
     /// Describe current network sandbox state for diagnostics
