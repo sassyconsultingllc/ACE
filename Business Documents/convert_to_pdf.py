@@ -25,6 +25,7 @@ Sassy Consulting LLC metadata.
 import os
 import sys
 import glob
+import zipfile
 import argparse
 import datetime
 import markdown
@@ -565,7 +566,31 @@ def convert_single_file(md_path: str, output_dir: str = None) -> str:
         return None
 
 
-def convert_all(base_dir: str = None):
+def create_zip(pdf_paths: list, zip_path: str, base_dir: str = None) -> str:
+    """Bundle a list of PDF paths into a single ZIP archive.
+
+    If *base_dir* is provided, each PDF is stored with a path relative to
+    that directory so the archive mirrors the original folder structure and
+    name collisions across subdirectories are avoided.
+    """
+    zip_path = Path(zip_path)
+    base = Path(base_dir) if base_dir else None
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for pdf in pdf_paths:
+            pdf = Path(pdf)
+            if base:
+                try:
+                    arcname = str(pdf.relative_to(base))
+                except ValueError:
+                    arcname = pdf.name
+            else:
+                arcname = pdf.name
+            zf.write(pdf, arcname)
+    print(f"  ✓ ZIP archive created: {zip_path.name} ({len(pdf_paths)} PDFs)")
+    return str(zip_path)
+
+
+def convert_all(base_dir: str = None, create_zip_archive: bool = True):
     """Convert all markdown files in Business Documents and subfolders."""
     if base_dir is None:
         base_dir = Path(__file__).parent
@@ -589,6 +614,7 @@ def convert_all(base_dir: str = None):
 
     success = 0
     failed = 0
+    converted_pdfs = []
 
     for md_file in md_files:
         # Skip this script's own file and any non-document MDs
@@ -598,6 +624,7 @@ def convert_all(base_dir: str = None):
         result = convert_single_file(str(md_file))
         if result:
             success += 1
+            converted_pdfs.append(result)
         else:
             failed += 1
 
@@ -605,6 +632,13 @@ def convert_all(base_dir: str = None):
     print(f"  Results: {success} converted, {failed} failed")
     print(f"  PDFs encrypted with configured passkey")
     print(f"{'='*60}\n")
+
+    # Create a ZIP archive of all generated PDFs
+    if create_zip_archive and converted_pdfs:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        zip_name = f"SassyBrowser_Docs_{timestamp}.zip"
+        zip_path = base_dir / zip_name
+        create_zip(converted_pdfs, str(zip_path), base_dir=str(base_dir))
 
     # Print metadata summary
     print("PDF Metadata included in all documents:")
@@ -643,6 +677,12 @@ def main():
     parser.add_argument(
         "--no-encrypt",
         help="Skip encryption (for testing)",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--no-zip",
+        help="Skip creating a ZIP archive of the generated PDFs",
         action="store_true",
         default=False,
     )
@@ -703,10 +743,10 @@ def main():
             print(f"Folder not found: {base}")
             sys.exit(1)
         print(f"\nConverting folder: {base}")
-        convert_all(str(base))
+        convert_all(str(base), create_zip_archive=not args.no_zip)
     else:
         # Convert everything
-        convert_all()
+        convert_all(create_zip_archive=not args.no_zip)
 
 
 if __name__ == "__main__":
