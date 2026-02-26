@@ -22,3 +22,35 @@ tempwarn_lines.txt
 
 # Extracted auth-gated code (offline storage)
 gitignore/
+
+# IDE / editor state
+.vs/
+.vscode/
+
+# Node.js dependencies
+node_modules/
+
+# Cloudflare Wrangler local state
+.wrangler/
+
+# Build output and warning log files
+build_output.txt
+check_output.txt
+detailed_warnings.txt
+warn.txt
+warn2.txt
+warn3.txt
+warn4.txt
+warn_current.txt
+warn_current2.txt
+warn_current_backup.txt
+warn_lines.txt
+warn_out.txt
+
+# Binary executables and large archives
+*.exe
+*.zip
+*.b64
+
+# GitHub credentials / recovery codes (never commit these)
+github-recovery-codes.txt
