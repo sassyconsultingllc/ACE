@@ -6438,7 +6438,7 @@ example.com#@#.approved-ad\n\
                 // Render elements
                 let render_output: PanelRender = self.mcp_panel.render();
                 ui.label(RichText::new(format!("Mode: {:?} | Width: {} | Scroll: {}", render_output.mode, render_output.width, render_output.scroll_offset)).color(surface));
-                egui::ScrollArea::vertical().max_height(400.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().auto_shrink([false; 2]).stick_to_bottom(true).show(ui, |ui| {
                     for elem in &render_output.elements {
                         match elem {
                             RenderElement::Header { title, subtitle } => { ui.label(RichText::new(title).size(18.0).color(text_c).strong()); if let Some(sub) = subtitle { ui.label(RichText::new(sub).color(text_dim)); } }
@@ -6449,7 +6449,7 @@ example.com#@#.approved-ad\n\
                             RenderElement::CodeEdit { index, file_path, operation, description, preview, selected } => { ui.label(RichText::new(format!("#{} {} ({:?}) [{}]: {}", index, file_path, operation, if *selected {"sel"} else {"_"}, description)).color(accent)); for (line, _clr) in preview { ui.label(RichText::new(line).monospace().color(text_c)); } }
                             RenderElement::AgentConfig { role, model, api_url, has_key, enabled } => { ui.label(RichText::new(format!("{}: {} @ {} key={} [{}]", role.name(), model, api_url, has_key, if *enabled {"on"} else {"off"})).color(text_dim)); }
                             RenderElement::ActionBar { actions } => { ui.horizontal(|ui| { for act in actions { let c = match act.style { ActionStyle::Primary => primary, ActionStyle::Secondary => text_dim, ActionStyle::Danger => err_c }; let _ = ui.button(RichText::new(&act.label).color(c)); } }); }
-                            RenderElement::Input { placeholder, value, cursor } => { ui.label(RichText::new(format!("[Input: {} val='{}' cursor={}]", placeholder, value, cursor)).color(border_c)); }
+                            RenderElement::Input { placeholder, value: _, cursor: _ } => { /* Real TextEdit is rendered below the scroll area */ let _ = placeholder; }
                             RenderElement::Notification { message, style } => { let c = match style { NotificationStyle::Info => primary, NotificationStyle::Success => success_c, NotificationStyle::Warning => warn_c, NotificationStyle::Error => err_c }; ui.label(RichText::new(message).color(c)); }
                             RenderElement::EmptyState { icon, message, hint } => { ui.label(RichText::new(format!("{} {} ({})", icon, message, hint)).color(text_dim).italics()); }
                             RenderElement::InfoRow { label, value } => { ui.horizontal(|ui| { ui.label(RichText::new(format!("{}: ", label)).color(text_dim)); ui.label(RichText::new(value).color(text_c)); }); }
@@ -6471,19 +6471,22 @@ example.com#@#.approved-ad\n\
                     if ui.button("Toggle Panel").clicked() { self.mcp_panel.toggle(); }
                     if ui.button("Approve Edit 0").clicked() { let _ = self.mcp_panel.approve_edit(0); }
                 });
-                // Key handling
-                ctx.input(|i| {
-                    for event in &i.events {
-                        if let egui::Event::Text(t) = event {
-                            for ch in t.chars() { self.mcp_panel.handle_key(ch); }
-                        }
-                        if let egui::Event::Key { key, pressed: true, .. } = event {
-                            match key {
-                                egui::Key::Backspace => self.mcp_panel.handle_backspace(),
-                                egui::Key::Enter => self.mcp_panel.handle_enter(),
-                                _ => {}
-                            }
-                        }
+                // Chat input with real TextEdit
+                ui.separator();
+                ui.horizontal(|ui| {
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut self.mcp_panel.input_text)
+                            .desired_width(ui.available_width() - 60.0)
+                            .hint_text("Ask the AI agents...")
+                            .text_color(text_c)
+                    );
+                    if ui.button(RichText::new("Send").color(primary)).clicked()
+                        || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    {
+                        self.mcp_panel.handle_enter();
+                    }
+                    if response.changed() {
+                        self.mcp_panel.input_cursor = self.mcp_panel.input_text.len();
                     }
                 });
                 // McpTheme secondary color

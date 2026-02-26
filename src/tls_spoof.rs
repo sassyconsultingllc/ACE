@@ -219,7 +219,7 @@ impl ChromeTlsConfig {
     /// Create a new `ChromeTlsConfig` with Chrome 132 defaults.
     pub fn new() -> Self {
         Self {
-            alpn_protocols: vec![b"h2".to_vec(), b"http/1.1".to_vec()],
+            alpn_protocols: vec![b"http/1.1".to_vec()],  // ureq is HTTP/1.1 only; h2 ALPN causes EOF on strict sites
             enable_sni: true,
             enable_resumption: true,
         }

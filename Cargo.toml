@@ -274,3 +274,7 @@ path = "src/main.rs"
 [[bin]]
 name = "sassy-ui"
 path = "src/bin/sassy-ui.rs"
+
+[[bin]]
+name = "mcp-client"
+path = "src/bin/mcp-client.rs"

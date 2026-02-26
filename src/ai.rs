@@ -158,11 +158,40 @@ impl AiConfig {
 /// This means you only need to set keys once in [mcp.keys] and the sidebar AI picks them up.
 pub fn load_runtime() -> AiRuntime {
     let path = config_dir().join("ai.toml");
-    let fallback = PathBuf::from("config").join("ai.toml");
 
-    let content = fs::read_to_string(&path)
-        .or_else(|_| fs::read_to_string(&fallback))
-        .unwrap_or_default();
+    // Fallback: CWD/config, then CARGO_MANIFEST_DIR/config, then exe-relative
+    let fallback_candidates = [
+        std::path::PathBuf::from("config/ai.toml"),
+        std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/config/ai.toml")),
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent()
+                .and_then(|p| p.parent())
+                .and_then(|p| p.parent())
+                .map(|p| p.join("config/ai.toml")))
+            .unwrap_or_default(),
+    ];
+
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => {
+            tracing::info!("Loaded ai.toml from: {}", path.display());
+            c
+        }
+        Err(_) => {
+            let mut found = String::new();
+            for candidate in &fallback_candidates {
+                if let Ok(c) = fs::read_to_string(candidate) {
+                    tracing::info!("Loaded ai.toml from fallback: {}", candidate.display());
+                    found = c;
+                    break;
+                }
+            }
+            if found.is_empty() {
+                tracing::warn!("ai.toml not found anywhere. Primary: {}", path.display());
+            }
+            found
+        }
+    };
 
     let parsed: AiFile = toml::from_str(&content).unwrap_or_default();
 
@@ -383,7 +412,7 @@ fn call_anthropic(key: &str, prompt: &str) -> Result<String, String> {
 
 fn call_xai(key: &str, prompt: &str) -> Result<String, String> {
     let body = serde_json::json!({
-        "model": "grok-2",
+        "model": "grok-3-fast",
         "messages": [
             {"role": "system", "content": "You are a concise browser assistant. Be safe, avoid code execution, no external calls."},
             {"role": "user", "content": prompt}

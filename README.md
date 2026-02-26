@@ -1,175 +1,96 @@
-# SASSY BROWSER v2.0.0
+# Sassy Browser
 
-**Universal File Viewer & Browser — Pure Rust — Zero Paid Dependencies**
+**Web browser and universal file viewer — pure Rust — zero Google code**
 
-```
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║  ███████╗ █████╗ ███████╗███████╗██╗   ██╗    ██████╗ ██████╗  ██████╗        ║
-║  ██╔════╝██╔══██╗██╔════╝██╔════╝╚██╗ ██╔╝    ██╔══██╗██╔══██╗██╔═══██╗       ║
-║  ███████╗███████║███████╗███████╗ ╚████╔╝     ██████╔╝██████╔╝██║   ██║       ║
-║  ╚════██║██╔══██║╚════██║╚════██║  ╚██╔╝      ██╔══██╗██╔══██╗██║   ██║       ║
-║  ███████║██║  ██║███████║███████║   ██║       ██████╔╝██║  ██║╚██████╔╝       ║
-║  ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝   ╚═╝       ╚═════╝ ╚═╝  ╚═╝ ╚═════╝        ║
-║                                                                               ║
-║  Universal File Viewer • Web Browser • No Chrome • No Google • Pure Rust      ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-```
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/Rust-1.75+-orange.svg)](https://rustup.rs)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)]()
 
-## 🎯 The End-All-Be-All Disruptor
+Sassy Browser is a web browser built from scratch in Rust. It opens, edits, saves, and prints 200+ file formats with no external paid dependencies, no Chromium, no V8, and no Google code of any kind.
 
-**People will line up for this browser.**
-
-One application. 200+ file formats. **Zero paid subscriptions.**
-
-| Software Killed | Annual Cost | Our Feature |
-|-----------------|-------------|-------------|
-| Adobe Creative Cloud | $504/yr | Image editor (RAW, PSD, EXR, HEIC) |
-| Microsoft 365 | $100/yr | DOCX/XLSX editor with formatting |
-| ChemDraw | $2,600/yr | Molecular viewer (PDB, MOL, SDF) |
-| PACS Viewers | $10,000+ | Medical imaging (DICOM) |
-| AutoCAD LT | $2,000/yr | CAD viewer (DXF, DWG) |
-| Postman Pro | $144/yr | REST client built-in |
-| WinRAR | Nagware | Archive support (ZIP, 7Z, RAR) |
-| Calibre | Ugly | Ebook reader (EPUB, MOBI) |
-| **Chrome** | Your soul | **Pure Rust, zero Google** |
+The JavaScript engine is [Boa v0.21](https://boajs.dev/) — 94% ECMAScript test262 compliant, pure Rust, embeddable, MIT licensed. No JIT compiler means no JIT-spray attack surface.
 
 ---
 
-## ⚡ Quick Start
+## What it replaces
+
+| Software | Annual Cost | What Sassy Browser does instead |
+|----------|-------------|----------------------------------|
+| Adobe Photoshop + Lightroom | $504/yr | Image editor — RAW, PSD, EXR, HEIC, crop, resize, filters, export |
+| Adobe Acrobat Pro | $240/yr | PDF annotate, highlight, draw, form fill, merge, split, print |
+| Microsoft 365 | $100/yr | DOCX/XLSX editor with formatting, styles, formulas |
+| ChemDraw | $2,600/yr | Molecular viewer — PDB, MOL, SDF, 3D rendering |
+| PACS Viewer | $10,000+/yr | DICOM medical imaging viewer |
+| AutoCAD LT | $2,000/yr | CAD viewer — DXF, DWG, OBJ, STL, GLTF |
+| Postman Pro | $144/yr | REST client built in |
+| 1Password / LastPass | $36–60/yr | ChaCha20-Poly1305 vault, Argon2id KDF, your key |
+| WinRAR | Nagware | ZIP, 7Z, RAR, TAR, GZ, XZ, BZ2, ZSTD |
+| Calibre | — | EPUB, MOBI, AZW3 reader |
+| Chrome / Edge / Brave | Your data | Pure Rust, zero Chromium, zero tracking |
+
+---
+
+## Quick start
 
 ```bash
 # Build from source
 cargo build --release
 
-# Open any file
-sassy-browser.exe document.pdf
-sassy-browser.exe molecule.pdb
-sassy-browser.exe photo.cr2
+# Open a file
+./target/release/sassy-browser document.pdf
+./target/release/sassy-browser molecule.pdb
+./target/release/sassy-browser photo.cr2
 
-# Or browse the web
-sassy-browser.exe https://duckduckgo.com
+# Browse the web
+./target/release/sassy-browser https://duckduckgo.com
 ```
 
 ---
 
-## 📁 Supported Formats (200+)
+## Supported formats (200+)
 
-### 🖼️ Images — View, Edit, Save, Print
-**Standard:** PNG, JPG, JPEG, GIF, WebP, BMP, ICO, TIFF, TGA, SVG, AVIF, HEIC
-**RAW Camera:** CR2, CR3, NEF, ARW, DNG, ORF, RW2, RAF, PEF, SRW, X3F
-**Professional:** PSD, PSB, EXR, HDR, DDS, QOI, OpenEXR
+### Images — view, edit, save, print
+**Standard:** PNG, JPG, GIF, WebP, BMP, ICO, TIFF, TGA, SVG, AVIF, HEIC
+**RAW camera:** CR2, CR3, NEF, ARW, DNG, ORF, RW2, RAF, PEF, SRW, X3F
+**Professional:** PSD, PSB, EXR, HDR, DDS, QOI
 
-*Edit: Crop, resize, rotate, flip, filters, adjustments, layers*
-*Export: PNG, JPEG, WebP, BMP, TIFF*
+Crop, resize, rotate, flip, filters, adjustments. Export to PNG, JPEG, WebP, BMP, TIFF.
 
-### 📄 Documents — View, Edit, Save, Print
+### Documents — view, edit, save, print
 **Office:** DOCX, DOC, ODT, RTF, WPD
-**PDF:** Full viewing, annotations, form fill, merge/split
-**Spreadsheet:** XLSX, XLS, ODS, CSV, TSV
+**PDF:** Annotations, form fill, merge/split, print
+**Spreadsheet:** XLSX, XLS, ODS, CSV, TSV — multi-sheet, formulas
 
-*Edit: Rich text, styles, find/replace, track changes*
-*Export: DOCX, ODT, RTF, PDF, HTML, Markdown*
+### Chemical and biological — 3D visualization
+**Structures:** PDB, MOL, MOL2, SDF, XYZ, CIF, mmCIF, FASTA
+**Medical:** DICOM
 
-### 🧬 Chemical/Biological — 3D Visualization
-**Structures:** PDB, MOL, MOL2, SDF, XYZ
-**Crystallography:** CIF, mmCIF
+Ball-and-stick, wireframe, spacefill rendering. Color by element, chain, residue, B-factor.
 
-*Features: Ball-and-stick, wireframe, spacefill rendering*
-*Color by: Element, chain, residue, B-factor*
+### Archives
+ZIP, RAR, 7Z, TAR, GZ, XZ, BZ2, ZSTD, JAR, WAR, APK, DEB, RPM
 
-### 📦 Archives — View, Extract, Create
-**Compression:** ZIP, RAR, 7Z, TAR, GZ, XZ, BZ2, ZSTD
-**Packages:** JAR, WAR, APK, DEB, RPM
+### 3D models
+OBJ, STL, GLTF, GLB, PLY, FBX, DAE, 3DS — rotate, zoom, wireframe, materials
 
-*Features: Tree view, extract, preview contents*
+### Audio
+MP3, FLAC, WAV, OGG, AAC, M4A, OPUS, AIFF — waveform display, metadata, cover art
 
-### 🎲 3D Models — Interactive Viewer
-**Formats:** OBJ, STL, GLTF, GLB, PLY, FBX, DAE, 3DS
+### Video
+MP4, MKV, WebM, AVI, MOV — metadata, thumbnail preview
 
-*Features: Rotate, zoom, wireframe, materials*
+### eBooks
+EPUB, MOBI, AZW, AZW3, FB2 — chapter navigation, TOC
 
-### 🔤 Fonts — Preview & Install
-**Formats:** TTF, OTF, WOFF, WOFF2, EOT
+### Fonts
+TTF, OTF, WOFF, WOFF2, EOT — glyph preview, character map
 
-*Features: Character map, glyph preview, metadata*
-
-### 🎵 Audio — Waveform & Playback
-**Formats:** MP3, FLAC, WAV, OGG, AAC, M4A, WMA, OPUS, AIFF
-
-*Features: Waveform display, metadata, cover art*
-
-### 🎬 Video — Metadata & Thumbnails
-**Formats:** MP4, MKV, WebM, AVI, MOV, WMV, FLV
-
-*Features: Metadata extraction, thumbnail preview*
-
-### 📚 eBooks — Reader Mode
-**Formats:** EPUB, MOBI, AZW, AZW3, FB2
-
-*Features: Chapter navigation, TOC, cover display*
-
-### 💻 Code — Syntax Highlighting
-**200+ Languages:** Rust, Python, JavaScript, TypeScript, C/C++, Java, Go, Ruby, PHP, Swift, Kotlin, Scala, Haskell, Elixir, and more
-
-*Features: Line numbers, syntax themes, search*
+### Code — 200+ languages
+Syntax highlighting and editing for Rust, Python, JavaScript, TypeScript, C/C++, Java, Go, Ruby, PHP, Swift, Kotlin, and 190+ more.
 
 ---
 
-## 🛡️ Security Model
-
-### Pure Rust — No Chrome, No WebKit
-```
-WHAT WE USE:                    WHAT WE DON'T USE:
-─────────────────────────────   ─────────────────────────────
-eframe/egui (Pure Rust GUI)     ❌ Chromium
-winit (Pure Rust windowing)     ❌ WebKit
-softbuffer (Pure Rust pixels)   ❌ WebView2
-fontdue (Pure Rust fonts)       ❌ V8 JavaScript
-html5ever (Pure Rust HTML)      ❌ Blink rendering
-SassyScript (Our JS engine)     ❌ Google APIs/Analytics
-```
-
-### 4-Layer Sandbox
-```
-Layer 1: NETWORK SANDBOX      → All content quarantined in memory
-Layer 2: RENDER SANDBOX       → SassyScript engine (no V8 exploits)
-Layer 3: CONTENT SANDBOX      → Rust parsers (no codec vulns)
-Layer 4: DOWNLOAD QUARANTINE  → 3 clicks + 5s wait to release
-```
-
-### Page Trust System
-- **🔴 Untrusted** — Fresh page, sandboxed
-- **🟠 Cautious** — 1 meaningful interaction
-- **🟢 Trusted** — 3 meaningful interactions
-- **🔵 Verified** — User explicitly trusts site
-
----
-
-## ⌨️ Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+L` | Focus address bar |
-| `Ctrl+T` | New tab |
-| `Ctrl+W` | Close tab |
-| `Ctrl+Tab` | Next tab |
-| `Ctrl+Shift+Tab` | Previous tab |
-| `Alt+Left` | Back |
-| `Alt+Right` | Forward |
-| `F5` | Refresh |
-| `F11` | Fullscreen |
-| `Ctrl+O` | Open file |
-| `Ctrl+S` | Save |
-| `Ctrl+P` | Print |
-| `Ctrl+Z` | Undo |
-| `Ctrl+Y` | Redo |
-| `Ctrl+F` | Find |
-| `+/-` | Zoom in/out |
-| `Ctrl+0` | Reset zoom |
-
----
-
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -195,91 +116,175 @@ Layer 4: DOWNLOAD QUARANTINE  → 3 clicks + 5s wait to release
 │  │ Player  │ │ Info    │ │ Reader  │ │ Preview │ │ Editor  │              │
 │  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘              │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                         BROWSER ENGINE (Pure Rust)                           │
+│                         BROWSER ENGINE (pure Rust)                           │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────────────────┐   │
-│  │ HTML5    │ │ CSS      │ │ Layout   │ │ SassyScript JS Engine        │   │
-│  │ Parser   │ │ Engine   │ │ Engine   │ │ (No JIT, No WASM, No V8)     │   │
+│  │ HTML5    │ │ CSS      │ │ Layout   │ │ Boa JS Engine v0.21          │   │
+│  │ Parser   │ │ Engine   │ │ Engine   │ │ 94% ES2025 · pure Rust       │   │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Dependencies — what we use and what we deliberately don't
+
+```
+WHAT WE USE                     WHAT WE DON'T USE
+──────────────────────────────  ──────────────────────────────
+eframe/egui  — pure Rust GUI    Chromium
+winit        — windowing        WebKit / WebView2
+softbuffer   — pixel buffer     V8 JavaScript engine
+fontdue      — font rendering   Blink rendering engine
+html5ever    — HTML parsing     Google APIs / Analytics
+Boa v0.21    — JS engine        Any C++ browser engine
+```
+
+No JIT compiler. No JIT-spray attack surface. Boa runs a bytecode VM with an optimizer pass — deliberate security decision, not a performance limitation.
+
 ---
 
-## 🔧 Building
+## Security model
+
+### 4-layer sandbox
+
+```
+Layer 1: NETWORK SANDBOX      → all content quarantined in memory before render
+Layer 2: RENDER SANDBOX       → Boa JS engine (no V8 exploits, no JIT spray)
+Layer 3: CONTENT SANDBOX      → Rust parsers (memory-safe by construction)
+Layer 4: DOWNLOAD QUARANTINE  → 3 confirmations + 5-second delay before filesystem access
+```
+
+### Page trust system
+
+Pages start with zero permissions. Trust is earned through meaningful interactions, not assumed.
+
+| Level | Trigger | Permissions unlocked |
+|-------|---------|----------------------|
+| Untrusted | Fresh page load | Sandboxed render only |
+| Cautious | 1 meaningful interaction | Basic clipboard read |
+| Trusted | 3 meaningful interactions | Standard permissions |
+| Verified | Explicit user grant | Full permissions |
+
+### Password vault
+
+ChaCha20-Poly1305 encryption. Argon2id key derivation. The key is generated on your machine and never leaves it. Same cryptographic primitives as WireGuard and Signal.
+
+### Network monitor
+
+Every active connection is visible in the UI at all times — domain, bytes per second, protocol. No background connections without user awareness.
+
+---
+
+## Building
+
+### Requirements
+- Rust 1.75+ — install via [rustup.rs](https://rustup.rs)
+- WiX Toolset 3.x — optional, Windows MSI installer only
 
 ### Windows
 ```batch
-# Quick build
 cargo build --release
 
-# Full build with MSI installer
+# Full installer build
 BUILD-WINDOWS.bat
 
-# PowerShell build (recommended)
+# PowerShell
 .\BUILD-WINDOWS.ps1
 ```
 
-### Linux/macOS
+### Linux / macOS
 ```bash
 cargo build --release
 ./target/release/sassy-browser
 ```
 
-### Requirements
-- Rust 1.75+ (`rustup.rs`)
-- WiX Toolset 3.x (optional, for MSI on Windows)
+---
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+L` | Focus address bar |
+| `Ctrl+T` | New tab |
+| `Ctrl+W` | Close tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
+| `Alt+Left` / `Alt+Right` | Back / forward |
+| `F5` | Refresh |
+| `F11` | Fullscreen |
+| `Ctrl+O` | Open file |
+| `Ctrl+S` | Save |
+| `Ctrl+P` | Print |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
+| `Ctrl+F` | Find |
+| `+` / `-` / `Ctrl+0` | Zoom in / out / reset |
 
 ---
 
-## 📱 Phone Sync
+## Phone sync
 
-Control your desktop browser from your phone via Tailscale P2P.
+Tab and file sync between desktop and phone via Tailscale P2P. No cloud. No accounts.
 
-1. Scan QR code in Settings > Phone Sync
+1. Settings → Phone Sync → scan QR code
 2. Open web app on phone
-3. Share tabs, URLs, and files between devices
-
-No cloud. No accounts. Peer-to-peer encrypted.
+3. Share tabs, URLs, and files peer-to-peer — end-to-end encrypted
 
 ---
 
-## 🤖 Built-in AI (MCP)
+## Built-in AI (MCP)
 
-4-agent system for intelligent assistance:
-- **Coordinator** — Routes queries
-- **Code** — Programming help
-- **Research** — Information lookup  
-- **Creative** — Writing assistance
+Optional 4-agent system. Disabled by default, no data sent anywhere without explicit configuration.
 
-Supports xAI Grok + Anthropic Claude APIs.
-No Google. No OpenAI dependency.
+- **Coordinator** — routes queries between agents
+- **Code** — programming assistance
+- **Research** — information retrieval
+- **Creative** — writing assistance
 
----
-
-## 📄 License
-
-MIT License — Sassy Consulting LLC
+Supports xAI Grok and Anthropic Claude APIs. No Google. No OpenAI dependency.
 
 ---
 
-## 🔐 Security Contact
+## Current state and known limitations
+
+This is an honest accounting of what works and what doesn't.
+
+**Complete:**
+- Image viewing and editing — all listed formats
+- PDF viewing, annotation, merge/split
+- DOCX/XLSX viewing and basic editing
+- Chemical/biological 3D viewing — PDB, MOL, SDF, DICOM
+- Archive browsing and extraction
+- 3D model viewing
+- Code syntax highlighting — 200+ languages
+- Built-in ad blocker (EasyList + EasyPrivacy)
+- Password vault
+- Network monitor
+- Page trust/sandbox system
+
+**In progress:**
+- Round-trip edit/save for 3D models and chemical structures (viewing works, save-back in development)
+- Cross-platform builds — currently Windows primary; Linux and macOS builds require platform-specific windowing work
+- Full CSS compliance — layout engine handles most pages; complex CSS grid/flexbox edge cases ongoing
+- Boa v0.21 integration — replacing internal interpreter with Boa for improved ES2025 compliance
+
+**Known tradeoff:**
+JavaScript-heavy web apps (Google Docs, Figma, Notion) run slower than Chromium-based browsers. Boa's bytecode VM is not a JIT compiler — this is intentional. Sassy Browser is built for everyday browsing and file work, not as a drop-in replacement for heavy web apps.
+
+---
+
+## Status
+
+Active development. 77 commits. 5 branches. 1 release tag.
+
+Crowdfunding campaign launching on Kickstarter and Indiegogo to fund cross-platform builds, independent security audit, and v1.0 release. Details at [sassyconsultingllc.com/browser](https://sassyconsultingllc.com/browser).
+
+---
+
+## License
+
+MIT — Sassy Consulting LLC
+
+---
+
+## Security contact
 
 Found a vulnerability? Email shane@sassyconsultingllc.com
 
-We take security seriously — that's the whole point of this browser.
-
----
-
-## 💎 Why Sassy Browser?
-
-Because you shouldn't need:
-- **$504/year** to edit a photo
-- **$2,600/year** to view a molecule
-- **Google tracking** to browse the web
-- **10 different apps** to open your files
-
-**One browser. Every format. Zero subscriptions. Pure Rust.**
-
-```
-The disruptor is here.
-```
+Responsible disclosure appreciated. We will respond within 48 hours.
