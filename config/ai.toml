@@ -121,7 +121,7 @@ provider = "xai"   # "xai", "together", "huggingface", "ollama", "openai"
 # Cloud: xAI Grok
 [mcp.voice.xai]
 url = "https://api.x.ai/v1/chat/completions"
-model = "grok-2"
+model = "grok-3-fast"
 max_tokens = 4096
 temperature = 0.7
 
@@ -151,19 +151,26 @@ temperature = 0.7
 # ==============================================================================
 [mcp.orchestrator]
 enabled = true
-provider = "together"  # "together", "huggingface", "ollama", "openai"
+provider = "xai"  # "together", "huggingface", "ollama", "openai"
 
-# Cloud: Together.ai (Mixtral)
+# Cloud: xAI Grok (task planning + reasoning)
+[mcp.orchestrator.xai]
+url = "https://api.x.ai/v1/chat/completions"
+model = "grok-4-1-fast"
+max_tokens = 8192
+temperature = 0.3
+
+# Alternative: Together.ai
 [mcp.orchestrator.together]
 url = "https://api.together.xyz/v1/chat/completions"
-model = "mistralai/Mixtral-8x22B-Instruct-v0.1"
+model = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 max_tokens = 8192
 temperature = 0.3
 
 # Alternative: Hugging Face
 [mcp.orchestrator.huggingface]
 url = ""  # Your HF endpoint URL
-model = "mistralai/Mixtral-8x22B-Instruct-v0.1"
+model = "grok-4-1-fast"
 max_tokens = 8192
 temperature = 0.3
 
@@ -184,7 +191,7 @@ provider = "anthropic"  # "anthropic", "together", "huggingface", "ollama"
 # Cloud: Anthropic Claude
 [mcp.coder.anthropic]
 url = "https://api.anthropic.com/v1/messages"
-model = "claude-sonnet-4-20250514"
+model = "claude-sonnet-4-5-20250929"
 max_tokens = 8192
 temperature = 0.3
 
@@ -219,7 +226,7 @@ provider = "google"  # "google", "together", "huggingface", "ollama"
 # Cloud: Google Gemini
 [mcp.auditor.google]
 url = "https://generativelanguage.googleapis.com/v1beta/models"
-model = "gemini-2.5-pro-preview-06-05"
+model = "gemini-2.5-pro"
 max_tokens = 65536
 temperature = 0.2
 
